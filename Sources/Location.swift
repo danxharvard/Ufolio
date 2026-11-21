@@ -159,20 +159,26 @@ final class LocalWeather: ObservableObject {
         guard text.count >= 2, text.count <= 100 else { return .failure(.notFound) }
         do {
             let marks = try await CLGeocoder().geocodeAddressString(text)
-            guard let mark = marks.first, let location = mark.location else { return .failure(.notFound) }
-            let name = mark.locality ?? mark.subAdministrativeArea ?? mark.name ?? text
-            let detail = [mark.administrativeArea, mark.country]
-                .compactMap { $0 }.filter { $0 != name }
-                .reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
-                .joined(separator: ", ")
-            return .success(Place(name: name, detail: detail,
-                                  latitude: (location.coordinate.latitude * 100).rounded() / 100,
-                                  longitude: (location.coordinate.longitude * 100).rounded() / 100))
+            guard let mark = marks.first, let found = place(from: mark, fallback: text) else { return .failure(.notFound) }
+            return .success(found)
         } catch let error as CLError where error.code == .network {
             return .failure(.offline)
         } catch {
             return .failure(.notFound)
         }
+    }
+
+    /// Turns a found place into what the start page keeps: its name and a rough position.
+    static func place(from mark: CLPlacemark, fallback: String) -> Place? {
+        guard let location = mark.location else { return nil }
+        let name = mark.locality ?? mark.subAdministrativeArea ?? mark.name ?? fallback
+        let detail = [mark.administrativeArea, mark.country]
+            .compactMap { $0 }.filter { $0 != name }
+            .reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+            .joined(separator: ", ")
+        return Place(name: name, detail: detail,
+                     latitude: (location.coordinate.latitude * 100).rounded() / 100,
+                     longitude: (location.coordinate.longitude * 100).rounded() / 100)
     }
 
     enum LookupError: Error {

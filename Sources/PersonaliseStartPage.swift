@@ -1,4 +1,55 @@
 import SwiftUI
+import MapKit
+
+/// Live place suggestions while you type a town or postcode (Apple Maps autocomplete).
+/// Doesn't use or ask for your Mac's location.
+final class PlaceSearch: NSObject, ObservableObject, MKLocalSearchCompleterDelegate {
+    struct Suggestion: Identifiable, Equatable {
+        let id = UUID()
+        let title: String
+        let subtitle: String
+        let completion: MKLocalSearchCompletion
+    }
+
+    @Published private(set) var suggestions: [Suggestion] = []
+    private let completer = MKLocalSearchCompleter()
+
+    override init() {
+        super.init()
+        completer.delegate = self
+        completer.resultTypes = .address
+    }
+
+    func update(_ text: String) {
+        let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.count < 2 || query.count > 100 {
+            completer.cancel()
+            suggestions = []
+        } else {
+            completer.queryFragment = query
+        }
+    }
+
+    func cancel() { completer.cancel() }
+
+    func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        let found = completer.results.prefix(5).map {
+            Suggestion(title: $0.title, subtitle: $0.subtitle, completion: $0)
+        }
+        DispatchQueue.main.async { self.suggestions = Array(found) }
+    }
+
+    func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
+        DispatchQueue.main.async { self.suggestions = [] }
+    }
+
+    /// Looks up where a suggestion is.
+    static func resolve(_ suggestion: Suggestion) async -> LocalWeather.Place? {
+        let search = MKLocalSearch(request: MKLocalSearch.Request(completion: suggestion.completion))
+        guard let item = try? await search.start().mapItems.first else { return nil }
+        return LocalWeather.place(from: item.placemark, fallback: suggestion.title)
+    }
+}
 
 /// The small "Personalise Start Page" button in the start page's corner.
 struct PersonaliseButton: View {
@@ -35,6 +86,9 @@ struct PersonaliseCard: View {
     @State private var searching = false
     @State private var error: String?
     @FocusState private var focused: Bool
+    @StateObject private var search = PlaceSearch()
+    @State private var highlighted = 0
+    @State private var keyMonitor: Any?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -75,6 +129,11 @@ struct PersonaliseCard: View {
                 .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.primary.opacity(0.06)))
                 .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous)
                     .strokeBorder(focused ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.1), lineWidth: focused ? 2 : 1))
+
+                if !search.suggestions.isEmpty && !searching {
+                    suggestionList
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
 
                 if let error {
                     Label(error, systemImage: "exclamationmark.circle.fill")
@@ -128,11 +187,94 @@ struct PersonaliseCard: View {
         }
         .frame(width: 460)
         .animation(.easeOut(duration: 0.2), value: error)
-        .onAppear { DispatchQueue.main.async { focused = true } }
+        .animation(.easeOut(duration: 0.15), value: search.suggestions)
+        .onChange(of: query) { text in
+            error = nil
+            highlighted = 0
+            search.update(text)
+        }
+        .onAppear {
+            DispatchQueue.main.async { focused = true }
+            // ↑ and ↓ move through the suggestions while the field is focused.
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                let count = search.suggestions.count
+                guard focused, count > 0 else { return event }
+                switch event.keyCode {
+                case 125: highlighted = (highlighted + 1) % count; return nil
+                case 126: highlighted = (highlighted - 1 + count) % count; return nil
+                default: return event
+                }
+            }
+        }
+        .onDisappear {
+            search.cancel()
+            if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+            keyMonitor = nil
+        }
+    }
+
+    private var suggestionList: some View {
+        VStack(spacing: 2) {
+            ForEach(Array(search.suggestions.enumerated()), id: \.element.id) { index, suggestion in
+                Button { choose(suggestion) } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(index == highlighted ? Color.white : Color.accentColor)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(suggestion.title)
+                                .font(.system(size: 13, weight: .medium))
+                                .lineLimit(1)
+                            if !suggestion.subtitle.isEmpty {
+                                Text(suggestion.subtitle)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(index == highlighted ? Color.white.opacity(0.8) : Color.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                        if index == highlighted {
+                            Image(systemName: "return").font(.system(size: 10, weight: .semibold)).opacity(0.8)
+                        }
+                    }
+                    .foregroundStyle(index == highlighted ? Color.white : Color.primary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(index == highlighted ? Color.accentColor : Color.clear))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .onHover { if $0 { highlighted = index } }
+            }
+        }
+        .padding(5)
+        .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.primary.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
+    }
+
+    private func choose(_ suggestion: PlaceSearch.Suggestion) {
+        guard !searching else { return }
+        searching = true
+        error = nil
+        Task { @MainActor in
+            if let place = await PlaceSearch.resolve(suggestion) {
+                searching = false
+                weather.save(place)
+                onDone()
+            } else {
+                searching = false
+                error = LocalWeather.LookupError.notFound.message
+            }
+        }
     }
 
     private func save() {
         guard !searching, query.trimmingCharacters(in: .whitespaces).count >= 2 else { return }
+        // Return picks the highlighted suggestion when there is one.
+        if search.suggestions.indices.contains(highlighted) {
+            choose(search.suggestions[highlighted]); return
+        }
         searching = true
         error = nil
         Task { @MainActor in

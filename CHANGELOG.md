@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.1
+
+**Improved**
+- Personalise Start Page now suggests places as you type a town or postcode. Click one, or use
+  the arrow keys and Return, to choose it.
+
 ## 0.12.0
 
 **New: Personalise Start Page**
