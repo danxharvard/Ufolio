@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0
+
+**New: Chrome extensions** (macOS 15.4 or later)
+- Settings › Extensions: paste a Chrome Web Store link and Hush downloads, unpacks and adds the
+  extension, after showing what it will be able to access. Developers can also load an unpacked folder.
+- Extension buttons appear in the toolbar, with their pop-ups and badges.
+- Switch extensions on or off, or remove them, in Settings › Extensions.
+- Built on WebKit's own extension support, so most Chrome extensions work; a few that rely on
+  Chrome-only features may not.
+
 ## 0.7.2
 
 **Improved**

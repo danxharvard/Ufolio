@@ -14,6 +14,7 @@ A lightweight, native macOS web browser built on WebKit (the engine behind Safar
 - Passwords & AutoFill (Keychain-backed, Touch ID): passwords, credit cards, your contact card
 - History with address-bar suggestions, and import from Safari, Chrome, Brave, Edge, Arc, Vivaldi, Firefox
 - Downloads list with progress
+- Chrome extensions from the Chrome Web Store (macOS 15.4 or later)
 - Updates itself from GitHub releases (Settings › Updates)
 - Tabs (⌘T, ⌘W, ⇧⌘[ / ⇧⌘]), zoom, downloads, restore last session
 - Under 3 MB, universal (Intel and Apple Silicon), macOS 13 or later
@@ -76,6 +77,7 @@ quit — or straight away from Settings › Updates.
 | `Sources/Autofill.swift` | Passwords, cards and contact AutoFill (Keychain + Touch ID) |
 | `Sources/Downloads.swift` | Downloads and the downloads list |
 | `Sources/Welcome.swift` | Welcome screen and default-browser prompt |
+| `Sources/Extensions.swift` | Chrome extensions: installing, running, toolbar buttons |
 | `scripts/build-app.sh` | Builds the app bundle, update zip and DMG |
 | `scripts/make-dmg-background.swift`, `scripts/dmg-settings.py` | The styled installer window |
 | `scripts/make-icon.swift` | Draws the app icon |

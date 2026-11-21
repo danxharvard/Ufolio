@@ -2,7 +2,7 @@ import SwiftUI
 import WebKit
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, appearance, adBlocker, privacy, passwords, location, updates
+    case general, appearance, adBlocker, extensions, privacy, passwords, location, updates
     var id: String { rawValue }
 
     var title: String {
@@ -10,6 +10,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: return "General"
         case .appearance: return "Appearance"
         case .adBlocker: return "Hush Guard"
+        case .extensions: return "Extensions"
         case .privacy: return "Privacy & Security"
         case .passwords: return "Passwords & AutoFill"
         case .location: return "Location"
@@ -22,6 +23,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: return "gearshape.fill"
         case .appearance: return "paintbrush.fill"
         case .adBlocker: return "hush"
+        case .extensions: return "puzzlepiece.extension.fill"
         case .privacy: return "hand.raised.fill"
         case .passwords: return "key.fill"
         case .location: return "location.fill"
@@ -35,6 +37,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: return [Color(white: 0.62), Color(white: 0.45)]
         case .appearance: return [Color(red: 0.30, green: 0.55, blue: 1.0), Color(red: 0.42, green: 0.32, blue: 0.95)]
         case .adBlocker: return [Color(red: 0.55, green: 0.40, blue: 1.0), Color(red: 0.36, green: 0.26, blue: 0.86)]
+        case .extensions: return [Color(red: 1.0, green: 0.62, blue: 0.25), Color(red: 0.95, green: 0.42, blue: 0.18)]
         case .privacy: return [Color(red: 0.25, green: 0.60, blue: 1.0), Color(red: 0.10, green: 0.42, blue: 0.95)]
         case .passwords: return [Color(red: 0.60, green: 0.62, blue: 0.66), Color(red: 0.40, green: 0.42, blue: 0.46)]
         case .location: return [Color(red: 0.25, green: 0.75, blue: 1.0), Color(red: 0.10, green: 0.50, blue: 0.95)]
@@ -93,6 +96,7 @@ struct SettingsView: View {
                 case .general: GeneralSettings()
                 case .appearance: AppearanceSettings()
                 case .adBlocker: AdBlockerSettings()
+                case .extensions: ExtensionSettings()
                 case .privacy: PrivacySettings()
                 case .passwords: PasswordSettings()
                 case .location: LocationSettings()
@@ -1398,5 +1402,122 @@ private struct AddCardSheet: View {
             sum += d
         }
         return sum % 10 == 0
+    }
+}
+
+// MARK: - Extensions
+
+private struct ExtensionSettings: View {
+    @ObservedObject private var store = ExtensionStore.shared
+    @State private var link = ""
+
+    var body: some View {
+        Form {
+            Section {
+                SettingsHeader(tab: .extensions,
+                               subtitle: "Add Chrome extensions from the Chrome Web Store. Most work in Hush; a few that rely on Chrome-only features may not.")
+            }
+
+            if !ExtensionStore.isSupported {
+                Section {
+                    Label("Extensions need macOS 15.4 or later. Update macOS in System Settings › General › Software Update to use them.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Color.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                Section {
+                    HStack {
+                        TextField("", text: $link, prompt: Text("Paste a Chrome Web Store link"))
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit(add)
+                        Button("Add", action: add)
+                            .keyboardShortcut(.defaultAction)
+                            .disabled(link.isEmpty || store.isWorking)
+                    }
+                    HStack {
+                        Button("Open the Chrome Web Store") {
+                            BrowserModel.frontmost?.newTab(url: URL(string: "https://chromewebstore.google.com/")!)
+                        }
+                        Button("Load Unpacked…", action: loadFolder)
+                        Spacer()
+                        if store.isWorking { ProgressView().controlSize(.small) }
+                    }
+                    if let status = store.status {
+                        Label(status, systemImage: store.statusIsError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(store.statusIsError ? Color.orange : Color.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } header: { Text("Add an extension") } footer: {
+                    Footnote("Find an extension in the Chrome Web Store, copy the address of its page and paste it here. Hush shows what it can access before adding it.")
+                }
+
+                Section {
+                    if store.installed.isEmpty {
+                        Text("No extensions yet.").foregroundStyle(.secondary)
+                    }
+                    ForEach(store.installed) { ext in
+                        ExtensionRow(ext: ext)
+                    }
+                } header: { Text("Installed") }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func add() {
+        let text = link
+        Task { @MainActor in
+            await store.install(fromWebStore: text)
+            if !store.statusIsError { link = "" }
+        }
+    }
+
+    private func loadFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.prompt = "Load Extension"
+        panel.message = "Choose an unpacked extension folder (the one containing manifest.json)."
+        if panel.runModal() == .OK, let url = panel.url {
+            Task { @MainActor in await store.install(fromFolder: url) }
+        }
+    }
+}
+
+private struct ExtensionRow: View {
+    let ext: InstalledExtension
+    @ObservedObject private var store = ExtensionStore.shared
+    @State private var icon: NSImage?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Group {
+                if let icon { Image(nsImage: icon).resizable() } else { Image(systemName: "puzzlepiece.extension.fill").foregroundStyle(.secondary) }
+            }
+            .frame(width: 28, height: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(ext.name).font(.system(size: 13, weight: .medium))
+                Text(ext.version.isEmpty ? "Extension" : "Version \(ext.version)").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Menu {
+                if let source = ext.source, let url = URL(string: source) {
+                    Button("Open in Chrome Web Store") { BrowserModel.frontmost?.newTab(url: url) }
+                }
+                Divider()
+                Button("Remove", role: .destructive) { store.remove(ext) }
+            } label: { Image(systemName: "ellipsis.circle") }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            Toggle("", isOn: Binding(get: { ext.enabled }, set: { store.setEnabled(ext, $0) }))
+                .toggleStyle(.switch).labelsHidden().controlSize(.small)
+        }
+        .task {
+            let folder = store.directory(for: ext)
+            if #available(macOS 15.4, *), let loaded = try? await WKWebExtension(resourceBaseURL: folder) {
+                icon = loaded.icon(for: CGSize(width: 28, height: 28))
+            }
+        }
     }
 }

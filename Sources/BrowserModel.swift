@@ -2,13 +2,15 @@ import SwiftUI
 import WebKit
 
 /// One browser window: its tabs and which one is showing.
-final class BrowserModel: ObservableObject {
+final class BrowserModel: NSObject, ObservableObject {
     @Published private(set) var tabs: [BrowserTab] = []
     @Published var selectedID: UUID? {
         didSet {
             // The tab you leave starts its idle clock; the one you pick wakes if it was asleep.
-            if let old = tabs.first(where: { $0.id == oldValue }) { old.lastActive = Date() }
+            let old = tabs.first(where: { $0.id == oldValue })
+            old?.lastActive = Date()
             selectedTab?.wakeIfNeeded()
+            if let tab = selectedTab, tab !== old { ExtensionEvents.activated(tab, previous: old) }
         }
     }
     private var sleepTimer: Timer?
@@ -53,7 +55,8 @@ final class BrowserModel: ObservableObject {
         }
     }
 
-    init() {
+    override init() {
+        super.init()
         BrowserModel.all.add(self)
         sleepTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.sleepIdleTabs() }
         sleepTimer?.tolerance = 15
@@ -96,6 +99,7 @@ final class BrowserModel: ObservableObject {
     func newTab(url: URL? = nil, configuration: WKWebViewConfiguration? = nil,
                 select: Bool = true, focus: Bool = false, usePreferredPage: Bool = true) -> BrowserTab {
         let tab = BrowserTab(model: self, configuration: configuration)
+        defer { ExtensionEvents.opened(tab) }
         if let current = selectedTab, let index = tabs.firstIndex(where: { $0 === current }) {
             tabs.insert(tab, at: index + 1)
         } else {
@@ -113,6 +117,7 @@ final class BrowserModel: ObservableObject {
         guard let index = tabs.firstIndex(where: { $0 === tab }) else { return }
         let wasSelected = tab.id == selectedTab?.id
         if let url = tab.url { RecentlyClosed.shared.add(title: tab.title, url: url) }
+        ExtensionEvents.closed(tab)
         tab.tearDown()
         tabs.remove(at: index)
         scheduleSessionSave()

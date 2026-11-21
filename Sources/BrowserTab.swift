@@ -37,6 +37,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         config.preferences.javaScriptCanOpenWindowsAutomatically = !Prefs.bool(Prefs.blockPopups)
         config.defaultWebpagePreferences.preferredContentMode = .desktop
         config.mediaTypesRequiringUserActionForPlayback = AutoplayPolicy.current.mediaTypes
+        ExtensionEvents.attach(config)
         return config
     }
 
@@ -81,6 +82,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             if url != nil { tab.waking = false }
             tab.url = url
             tab.model?.scheduleSessionSave()
+            ExtensionEvents.changed(tab)
         }
         bind(\.isLoading) { $0.isLoading = $1 }
         bind(\.estimatedProgress) { $0.progress = $1 }

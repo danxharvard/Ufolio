@@ -128,6 +128,7 @@ struct BrowserWindow: View {
             }
         }
         ToolbarItemGroup(placement: .primaryAction) {
+            ExtensionButtons()
             DownloadsButton()
             SelectedTab(model: model) { ShieldsButton(tab: $0) }
             ToolbarIconButton(symbol: "plus", help: "New Tab (⌘T)") {

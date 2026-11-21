@@ -1,0 +1,521 @@
+import AppKit
+import SwiftUI
+import WebKit
+
+// MARK: - Installed extensions (any macOS)
+
+struct InstalledExtension: Codable, Identifiable, Equatable {
+    var id: String          // Chrome Web Store ID, or a generated one for unpacked folders
+    var name: String
+    var version: String
+    var enabled = true
+    var source: String?     // the Chrome Web Store page it came from
+}
+
+/// Keeps track of installed extensions and installs new ones from the Chrome Web Store or a
+/// folder. Running them needs WebKit's extension system, which arrived in macOS 15.4.
+final class ExtensionStore: ObservableObject {
+    static let shared = ExtensionStore()
+
+    @Published private(set) var installed: [InstalledExtension] = []
+    @Published private(set) var isWorking = false
+    @Published var status: String?
+    @Published var statusIsError = false
+
+    let folder: URL
+    private var listFile: URL { folder.appendingPathComponent("extensions.json") }
+
+    static var isSupported: Bool {
+        if #available(macOS 15.4, *) { return true }
+        return false
+    }
+
+    private init() {
+        folder = AppPaths.support.appendingPathComponent("Extensions", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        if let data = try? Data(contentsOf: listFile),
+           let saved = try? JSONDecoder().decode([InstalledExtension].self, from: data) {
+            installed = saved
+        }
+    }
+
+    func directory(for ext: InstalledExtension) -> URL {
+        folder.appendingPathComponent(ext.id, isDirectory: true)
+    }
+
+    private func save() {
+        if let data = try? JSONEncoder().encode(installed) { try? data.write(to: listFile, options: .atomic) }
+    }
+
+    /// The 32-letter extension ID in a Chrome Web Store link (or the ID on its own).
+    static func webStoreID(from text: String) -> String? {
+        let pattern = try! NSRegularExpression(pattern: "(?:^|[/=])([a-p]{32})(?:$|[/?#&])")
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let range = NSRange(trimmed.startIndex..., in: trimmed)
+        guard let match = pattern.firstMatch(in: trimmed, range: range),
+              let idRange = Range(match.range(at: 1), in: trimmed) else { return nil }
+        return String(trimmed[idRange])
+    }
+
+    // MARK: Installing
+
+    @MainActor
+    func install(fromWebStore text: String) async {
+        guard let id = Self.webStoreID(from: text) else {
+            report("That doesn’t look like a Chrome Web Store link. Open the extension’s page in the Web Store and copy its address.", error: true)
+            return
+        }
+        isWorking = true
+        status = "Downloading…"
+        statusIsError = false
+        do {
+            var components = URLComponents(string: "https://clients2.google.com/service/update2/crx")!
+            components.queryItems = [
+                .init(name: "response", value: "redirect"),
+                .init(name: "prodversion", value: "131.0"),
+                .init(name: "acceptformat", value: "crx2,crx3"),
+                .init(name: "x", value: "id=\(id)&uc"),
+            ]
+            let (data, response) = try await URLSession.shared.data(from: components.url!)
+            guard (response as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty else {
+                throw ExtensionError("The Chrome Web Store didn’t provide this extension.")
+            }
+            let zip = try Self.zipData(fromCRX: data)
+            let staging = try unpack(zip: zip)
+            await finishInstall(from: staging, id: id, source: text.trimmingCharacters(in: .whitespacesAndNewlines))
+        } catch {
+            report(error.localizedDescription, error: true)
+        }
+    }
+
+    /// Installs an unpacked extension folder (for developers, or extensions from elsewhere).
+    @MainActor
+    func install(fromFolder url: URL) async {
+        isWorking = true
+        statusIsError = false
+        let staging = FileManager.default.temporaryDirectory.appendingPathComponent("hush-ext-\(UUID().uuidString)")
+        do {
+            try FileManager.default.copyItem(at: url, to: staging)
+            let id = "local-" + UUID().uuidString.lowercased().prefix(12)
+            await finishInstall(from: staging, id: String(id), source: nil)
+        } catch {
+            report("Couldn’t read that folder: \(error.localizedDescription)", error: true)
+        }
+    }
+
+    @MainActor
+    private func finishInstall(from staging: URL, id: String, source: String?) async {
+        defer { try? FileManager.default.removeItem(at: staging) }
+        guard FileManager.default.fileExists(atPath: staging.appendingPathComponent("manifest.json").path) else {
+            report("That isn’t a browser extension (it has no manifest.json).", error: true)
+            return
+        }
+        guard #available(macOS 15.4, *) else {
+            report("Extensions need macOS 15.4 or later.", error: true)
+            return
+        }
+        do {
+            let ext = try await WKWebExtension(resourceBaseURL: staging)
+            let name = ext.displayName ?? "Extension"
+            guard ExtensionManager.shared.confirmInstall(ext, name: name) else {
+                report("“\(name)” wasn’t added.", error: false)
+                return
+            }
+            let record = InstalledExtension(id: id, name: name, version: ext.displayVersion ?? ext.version ?? "",
+                                            source: source)
+            let destination = directory(for: record)
+            try? FileManager.default.removeItem(at: destination)
+            try FileManager.default.copyItem(at: staging, to: destination)
+            installed.removeAll { $0.id == id }
+            installed.append(record)
+            save()
+            await ExtensionManager.shared.load(record)
+            report("Added “\(name)”.", error: false)
+        } catch {
+            report("Hush couldn’t load this extension: \(error.localizedDescription)", error: true)
+        }
+    }
+
+    /// Chrome extensions come as .crx: a small signed header followed by an ordinary zip.
+    static func zipData(fromCRX data: Data) throws -> Data {
+        let bytes = [UInt8](data)
+        func le32(_ offset: Int) -> Int {
+            Int(bytes[offset]) | Int(bytes[offset + 1]) << 8 | Int(bytes[offset + 2]) << 16 | Int(bytes[offset + 3]) << 24
+        }
+        if bytes.count > 4, bytes[0] == 0x50, bytes[1] == 0x4B { return data } // already a zip
+        guard bytes.count > 16, bytes[0] == 0x43, bytes[1] == 0x72, bytes[2] == 0x32, bytes[3] == 0x34 else { // "Cr24"
+            throw ExtensionError("The download wasn’t a Chrome extension.")
+        }
+        let start: Int
+        switch le32(4) {
+        case 3: start = 12 + le32(8)
+        case 2: start = 16 + le32(8) + le32(12)
+        default: throw ExtensionError("This extension uses a format Hush doesn’t recognise.")
+        }
+        guard start < bytes.count else { throw ExtensionError("The extension download was damaged.") }
+        return data.subdata(in: start..<data.count)
+    }
+
+    private func unpack(zip: Data) throws -> URL {
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent("hush-ext-\(UUID().uuidString)")
+        let zipFile = temp.appendingPathExtension("zip")
+        try zip.write(to: zipFile)
+        defer { try? FileManager.default.removeItem(at: zipFile) }
+        let unzip = Process()
+        unzip.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        unzip.arguments = ["-x", "-k", zipFile.path, temp.path]
+        try unzip.run()
+        unzip.waitUntilExit()
+        guard unzip.terminationStatus == 0 else { throw ExtensionError("The extension couldn’t be unpacked.") }
+        // Chrome's signature metadata isn't used by WebKit.
+        try? FileManager.default.removeItem(at: temp.appendingPathComponent("_metadata"))
+        return temp
+    }
+
+    // MARK: Managing
+
+    @MainActor
+    func setEnabled(_ ext: InstalledExtension, _ enabled: Bool) {
+        guard let i = installed.firstIndex(where: { $0.id == ext.id }) else { return }
+        installed[i].enabled = enabled
+        save()
+        if #available(macOS 15.4, *) {
+            if enabled { Task { await ExtensionManager.shared.load(installed[i]) } } else { ExtensionManager.shared.unload(ext.id) }
+        }
+    }
+
+    @MainActor
+    func remove(_ ext: InstalledExtension) {
+        if #available(macOS 15.4, *) { ExtensionManager.shared.unload(ext.id) }
+        installed.removeAll { $0.id == ext.id }
+        save()
+        try? FileManager.default.removeItem(at: directory(for: ext))
+    }
+
+    @MainActor
+    private func report(_ message: String, error: Bool) {
+        isWorking = false
+        status = message
+        statusIsError = error
+    }
+}
+
+struct ExtensionError: LocalizedError {
+    let message: String
+    init(_ message: String) { self.message = message }
+    var errorDescription: String? { message }
+}
+
+/// Tells running extensions what the browser is doing. Safe to call on any macOS.
+enum ExtensionEvents {
+    private static var active: Bool { !ExtensionStore.shared.installed.isEmpty }
+
+    static func attach(_ config: WKWebViewConfiguration) {
+        guard active, #available(macOS 15.4, *) else { return }
+        MainActor.assumeIsolated { config.webExtensionController = ExtensionManager.shared.controller }
+    }
+    static func opened(_ tab: BrowserTab) {
+        guard active, #available(macOS 15.4, *) else { return }
+        MainActor.assumeIsolated { ExtensionManager.shared.tabOpened(tab) }
+    }
+    static func closed(_ tab: BrowserTab) {
+        guard active, #available(macOS 15.4, *) else { return }
+        MainActor.assumeIsolated { ExtensionManager.shared.tabClosed(tab) }
+    }
+    static func activated(_ tab: BrowserTab, previous: BrowserTab?) {
+        guard active, #available(macOS 15.4, *) else { return }
+        MainActor.assumeIsolated { ExtensionManager.shared.tabActivated(tab, previous: previous) }
+    }
+    static func changed(_ tab: BrowserTab) {
+        guard active, #available(macOS 15.4, *) else { return }
+        MainActor.assumeIsolated { ExtensionManager.shared.tabChanged(tab) }
+    }
+    static func launch() {
+        guard active, #available(macOS 15.4, *) else { return }
+        MainActor.assumeIsolated { ExtensionManager.shared.loadAll() }
+    }
+}
+
+// MARK: - Running extensions (macOS 15.4+)
+
+/// Runs extensions with WebKit's built-in extension system and connects them to Hush's
+/// window and tabs, toolbar buttons and pop-ups.
+@available(macOS 15.4, *)
+@MainActor
+final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControllerDelegate {
+    static let shared = ExtensionManager()
+
+    let controller = WKWebExtensionController()
+    @Published private(set) var contexts: [String: WKWebExtensionContext] = [:]
+    /// Where each extension's toolbar button is, so pop-ups open under it.
+    var anchors: [String: NSView] = [:]
+
+    private override init() {
+        super.init()
+        controller.delegate = self
+    }
+
+    func loadAll() {
+        for ext in ExtensionStore.shared.installed where ext.enabled {
+            Task { await load(ext) }
+        }
+    }
+
+    func load(_ record: InstalledExtension) async {
+        guard contexts[record.id] == nil else { return }
+        do {
+            let ext = try await WKWebExtension(resourceBaseURL: ExtensionStore.shared.directory(for: record))
+            let context = WKWebExtensionContext(for: ext)
+            context.uniqueIdentifier = record.id
+            // Permissions were shown to and accepted by the user when the extension was added.
+            for permission in ext.requestedPermissions { context.setPermissionStatus(.grantedExplicitly, for: permission) }
+            for pattern in ext.allRequestedMatchPatterns { context.setPermissionStatus(.grantedExplicitly, for: pattern) }
+            try controller.load(context)
+            contexts[record.id] = context
+            if let model = BrowserModel.frontmost {
+                controller.didOpenWindow(model)
+                for tab in model.tabs { controller.didOpenTab(tab) }
+                if let selected = model.selectedTab { controller.didActivateTab(selected) }
+            }
+        } catch {
+            NSLog("Hush: couldn't load extension \(record.name): \(error)")
+        }
+    }
+
+    func unload(_ id: String) {
+        guard let context = contexts.removeValue(forKey: id) else { return }
+        try? controller.unload(context)
+        anchors[id] = nil
+    }
+
+    /// Shows what an extension wants before it's added, the way Chrome does.
+    func confirmInstall(_ ext: WKWebExtension, name: String) -> Bool {
+        #if SNAPSHOT
+        if ProcessInfo.processInfo.environment["SNAP_MODE"] != nil { return true } // automated tests only
+        #endif
+        let alert = NSAlert()
+        alert.messageText = "Add “\(name)” to Hush?"
+        var lines: [String] = []
+        let patterns = ext.allRequestedMatchPatterns.map { $0.string }
+        if patterns.contains(where: { $0 == "<all_urls>" || $0.hasPrefix("*://*/") || $0.hasPrefix("http://*/") || $0.hasPrefix("https://*/") }) {
+            lines.append("• Read and change all your data on all websites")
+        } else if !patterns.isEmpty {
+            let hosts = patterns.prefix(4).map { $0.replacingOccurrences(of: "*://", with: "").replacingOccurrences(of: "/*", with: "") }
+            lines.append("• Read and change your data on " + hosts.joined(separator: ", ") + (patterns.count > 4 ? " and more" : ""))
+        }
+        let readable: [String: String] = [
+            "tabs": "Read your browsing activity", "history": "Read and change your browsing history",
+            "bookmarks": "Read and change your bookmarks", "cookies": "Read and change cookies",
+            "downloads": "Manage your downloads", "clipboardRead": "Read what you copy",
+            "clipboardWrite": "Change what you copy", "webNavigation": "See the pages you visit",
+            "nativeMessaging": "Talk to other apps on your Mac", "notifications": "Show notifications",
+        ]
+        for permission in ext.requestedPermissions.map(\.rawValue).sorted() {
+            if let text = readable[permission] { lines.append("• " + text) }
+        }
+        alert.informativeText = lines.isEmpty
+            ? "This extension doesn’t ask for any special access."
+            : "It will be able to:\n" + lines.joined(separator: "\n")
+        alert.addButton(withTitle: "Add Extension")
+        alert.addButton(withTitle: "Cancel")
+        if let icon = ext.icon(for: CGSize(width: 64, height: 64)) { alert.icon = icon }
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    func performAction(_ id: String) {
+        guard let context = contexts[id] else { return }
+        context.performAction(for: BrowserModel.frontmost?.selectedTab)
+    }
+
+    // MARK: Telling extensions what the browser is doing
+
+    func tabOpened(_ tab: BrowserTab) { controller.didOpenTab(tab) }
+    func tabClosed(_ tab: BrowserTab) { controller.didCloseTab(tab) }
+    func tabActivated(_ tab: BrowserTab, previous: BrowserTab?) { controller.didActivateTab(tab, previousActiveTab: previous) }
+    func tabChanged(_ tab: BrowserTab) { controller.didChangeTabProperties([.URL, .title, .loading], for: tab) }
+
+    // MARK: WKWebExtensionControllerDelegate
+
+    func webExtensionController(_ controller: WKWebExtensionController, openWindowsFor extensionContext: WKWebExtensionContext) -> [any WKWebExtensionWindow] {
+        BrowserModel.frontmost.map { [$0] } ?? []
+    }
+
+    func webExtensionController(_ controller: WKWebExtensionController, focusedWindowFor extensionContext: WKWebExtensionContext) -> (any WKWebExtensionWindow)? {
+        BrowserModel.frontmost
+    }
+
+    func webExtensionController(_ controller: WKWebExtensionController, openNewTabUsing configuration: WKWebExtension.TabConfiguration,
+                                for extensionContext: WKWebExtensionContext,
+                                completionHandler: @escaping ((any WKWebExtensionTab)?, (any Error)?) -> Void) {
+        guard let model = BrowserModel.frontmost else { completionHandler(nil, nil); return }
+        let tab = model.newTab(url: configuration.url, select: configuration.shouldBeActive)
+        completionHandler(tab, nil)
+    }
+
+    func webExtensionController(_ controller: WKWebExtensionController, openOptionsPageFor extensionContext: WKWebExtensionContext,
+                                completionHandler: @escaping ((any Error)?) -> Void) {
+        if let url = extensionContext.optionsPageURL { BrowserModel.frontmost?.newTab(url: url) }
+        completionHandler(nil)
+    }
+
+    func webExtensionController(_ controller: WKWebExtensionController, promptForPermissions permissions: Set<WKWebExtension.Permission>,
+                                in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext,
+                                completionHandler: @escaping (Set<WKWebExtension.Permission>, Date?) -> Void) {
+        let name = extensionContext.webExtension.displayName ?? "An extension"
+        let alert = NSAlert()
+        alert.messageText = "“\(name)” wants more access"
+        alert.informativeText = "It’s asking for: " + permissions.map(\.rawValue).sorted().joined(separator: ", ")
+        alert.addButton(withTitle: "Allow")
+        alert.addButton(withTitle: "Don’t Allow")
+        completionHandler(alert.runModal() == .alertFirstButtonReturn ? permissions : [], nil)
+    }
+
+    func webExtensionController(_ controller: WKWebExtensionController, promptForPermissionToAccess urls: Set<URL>,
+                                in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext,
+                                completionHandler: @escaping (Set<URL>, Date?) -> Void) {
+        let name = extensionContext.webExtension.displayName ?? "An extension"
+        let alert = NSAlert()
+        alert.messageText = "Allow “\(name)” on this site?"
+        alert.informativeText = urls.compactMap(\.host).sorted().joined(separator: ", ")
+        alert.addButton(withTitle: "Allow")
+        alert.addButton(withTitle: "Don’t Allow")
+        completionHandler(alert.runModal() == .alertFirstButtonReturn ? urls : [], nil)
+    }
+
+    func webExtensionController(_ controller: WKWebExtensionController, didUpdate action: WKWebExtension.Action,
+                                forExtensionContext context: WKWebExtensionContext) {
+        objectWillChange.send()
+    }
+
+    func webExtensionController(_ controller: WKWebExtensionController, presentActionPopup action: WKWebExtension.Action,
+                                for context: WKWebExtensionContext, completionHandler: @escaping ((any Error)?) -> Void) {
+        guard let popover = action.popupPopover else { completionHandler(nil); return }
+        if let anchor = anchors[context.uniqueIdentifier], anchor.window != nil {
+            popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
+        } else if let view = BrowserModel.frontmost?.window?.contentView {
+            popover.show(relativeTo: NSRect(x: view.bounds.maxX - 60, y: view.bounds.maxY - 10, width: 1, height: 1), of: view, preferredEdge: .minY)
+        }
+        completionHandler(nil)
+    }
+}
+
+// MARK: - Hush's window and tabs, as extensions see them
+
+@available(macOS 15.4, *)
+extension BrowserModel: @preconcurrency WKWebExtensionWindow {
+    func tabs(for context: WKWebExtensionContext) -> [any WKWebExtensionTab] { tabs }
+    func activeTab(for context: WKWebExtensionContext) -> (any WKWebExtensionTab)? { selectedTab }
+    func windowType(for context: WKWebExtensionContext) -> WKWebExtension.WindowType { .normal }
+    func windowState(for context: WKWebExtensionContext) -> WKWebExtension.WindowState { .normal }
+    func isPrivate(for context: WKWebExtensionContext) -> Bool { false }
+    func frame(for context: WKWebExtensionContext) -> CGRect { window?.frame ?? .zero }
+    func screenFrame(for context: WKWebExtensionContext) -> CGRect { window?.screen?.frame ?? .zero }
+    func focus(for context: WKWebExtensionContext, completionHandler: @escaping ((any Error)?) -> Void) {
+        window?.makeKeyAndOrderFront(nil)
+        completionHandler(nil)
+    }
+}
+
+@available(macOS 15.4, *)
+extension BrowserTab: @preconcurrency WKWebExtensionTab {
+    func window(for context: WKWebExtensionContext) -> (any WKWebExtensionWindow)? { model }
+    func indexInWindow(for context: WKWebExtensionContext) -> Int { model?.tabs.firstIndex { $0 === self } ?? 0 }
+    func webView(for context: WKWebExtensionContext) -> WKWebView? { isAsleep ? nil : webView }
+    func title(for context: WKWebExtensionContext) -> String? { title }
+    func url(for context: WKWebExtensionContext) -> URL? { url }
+    func isLoadingComplete(for context: WKWebExtensionContext) -> Bool { !isLoading }
+    func isSelected(for context: WKWebExtensionContext) -> Bool { model?.selectedTab === self }
+    func activate(for context: WKWebExtensionContext, completionHandler: @escaping ((any Error)?) -> Void) {
+        model?.selectedID = id
+        completionHandler(nil)
+    }
+    func close(for context: WKWebExtensionContext, completionHandler: @escaping ((any Error)?) -> Void) {
+        model?.close(self)
+        completionHandler(nil)
+    }
+    func loadURL(_ url: URL, for context: WKWebExtensionContext, completionHandler: @escaping ((any Error)?) -> Void) {
+        load(url)
+        completionHandler(nil)
+    }
+    func reload(fromOrigin: Bool, for context: WKWebExtensionContext, completionHandler: @escaping ((any Error)?) -> Void) {
+        webView.reload()
+        completionHandler(nil)
+    }
+}
+
+// MARK: - Toolbar buttons
+
+/// One button per extension that has a toolbar action, with its icon and badge.
+struct ExtensionButtons: View {
+    var body: some View {
+        if #available(macOS 15.4, *) {
+            ExtensionButtonRow(manager: ExtensionManager.shared)
+        }
+    }
+}
+
+@available(macOS 15.4, *)
+private struct ExtensionButtonRow: View {
+    @ObservedObject var manager: ExtensionManager
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(manager.contexts.keys.sorted(), id: \.self) { id in
+                if let context = manager.contexts[id], let action = context.action(for: BrowserModel.frontmost?.selectedTab) {
+                    ExtensionButton(id: id, action: action, manager: manager)
+                }
+            }
+        }
+    }
+}
+
+@available(macOS 15.4, *)
+private struct ExtensionButton: View {
+    let id: String
+    let action: WKWebExtension.Action
+    let manager: ExtensionManager
+    @State private var hovering = false
+
+    var body: some View {
+        Button { manager.performAction(id) } label: {
+            ZStack(alignment: .topTrailing) {
+                Group {
+                    if let icon = action.icon(for: CGSize(width: 16, height: 16)) {
+                        Image(nsImage: icon).resizable().interpolation(.high)
+                    } else {
+                        Image(systemName: "puzzlepiece.extension")
+                    }
+                }
+                .frame(width: 16, height: 16)
+                .frame(width: 28, height: 26)
+                if !action.badgeText.isEmpty {
+                    Text(action.badgeText)
+                        .font(.system(size: 8, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 3)
+                        .frame(minWidth: 12, minHeight: 12)
+                        .background(Capsule().fill(Color.red))
+                        .offset(x: 2, y: 1)
+                }
+            }
+            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(hovering ? 0.08 : 0)))
+            .background(AnchorReader { manager.anchors[id] = $0 })
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(action.label)
+        .onHover { hovering = $0 }
+        .opacity(action.isEnabled ? 1 : 0.45)
+    }
+}
+
+/// Hands back the NSView behind a SwiftUI view, to anchor pop-ups to it.
+private struct AnchorReader: NSViewRepresentable {
+    let onView: (NSView) -> Void
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { onView(view) }
+        return view
+    }
+    func updateNSView(_ view: NSView, context: Context) {}
+}
