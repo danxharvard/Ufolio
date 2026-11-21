@@ -49,15 +49,28 @@ ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 echo "✓ $ZIP ($(du -h "$ZIP" | cut -f1))"
 
 if [ "${1:-}" != "--no-dmg" ]; then
-  echo "  making installer disk image"
   DMG="$BUILD/HushBrowser-$VERSION.dmg"
-  STAGE="$BUILD/dmg"
-  rm -rf "$STAGE" "$DMG"
-  mkdir -p "$STAGE"
-  cp -R "$APP" "$STAGE/"
-  ln -s /Applications "$STAGE/Applications"
-  hdiutil create -quiet -volname "$APP_NAME" -srcfolder "$STAGE" -fs HFS+ -format UDZO "$DMG"
-  rm -rf "$STAGE"
+  rm -f "$DMG"
+  if python3 -c "import dmgbuild" 2>/dev/null; then
+    # The styled installer: drag Hush onto Applications over a custom background.
+    echo "  making installer window"
+    ART="$BUILD/dmg-art"
+    swift scripts/make-dmg-background.swift "$ART" >/dev/null
+    tiffutil -cathidpicheck "$ART/background.png" "$ART/background@2x.png" -out "$ART/background.tiff" 2>/dev/null
+    python3 -m dmgbuild -s scripts/dmg-settings.py \
+      -D app="$APP" -D background="$ART/background.tiff" \
+      "$APP_NAME" "$DMG" >/dev/null
+  else
+    # Plain fallback when dmgbuild isn't installed (pip3 install dmgbuild).
+    echo "  making plain installer disk image (install dmgbuild for the styled one)"
+    STAGE="$BUILD/dmg"
+    rm -rf "$STAGE"
+    mkdir -p "$STAGE"
+    cp -R "$APP" "$STAGE/"
+    ln -s /Applications "$STAGE/Applications"
+    hdiutil create -quiet -volname "$APP_NAME" -srcfolder "$STAGE" -fs HFS+ -format UDZO "$DMG"
+    rm -rf "$STAGE"
+  fi
   echo "✓ $DMG ($(du -h "$DMG" | cut -f1))"
 fi
 echo "✓ $APP"

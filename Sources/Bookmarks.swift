@@ -405,45 +405,73 @@ struct StartBackgroundView: View {
     let style: StartBackground
     @Environment(\.colorScheme) private var scheme
     @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
-    @State private var drift = false
 
     var body: some View {
-        switch style {
-        case .plain:
-            Color(nsColor: .windowBackgroundColor)
-        case .twilight:
-            LinearGradient(
-                colors: scheme == .dark
-                    ? [Color(red: 0.09, green: 0.09, blue: 0.13), Color(red: 0.13, green: 0.11, blue: 0.19)]
-                    : [Color(red: 0.98, green: 0.97, blue: 1.0), Color(red: 0.93, green: 0.93, blue: 0.98)],
-                startPoint: .top, endPoint: .bottom)
-        case .aurora:
-            ZStack {
-                (scheme == .dark ? Color(red: 0.07, green: 0.07, blue: 0.11) : Color(red: 0.97, green: 0.97, blue: 0.99))
-                GeometryReader { geo in
-                    let w = geo.size.width, h = geo.size.height
-                    ZStack {
-                        blob(Color(red: 0.45, green: 0.35, blue: 0.95), size: w * 0.55)
-                            .offset(x: drift ? -w * 0.18 : -w * 0.25, y: drift ? -h * 0.20 : -h * 0.12)
-                        blob(Color(red: 0.15, green: 0.65, blue: 0.85), size: w * 0.45)
-                            .offset(x: drift ? w * 0.22 : w * 0.15, y: drift ? h * 0.05 : -h * 0.08)
-                        blob(Color(red: 0.95, green: 0.45, blue: 0.65), size: w * 0.40)
-                            .offset(x: drift ? -w * 0.02 : w * 0.06, y: drift ? h * 0.28 : h * 0.20)
-                    }
-                    .frame(width: w, height: h)
-                }
-                .blur(radius: 90)
-                .opacity(scheme == .dark ? 0.55 : 0.35)
-            }
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 14).repeatForever(autoreverses: true)) { drift = true }
+        Group {
+            switch style {
+            case .plain:
+                Color(nsColor: .windowBackgroundColor)
+            case .twilight:
+                LinearGradient(
+                    colors: scheme == .dark
+                        ? [Color(red: 0.09, green: 0.09, blue: 0.13), Color(red: 0.13, green: 0.11, blue: 0.19)]
+                        : [Color(red: 0.98, green: 0.97, blue: 1.0), Color(red: 0.93, green: 0.93, blue: 0.98)],
+                    startPoint: .top, endPoint: .bottom)
+            case .aurora:
+                AuroraView(dark: scheme == .dark, animate: !reduceMotion)
             }
         }
+        // A backdrop must never catch clicks or spill outside the page.
+        .clipped()
+        .allowsHitTesting(false)
+    }
+}
+
+/// Slowly drifting colour fields. Drawn frame by frame from the clock (no long-running
+/// SwiftUI animation that could leak into the toolbar), with cheap radial gradients.
+private struct AuroraView: View {
+    let dark: Bool
+    let animate: Bool
+    /// Pauses the drift when the window isn't the one in use (saves power).
+    @Environment(\.controlActiveState) private var activeState
+
+    private struct Field {
+        let color: Color
+        let from: CGPoint   // centre at the start of the drift, as fractions of the size
+        let to: CGPoint     // centre at the other end
+        let radius: CGFloat // fraction of the width
+        let speed: Double   // seconds for one drift there and back
     }
 
-    private func blob(_ color: Color, size: CGFloat) -> some View {
-        Circle().fill(color).frame(width: size, height: size)
+    private let fields = [
+        Field(color: Color(red: 0.45, green: 0.35, blue: 0.95), from: CGPoint(x: 0.25, y: 0.32), to: CGPoint(x: 0.34, y: 0.22), radius: 0.48, speed: 28),
+        Field(color: Color(red: 0.15, green: 0.65, blue: 0.85), from: CGPoint(x: 0.66, y: 0.40), to: CGPoint(x: 0.74, y: 0.55), radius: 0.40, speed: 34),
+        Field(color: Color(red: 0.95, green: 0.45, blue: 0.65), from: CGPoint(x: 0.56, y: 0.72), to: CGPoint(x: 0.46, y: 0.80), radius: 0.36, speed: 40),
+    ]
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 24, paused: !animate || activeState == .inactive)) { context in
+            Canvas { ctx, size in
+                ctx.fill(Path(CGRect(origin: .zero, size: size)),
+                         with: .color(dark ? Color(red: 0.07, green: 0.07, blue: 0.11) : Color(red: 0.97, green: 0.97, blue: 0.99)))
+                let t = animate ? context.date.timeIntervalSinceReferenceDate : 0
+                let strength = dark ? 0.55 : 0.32
+                for field in fields {
+                    let phase = (sin(t * 2 * .pi / field.speed) + 1) / 2
+                    let center = CGPoint(x: (field.from.x + (field.to.x - field.from.x) * phase) * size.width,
+                                         y: (field.from.y + (field.to.y - field.from.y) * phase) * size.height)
+                    let r = field.radius * size.width
+                    let rect = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
+                    ctx.fill(Path(ellipseIn: rect), with: .radialGradient(
+                        Gradient(stops: [
+                            .init(color: field.color.opacity(strength), location: 0),
+                            .init(color: field.color.opacity(strength * 0.45), location: 0.45),
+                            .init(color: field.color.opacity(0), location: 1),
+                        ]),
+                        center: center, startRadius: 0, endRadius: r))
+                }
+            }
+        }
     }
 }
 

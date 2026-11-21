@@ -25,8 +25,9 @@ All settings live in **Hush Browser › Settings…** (⌘,).
 Download `HushBrowser-<version>.dmg` from [Releases](https://github.com/danxharvard/hushbrowser/releases),
 open it and drag **Hush Browser** into **Applications**.
 
-The first time you open it, right-click the app › **Open** › **Open**. macOS asks this once because
-the app isn't signed with a paid Apple Developer ID.
+The first time you open it, macOS says it can't verify Hush, because it isn't signed with a paid
+Apple Developer ID. Click **Done**, open **System Settings › Privacy & Security**, scroll to
+**Security** and click **Open Anyway** next to Hush Browser. You only do this once.
 
 ## Build from source
 
@@ -75,7 +76,8 @@ quit — or straight away from Settings › Updates.
 | `Sources/Autofill.swift` | Passwords, cards and contact AutoFill (Keychain + Touch ID) |
 | `Sources/Downloads.swift` | Downloads and the downloads list |
 | `Sources/Welcome.swift` | Welcome screen and default-browser prompt |
-| `scripts/build-app.sh` | Builds the app bundle and DMG |
+| `scripts/build-app.sh` | Builds the app bundle, update zip and DMG |
+| `scripts/make-dmg-background.swift`, `scripts/dmg-settings.py` | The styled installer window |
 | `scripts/make-icon.swift` | Draws the app icon |
 
 ## Privacy notes

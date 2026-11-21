@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.2
+
+**Fixed**
+- Imported filter lists (such as EasyList) could block entire websites, including Google, YouTube
+  and X: rules that hide page elements on a site were misread as "block this site". Lists converted
+  by the faulty version are re-downloaded and converted again automatically on launch.
+- The Aurora start-page background could push the address bar out of the toolbar and swallow
+  clicks, so typing an address or clicking bookmarks did nothing. Aurora is now drawn without
+  animations that can affect the rest of the window, can't catch clicks, and pauses when the
+  window isn't in use.
+
+**New**
+- A styled installer: drag the Hush icon onto Applications over a custom background.
+- Install instructions (including macOS's "Open Anyway" step) on every GitHub release.
+
+**Tested** in Twilight, Aurora and Plain, each in light and dark mode: the address bar stays put,
+clicks reach it, and typing an address opens the right site. EasyList, EasyPrivacy and hosts lists
+were checked so that no whole site is blocked.
+
 ## 0.3.1
 
 **Fixed**

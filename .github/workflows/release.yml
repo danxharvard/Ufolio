@@ -27,6 +27,9 @@ jobs:
             echo "Tag v$TAG doesn't match VERSION ($FILE)"; exit 1
           fi
 
+      - name: Install the installer-window tool
+        run: python3 -m pip install --user dmgbuild
+
       - name: Build app, update zip and installer
         run: ./scripts/build-app.sh
 
@@ -39,4 +42,4 @@ jobs:
             "build/HushBrowser-$V.dmg" \
             "build/HushBrowser-$V.zip" \
             --title "Hush Browser $V" \
-            --generate-notes
+            --notes "$(sed "s/VERSION/$V/g" .github/release-notes.md)"

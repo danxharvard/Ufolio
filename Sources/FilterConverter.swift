@@ -12,6 +12,10 @@ import Foundation
 /// Rules WebKit can't run (scriptlets, `:has-text`, regex rules, redirects…) are
 /// skipped and counted, so the user can see how much of a list was used.
 enum FilterConverter {
+    /// Bumped whenever a conversion bug is fixed; lists converted by an older version are redone.
+    /// 2: element-hiding rules were mistaken for hosts entries and blocked whole sites.
+    static let version = 2
+
     /// WebKit's limit for one compiled list.
     static let maxRules = 150_000
     /// Element-hiding selectors are grouped so one bad selector can't hide a whole list's worth.
@@ -174,7 +178,13 @@ enum FilterConverter {
     ]
 
     private static func hostsEntry(_ line: String) -> HostsLine {
-        let withoutComment = line.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
+        // Adblock element-hiding rules use "#" too ("example.com##.ad"). Those must never be read
+        // as hosts lines, or the whole site gets blocked (the 0.3.1 bug).
+        if ["##", "#@#", "#?#", "#$#", "#%#"].contains(where: line.contains) { return .notHosts }
+        // In hosts files a comment is a "#" at the start or after whitespace.
+        var withoutComment = Substring(line)
+        if let r = line.range(of: " #") ?? line.range(of: "\t#") { withoutComment = line[..<r.lowerBound] }
+        if withoutComment.contains("#") { return .notHosts }
         let parts = withoutComment.split(whereSeparator: { $0 == " " || $0 == "\t" })
         if parts.count >= 2, ["0.0.0.0", "127.0.0.1", "::", "::1", "0"].contains(String(parts[0])) {
             let domain = parts[1].lowercased()

@@ -11,6 +11,10 @@ struct FilterList: Codable, Identifiable, Equatable {
     var format: String
     var enabled = true
     var updatedAt = Date()
+    /// FilterConverter.version that produced this list's rules (nil = version 1).
+    var converterVersion: Int?
+
+    var isOutdated: Bool { (converterVersion ?? 1) < FilterConverter.version }
 
     var identifier: String { "hush-list-\(id.uuidString)" }
 }
@@ -76,6 +80,19 @@ final class ContentBlocker: ObservableObject {
             loadCompiled(builtIn.identifier) { builtIn.json }
         }
         for list in lists {
+            if list.isOutdated {
+                // Converted by an older, buggy converter: never load those rules.
+                if let source = list.sourceURL {
+                    importFromWeb(source, name: list.name)
+                } else if let i = lists.firstIndex(where: { $0.id == list.id }) {
+                    lists[i].enabled = false
+                    saveLists()
+                    status = "“\(list.name)” was turned off because an older version of Hush converted it incorrectly. Please import it again."
+                    statusIsError = true
+                }
+                store.removeContentRuleList(forIdentifier: list.identifier) { _ in }
+                continue
+            }
             let file = jsonFile(for: list)
             loadCompiled(list.identifier) { try? String(contentsOf: file) }
         }
@@ -125,7 +142,7 @@ final class ContentBlocker: ObservableObject {
 
     private var activeIdentifiers: [String] {
         BuiltInRules.allCases.filter(\.isEnabled).map(\.identifier)
-            + lists.filter(\.enabled).map(\.identifier)
+            + lists.filter { $0.enabled && !$0.isOutdated }.map(\.identifier)
     }
 
     private func configure(_ controller: WKUserContentController) {
@@ -243,6 +260,7 @@ final class ContentBlocker: ObservableObject {
             list.skippedCount = output.skipped
             list.format = output.format
             list.updatedAt = Date()
+            list.converterVersion = FilterConverter.version
 
             await MainActor.run { self.status = "Compiling \(output.ruleCount.formatted()) rules…" }
             let compiledList = try await compile(list.identifier, json: output.json)
