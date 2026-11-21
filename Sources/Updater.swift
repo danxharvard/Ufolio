@@ -150,6 +150,16 @@ final class Updater: ObservableObject {
             guard info?["CFBundleShortVersionString"] as? String == latest.version else {
                 throw UpdateError("The download is the wrong version.")
             }
+            // Never install a version this Mac can't open.
+            if let minimum = info?["LSMinimumSystemVersion"] as? String {
+                let parts = minimum.split(separator: ".").compactMap { Int($0) }
+                let needed = OperatingSystemVersion(majorVersion: parts.first ?? 0,
+                                                    minorVersion: parts.count > 1 ? parts[1] : 0,
+                                                    patchVersion: parts.count > 2 ? parts[2] : 0)
+                guard ProcessInfo.processInfo.isOperatingSystemAtLeast(needed) else {
+                    throw UpdateError("Hush \(latest.version) needs macOS \(minimum) or later. Update macOS in System Settings › General › Software Update to get it.")
+                }
+            }
             try run("/usr/bin/codesign", ["--verify", "--deep", newApp.path])
             try? FileManager.default.removeItem(at: zip)
 

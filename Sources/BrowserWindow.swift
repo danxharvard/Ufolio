@@ -390,9 +390,9 @@ struct ShieldsPanel: View {
 }
 
 private extension View {
-    /// Rolling-number animation where macOS supports it.
-    @ViewBuilder func contentTransitionIfAvailable() -> some View {
-        if #available(macOS 14.0, *) { self.contentTransition(.numericText()) } else { self }
+    /// Rolling-number animation.
+    func contentTransitionIfAvailable() -> some View {
+        contentTransition(.numericText())
     }
 }
 

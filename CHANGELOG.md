@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.0
+
+**Changed**
+- Hush now needs macOS 15 Sequoia or later. Apple only keeps the web engine that Hush, like Safari,
+  is built on up to date on recent versions of macOS, so this keeps you on a patched one.
+- Software Update won't install a version of Hush that your Mac can't open. It tells you which
+  macOS you need instead.
+
 ## 0.13.0
 
 **New: extensions in the toolbar**

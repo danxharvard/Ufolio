@@ -19,7 +19,7 @@ mkdir -p "$BUILD"
 
 for ARCH in x86_64 arm64; do
   echo "  compiling for $ARCH"
-  swiftc -O -parse-as-library -sdk "$SDK" -target "$ARCH-apple-macos13.0" \
+  swiftc -O -parse-as-library -sdk "$SDK" -target "$ARCH-apple-macos15.0" \
     Sources/*.swift -o "$BUILD/Hush-$ARCH"
 done
 lipo -create "$BUILD/Hush-x86_64" "$BUILD/Hush-arm64" -output "$BUILD/Hush"

@@ -2,6 +2,8 @@
 
 ## Install
 
+Hush needs **macOS 15 Sequoia or later** on an Apple Silicon or Intel Mac.
+
 1. Download **HushBrowser-VERSION.dmg** below and open it.
 2. Drag **Hush Browser** onto the **Applications** folder.
 3. Open Hush from Applications. macOS will say it can't verify Hush, because Hush isn't signed with a
