@@ -56,18 +56,25 @@ struct BrowserWindow: View {
             }
         )
         .background(WindowReader { model.window = $0 })
-        .sheet(isPresented: $showWelcome) {
-            WelcomeView {
-                UserDefaults.standard.set(true, forKey: Prefs.hasOnboarded)
-                showWelcome = false
-                model.focusAddressBar()
+        // The welcome screen and default-browser question are drawn inside the window,
+        // over a dimmed backdrop (SwiftUI sheets could end up off-screen and lock the window).
+        .overlay {
+            if showWelcome || showDefaultPrompt {
+                LaunchCardOverlay {
+                    if showWelcome {
+                        WelcomeView {
+                            UserDefaults.standard.set(true, forKey: Prefs.hasOnboarded)
+                            showWelcome = false
+                            model.focusAddressBar()
+                        }
+                    } else {
+                        DefaultBrowserPrompt { showDefaultPrompt = false }
+                    }
+                }
+                .transition(.opacity)
             }
         }
-        .background(
-            Color.clear.sheet(isPresented: $showDefaultPrompt) {
-                DefaultBrowserPrompt { showDefaultPrompt = false }
-            }
-        )
+        .animation(.easeOut(duration: 0.25), value: showWelcome || showDefaultPrompt)
         // Links opened from other apps (when Hush is the default browser) arrive here.
         .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         .onOpenURL { url in
@@ -359,5 +366,50 @@ struct WindowReader: NSViewRepresentable {
     }
     func updateNSView(_ view: NSView, context: Context) {
         DispatchQueue.main.async { onWindow(view.window) }
+    }
+}
+
+/// A card floating over a dimmed window, scaled down if the window is too small for it.
+private struct LaunchCardOverlay<Card: View>: View {
+    @ViewBuilder let card: Card
+    @State private var size: CGSize = .zero
+    @State private var appeared = false
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                Rectangle()
+                    .fill(Color.black.opacity(0.3))
+                    .contentShape(Rectangle())
+                    .onTapGesture {} // clicks outside the card do nothing
+                card
+                    .background(
+                        GeometryReader { inner in
+                            Color.clear.onAppear { size = inner.size }
+                        }
+                    )
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(.regularMaterial)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(0.08))
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .shadow(color: .black.opacity(0.35), radius: 40, y: 18)
+                    .scaleEffect(scale(in: geo.size) * (appeared ? 1 : 0.96))
+                    .opacity(appeared ? 1 : 0)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) { appeared = true }
+        }
+    }
+
+    private func scale(in space: CGSize) -> CGFloat {
+        guard size.width > 0, size.height > 0 else { return 1 }
+        return min(1, (space.width - 40) / size.width, (space.height - 40) / size.height)
     }
 }

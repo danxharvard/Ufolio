@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1
+
+**Fixed**
+- On first launch the welcome screen could appear off-screen, leaving the browser window dimmed
+  and ignoring every click and keystroke. The welcome screen and the default-browser question are
+  now shown inside the window, so they can't go missing.
+- If Hush was last quit with no windows open, it could reopen as just a menu bar. It now always
+  opens a browser window, and clicking its Dock icon brings one back.
+
 ## 0.3.0
 
 **New**

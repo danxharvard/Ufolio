@@ -24,6 +24,11 @@ final class BrowserModel: ObservableObject {
     private static var didRestoreSession = false
     private var sessionSave: DispatchWorkItem?
 
+    /// True when a Hush browser window is showing.
+    static var hasVisibleWindow: Bool {
+        all.allObjects.contains { $0.window?.isVisible == true }
+    }
+
     init() {
         BrowserModel.all.add(self)
         // The first window after launch can bring back last time's tabs.

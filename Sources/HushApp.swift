@@ -42,7 +42,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         BlockStats.shared.save()
     }
 
+    /// Clicking Hush in the Dock with no window open brings one back.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !BrowserModel.hasVisibleWindow { WindowOpener.ensureWindow() }
+        return true
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // macOS restores the windows Hush had when it quit; if that was none,
+        // open a fresh one so Hush never starts as just a menu bar.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { WindowOpener.ensureWindow() }
         ContentBlocker.shared.prepare()
         Updater.shared.start()
     }
@@ -140,5 +149,22 @@ enum QuitHelper {
             for sheet in window.sheets { window.endSheet(sheet) }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { NSApp.terminate(nil) }
+    }
+}
+
+enum WindowOpener {
+    /// Shows a browser window, opening a new one if none is visible.
+    static func ensureWindow() {
+        if BrowserModel.hasVisibleWindow {
+            BrowserModel.frontmost?.window?.makeKeyAndOrderFront(nil)
+            return
+        }
+        // Use SwiftUI's own File › New Window command, which creates a proper browser window.
+        let items = NSApp.mainMenu?.items.flatMap { $0.submenu?.items ?? [] } ?? []
+        if let item = items.first(where: { $0.keyEquivalent == "n" && $0.keyEquivalentModifierMask == .command }),
+           let menu = item.menu {
+            menu.performActionForItem(at: menu.index(of: item))
+        }
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
