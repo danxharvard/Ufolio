@@ -118,116 +118,122 @@ final class SitePermissions: ObservableObject {
 
 // MARK: - Local weather for the start page
 
-/// Finds your approximate location and the current weather, for a personal start page.
-/// The position is rounded to about 1 km before it leaves your Mac: it goes to
-/// Open-Meteo for the weather and to Apple to look up the town name.
-final class LocalWeather: NSObject, ObservableObject, CLLocationManagerDelegate {
+/// The town you chose for your personal start page, and its current weather.
+/// Hush never asks macOS for your location: you type a town or postcode, Apple finds
+/// the place, and only its rough position (about 1 km) goes to Open-Meteo for the weather.
+final class LocalWeather: ObservableObject {
     static let shared = LocalWeather()
 
-    @Published private(set) var city: String?
+    struct Place: Codable, Equatable {
+        var name: String      // "Manchester"
+        var detail: String    // "England, United Kingdom"
+        var latitude: Double
+        var longitude: Double
+    }
+
+    @Published private(set) var place: Place?
     @Published private(set) var temperature: Int?
     @Published private(set) var symbol = "cloud.sun"
     @Published private(set) var summary = ""
-    @Published private(set) var authorization: CLAuthorizationStatus
     @Published private(set) var problem: String?
 
-    private let manager = CLLocationManager()
+    private static let placeKey = "startPagePlace"
     private var lastUpdate: Date?
+    private var loading = false
 
-    private override init() {
-        authorization = manager.authorizationStatus
-        super.init()
-        manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyKilometer
-    }
-
-    var isEnabled: Bool { Prefs.bool(Prefs.startPageWeather) }
-
-    var isAuthorized: Bool {
-        authorization == .authorizedAlways
-    }
-
-    var statusText: String {
-        switch authorization {
-        case .notDetermined: return "Hush hasn’t asked for your location yet"
-        case .denied: return "Location access is turned off for Hush in System Settings"
-        case .restricted: return "Location access is restricted on this Mac"
-        default:
-            if let problem { return problem }
-            if let city { return "Using your location near \(city)" }
-            return "Location access allowed"
+    private init() {
+        if let data = UserDefaults.standard.data(forKey: Self.placeKey),
+           let saved = try? JSONDecoder().decode(Place.self, from: data) {
+            place = saved
         }
+        // The old setting asked macOS for your location; it's no longer used.
+        UserDefaults.standard.removeObject(forKey: "startPageWeather")
+    }
+
+    var isPersonalised: Bool { place != nil }
+    var city: String? { place?.name }
+
+    /// Finds a town or postcode. Doesn't need (or ask for) location access.
+    static func lookUp(_ query: String) async -> Result<Place, LookupError> {
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.count >= 2, text.count <= 100 else { return .failure(.notFound) }
+        do {
+            let marks = try await CLGeocoder().geocodeAddressString(text)
+            guard let mark = marks.first, let location = mark.location else { return .failure(.notFound) }
+            let name = mark.locality ?? mark.subAdministrativeArea ?? mark.name ?? text
+            let detail = [mark.administrativeArea, mark.country]
+                .compactMap { $0 }.filter { $0 != name }
+                .reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+                .joined(separator: ", ")
+            return .success(Place(name: name, detail: detail,
+                                  latitude: (location.coordinate.latitude * 100).rounded() / 100,
+                                  longitude: (location.coordinate.longitude * 100).rounded() / 100))
+        } catch let error as CLError where error.code == .network {
+            return .failure(.offline)
+        } catch {
+            return .failure(.notFound)
+        }
+    }
+
+    enum LookupError: Error {
+        case notFound, offline
+        var message: String {
+            switch self {
+            case .notFound: return "Hush couldn’t find that place. Try a town name or a full postcode."
+            case .offline: return "Hush couldn’t look that up. Check your internet connection and try again."
+            }
+        }
+    }
+
+    func save(_ newPlace: Place) {
+        if let data = try? JSONEncoder().encode(newPlace) {
+            UserDefaults.standard.set(data, forKey: Self.placeKey)
+        }
+        place = newPlace
+        temperature = nil
+        lastUpdate = nil
+        refresh()
+    }
+
+    func clear() {
+        UserDefaults.standard.removeObject(forKey: Self.placeKey)
+        place = nil
+        temperature = nil
+        problem = nil
+        lastUpdate = nil
     }
 
     /// Refreshes at most every 20 minutes.
     func refreshIfNeeded() {
-        guard isEnabled else { return }
         if let lastUpdate, Date().timeIntervalSince(lastUpdate) < 20 * 60, temperature != nil { return }
-        request()
+        refresh()
     }
 
-    func request() {
-        switch manager.authorizationStatus {
-        case .notDetermined:
-            manager.requestWhenInUseAuthorization()
-        case .denied, .restricted:
-            authorization = manager.authorizationStatus
-        default:
-            manager.requestLocation()
+    func refresh() {
+        guard let place, !loading else { return }
+        loading = true
+        Task {
+            await self.update(for: place)
+            await MainActor.run { self.loading = false }
         }
     }
 
-    func clear() {
-        city = nil
-        temperature = nil
-        lastUpdate = nil
-    }
-
-    static func openSystemLocationSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    // CLLocationManagerDelegate
-
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        DispatchQueue.main.async {
-            self.authorization = manager.authorizationStatus
-            if self.isEnabled && self.isAuthorized { manager.requestLocation() }
-        }
-    }
-
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last else { return }
-        Task { await self.update(for: location) }
-    }
-
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        DispatchQueue.main.async { self.problem = "Couldn’t find your location right now" }
-    }
-
-    private func update(for location: CLLocation) async {
-        // Round to ~1 km so the exact position never leaves the Mac.
-        let lat = (location.coordinate.latitude * 100).rounded() / 100
-        let lon = (location.coordinate.longitude * 100).rounded() / 100
+    private func update(for place: Place) async {
         let fahrenheit = Locale.current.measurementSystem == .us
-
         var components = URLComponents(string: "https://api.open-meteo.com/v1/forecast")!
         components.queryItems = [
-            .init(name: "latitude", value: String(lat)),
-            .init(name: "longitude", value: String(lon)),
+            .init(name: "latitude", value: String(place.latitude)),
+            .init(name: "longitude", value: String(place.longitude)),
             .init(name: "current", value: "temperature_2m,weather_code,is_day"),
             .init(name: "temperature_unit", value: fahrenheit ? "fahrenheit" : "celsius"),
         ]
-        let rounded = CLLocation(latitude: lat, longitude: lon)
-        let place = try? await CLGeocoder().reverseGeocodeLocation(rounded).first
-
-        guard let url = components.url,
-              let (data, _) = try? await URLSession.shared.data(from: url),
+        var request = URLRequest(url: components.url!, timeoutInterval: 15)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let current = json["current"] as? [String: Any],
-              let temp = current["temperature_2m"] as? Double else {
+              let temp = current["temperature_2m"] as? Double, temp.isFinite else {
             await MainActor.run { self.problem = "Couldn’t get the weather right now" }
             return
         }
@@ -235,7 +241,7 @@ final class LocalWeather: NSObject, ObservableObject, CLLocationManagerDelegate 
         let isDay = (current["is_day"] as? Int ?? 1) == 1
         let (symbol, summary) = Self.describe(code, isDay: isDay)
         await MainActor.run {
-            self.city = place?.locality ?? place?.subAdministrativeArea ?? place?.name
+            guard self.place == place else { return }   // changed while loading
             self.temperature = Int(temp.rounded())
             self.symbol = symbol
             self.summary = summary

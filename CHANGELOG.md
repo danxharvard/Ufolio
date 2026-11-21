@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.12.0
+
+**New: Personalise Start Page**
+- A small Personalise Start Page button sits in the corner of every new tab. Click it and type
+  your town or postcode to see your local weather under the greeting. More personal touches
+  are coming soon.
+- You can change or remove your town any time, from the same button or Settings › Location.
+
+**Fixed**
+- Hush no longer asks macOS for your location when it starts. It never uses your Mac's location
+  for itself any more. Websites can still ask, and Hush checks with you first.
+
 ## 0.11.0
 
 **New look for Settings**

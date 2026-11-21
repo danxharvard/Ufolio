@@ -27,7 +27,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .extensions: return "chrome extension extensions web store add-on plugin dark reader"
         case .privacy: return "cookies https tracking gpc fraud phishing look-alike clean links camera microphone pop-ups autoplay javascript website data clear"
         case .passwords: return "autofill passwords credit cards contact card keychain touch id"
-        case .location: return "location weather permission maps"
+        case .location: return "location weather town postcode personalise start page permission maps"
         case .updates: return "update updates version changelog what's new release notes"
         }
     }
@@ -1112,38 +1112,44 @@ private struct AddListSheet: View {
 // MARK: - Location
 
 private struct LocationSettings: View {
-    @AppStorage(Prefs.startPageWeather) private var weatherOn = false
     @AppStorage(Prefs.locationPolicy) private var policy = PermissionPolicy.ask.rawValue
     @ObservedObject private var weather = LocalWeather.shared
+    @State private var editing = false
 
     var body: some View {
         Form {
             Section {
-                SettingsHeader(tab: .location, subtitle: "Let Hush use your approximate location for a more personal browser. Nothing is shared without your say.")
+                SettingsHeader(tab: .location, subtitle: "Choose which websites can know where you are. Hush itself never uses your Mac’s location.")
             }
 
             Section {
-                DescribedToggle(title: "Personalise the start page",
-                                detail: "Shows your town and the local weather under the greeting.",
-                                isOn: $weatherOn)
-                if weatherOn {
+                LabeledContent {
                     HStack(spacing: 8) {
-                        Image(systemName: weather.isAuthorized ? "location.fill" : "location.slash")
-                            .foregroundStyle(weather.isAuthorized ? Color.accentColor : Color.orange)
-                        Text(weather.statusText)
-                            .font(.system(size: 12))
-                        Spacer()
-                        if weather.authorization == .denied || weather.authorization == .restricted {
-                            Button("Open System Settings…") { LocalWeather.openSystemLocationSettings() }
-                                .controlSize(.small)
-                        } else if let temperature = weather.temperature {
-                            Image(systemName: weather.symbol).symbolRenderingMode(.multicolor)
-                            Text("\(temperature)° \(weather.summary)").font(.system(size: 12))
+                        if weather.isPersonalised {
+                            Button("Remove") { weather.clear() }
+                        }
+                        Button(weather.isPersonalised ? "Change…" : "Personalise…") { editing = true }
+                    }
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Your town for the start page")
+                        if let place = weather.place {
+                            HStack(spacing: 5) {
+                                Text(place.detail.isEmpty ? place.name : "\(place.name), \(place.detail)")
+                                if let t = weather.temperature {
+                                    Image(systemName: weather.symbol).symbolRenderingMode(.multicolor)
+                                    Text("\(t)° \(weather.summary)")
+                                }
+                            }
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                        } else {
+                            Text("Not set: add a town or postcode to see your local weather")
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                     }
                 }
-            } header: { SectionTitle("Hush") } footer: {
-                Text("Your position is rounded to about 1 km before it leaves your Mac. It goes to Open-Meteo for the weather and to Apple to find your town’s name.")
+            } header: { SectionTitle("Start page") } footer: {
+                Text("What you type goes to Apple to find the place, and only its rough position goes to Open-Meteo for the weather.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1163,8 +1169,8 @@ private struct LocationSettings: View {
             } header: { SectionTitle("Your answers") }
         }
         .formStyle(SafariFormStyle())
-        .onChange(of: weatherOn) { on in
-            if on { weather.request() } else { weather.clear() }
+        .sheet(isPresented: $editing) {
+            PersonaliseCard { editing = false }
         }
     }
 }

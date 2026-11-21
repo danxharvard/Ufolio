@@ -15,7 +15,7 @@ struct StartPage: View {
     @AppStorage(Prefs.startBookmarks) private var showFavourites = true
     @AppStorage(Prefs.startFrequent) private var showSuggestions = true
     @AppStorage(Prefs.startPrivacyReport) private var showPrivacy = true
-    @AppStorage(Prefs.startPageWeather) private var showWeather = false
+    @State private var personalising = false
 
     var body: some View {
         let favouriteHosts = Set(bookmarks.items.compactMap { $0.url.host?.lowercased().strippingWWW })
@@ -45,9 +45,22 @@ struct StartPage: View {
                 .frame(maxWidth: .infinity)
             }
         }
+        .overlay(alignment: .topTrailing) {
+            PersonaliseButton { personalising = true }
+                .padding(.top, 16)
+                .padding(.trailing, 18)
+                .opacity(personalising ? 0 : 1)
+        }
+        .overlay {
+            if personalising {
+                LaunchCardOverlay { PersonaliseCard { personalising = false } }
+                    .transition(.opacity)
+            }
+        }
         .animation(.easeOut(duration: 0.25), value: closed.tabs.count)
+        .animation(.easeOut(duration: 0.2), value: personalising)
         .onAppear { weather.refreshIfNeeded() }
-        .onChange(of: showWeather) { on in if on { weather.request() } }
+        .onReceive(NotificationCenter.default.publisher(for: QuitHelper.closeSheets)) { _ in personalising = false }
     }
 
     private var header: some View {
@@ -57,10 +70,10 @@ struct StartPage: View {
             Text("Hush")
                 .font(.system(size: 50, weight: .thin, design: .rounded))
                 .tracking(2)
-            if showGreeting || (showWeather && weather.temperature != nil) {
+            if showGreeting || weather.temperature != nil {
                 HStack(spacing: 8) {
                     if showGreeting { Text(greeting) }
-                    if showWeather, let temperature = weather.temperature {
+                    if let temperature = weather.temperature {
                         if showGreeting { Text("·").foregroundStyle(.tertiary) }
                         Image(systemName: weather.symbol).symbolRenderingMode(.multicolor)
                         Text("\(temperature)°")

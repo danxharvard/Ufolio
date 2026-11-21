@@ -574,7 +574,7 @@ struct WindowReader: NSViewRepresentable {
 }
 
 /// A card floating over a dimmed window, scaled down if the window is too small for it.
-private struct LaunchCardOverlay<Card: View>: View {
+struct LaunchCardOverlay<Card: View>: View {
     @ViewBuilder let card: Card
     @State private var size: CGSize = .zero
     @State private var appeared = false
