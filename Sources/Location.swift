@@ -70,7 +70,6 @@ final class SitePermissions: ObservableObject {
         if remembered.allSatisfy({ $0 == true }) { completion(true); return }
         if remembered.contains(where: { $0 == false }) { completion(false); return }
 
-        let alert = NSAlert()
         let site = ContentBlocker.normalize(host)
         let what: String
         switch Set(kinds) {
@@ -79,23 +78,29 @@ final class SitePermissions: ObservableObject {
         case [.microphone]: what = "your microphone"
         default: what = "your camera and microphone"
         }
+        let alert = NSAlert()
         alert.messageText = "“\(site)” wants to use \(what)"
         alert.informativeText = kinds.contains(.location)
-            ? "The website will be told your approximate position. You can change this later in Hush Settings › Location."
-            : "You can change this later in Hush Settings › Privacy."
-        alert.addButton(withTitle: "Allow")
+            ? "The website will be told your approximate position. You can change your answer any time in Hush Settings › Location."
+            : "You can change your answer any time in Hush Settings › Privacy."
+        alert.addButton(withTitle: "Allow Once")
+        alert.addButton(withTitle: "Always Allow")
         alert.addButton(withTitle: "Don’t Allow")
-        alert.showsSuppressionButton = true
-        alert.suppressionButton?.title = "Remember my choice for this website"
-        alert.suppressionButton?.state = .on
+        alert.buttons[2].keyEquivalent = "\u{1b}" // Esc = Don't Allow
         if let image = NSImage(systemSymbolName: kinds[0].symbol, accessibilityDescription: nil) {
             alert.icon = image
         }
 
         let finish: (NSApplication.ModalResponse) -> Void = { [weak self] response in
-            let allowed = response == .alertFirstButtonReturn
-            if alert.suppressionButton?.state == .on { self?.set(allowed, for: site, kinds) }
-            completion(allowed)
+            switch response {
+            case .alertFirstButtonReturn:           // Allow Once: just this time
+                completion(true)
+            case .alertSecondButtonReturn:          // Always Allow: remembered for this site
+                self?.set(true, for: site, kinds)
+                completion(true)
+            default:                                // Don't Allow: this time; the site can ask again later
+                completion(false)
+            }
         }
         if let window {
             alert.beginSheetModal(for: window, completionHandler: finish)

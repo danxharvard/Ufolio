@@ -1,0 +1,348 @@
+import SwiftUI
+import WebKit
+
+/// One download in the Downloads list.
+final class DownloadItem: ObservableObject, Identifiable {
+    enum State: String, Codable { case downloading, finished, failed, cancelled }
+
+    let id: UUID
+    @Published var filename: String
+    @Published var destination: URL?
+    @Published var progress: Double
+    @Published var state: State
+    @Published var totalBytes: Int64
+    let started: Date
+    weak var download: WKDownload?
+    private var observation: NSKeyValueObservation?
+
+    init(filename: String, download: WKDownload?) {
+        id = UUID()
+        self.filename = filename
+        self.download = download
+        progress = 0
+        state = .downloading
+        totalBytes = 0
+        started = Date()
+    }
+
+    init(saved: Saved) {
+        id = saved.id
+        filename = saved.filename
+        destination = saved.path.map { URL(fileURLWithPath: $0) }
+        progress = 1
+        state = saved.state
+        totalBytes = saved.bytes
+        started = saved.started
+    }
+
+    func watch(_ progressObject: Progress) {
+        observation = progressObject.observe(\.fractionCompleted) { [weak self] p, _ in
+            let fraction = p.fractionCompleted
+            let total = p.totalUnitCount
+            DispatchQueue.main.async {
+                self?.progress = fraction
+                if total > 0 { self?.totalBytes = total }
+            }
+        }
+    }
+
+    func stopWatching() { observation = nil }
+
+    struct Saved: Codable {
+        var id: UUID
+        var filename: String
+        var path: String?
+        var state: State
+        var bytes: Int64
+        var started: Date
+    }
+
+    var saved: Saved {
+        Saved(id: id, filename: filename, path: destination?.path, state: state, bytes: totalBytes, started: started)
+    }
+}
+
+/// Saves downloads to the chosen folder (or asks where), keeps the Downloads list,
+/// and bounces the Downloads stack in the Dock when a file finishes.
+final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
+    static let shared = Downloads()
+
+    @Published private(set) var items: [DownloadItem] = []
+    private var byDownload: [ObjectIdentifier: DownloadItem] = [:]
+
+    /// Opened automatically after downloading when "Open safe files" is on (like Safari).
+    private static let safeExtensions: Set<String> = [
+        "jpg", "jpeg", "png", "gif", "heic", "webp", "tiff", "bmp",
+        "mov", "mp4", "m4v", "mp3", "m4a", "aac", "wav", "aiff",
+        "pdf", "txt", "rtf", "csv", "zip",
+    ]
+
+    static var folder: URL {
+        let saved = Prefs.string(Prefs.downloadFolder)
+        if !saved.isEmpty { return URL(fileURLWithPath: saved, isDirectory: true) }
+        return FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+    }
+
+    private override init() {
+        super.init()
+        if let data = UserDefaults.standard.data(forKey: "downloadList"),
+           let saved = try? JSONDecoder().decode([DownloadItem.Saved].self, from: data) {
+            items = saved.map(DownloadItem.init(saved:))
+        }
+        prune()
+        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil,
+                                               queue: .main) { [weak self] _ in
+            if DownloadRetention.current == .onQuit { self?.clearFinished() }
+            self?.save()
+        }
+    }
+
+    var activeCount: Int { items.filter { $0.state == .downloading }.count }
+
+    // MARK: WKDownloadDelegate
+
+    func download(_ download: WKDownload, decideDestinationUsing response: URLResponse,
+                  suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
+        // Never let a site choose a path: keep only the file's name.
+        let safeName = (suggestedFilename as NSString).lastPathComponent
+            .replacingOccurrences(of: ":", with: "-")
+        let name = safeName.isEmpty || safeName.hasPrefix(".") ? "download" + safeName : safeName
+
+        let begin: (URL?) -> Void = { url in
+            guard let url else { completionHandler(nil); return }
+            let item = DownloadItem(filename: url.lastPathComponent, download: download)
+            item.destination = url
+            item.watch(download.progress)
+            self.byDownload[ObjectIdentifier(download)] = item
+            self.items.insert(item, at: 0)
+            completionHandler(url)
+        }
+
+        if Prefs.bool(Prefs.askWhereToSave) {
+            let panel = NSSavePanel()
+            panel.nameFieldStringValue = name
+            panel.directoryURL = Self.folder
+            let finish: (NSApplication.ModalResponse) -> Void = { response in
+                guard response == .OK, let url = panel.url else { begin(nil); return }
+                try? FileManager.default.removeItem(at: url) // the panel already confirmed replacing it
+                begin(url)
+            }
+            if let window = download.webView?.window {
+                panel.beginSheetModal(for: window, completionHandler: finish)
+            } else {
+                finish(panel.runModal())
+            }
+            return
+        }
+
+        let folder = Self.folder
+        let base = (name as NSString).deletingPathExtension
+        let ext = (name as NSString).pathExtension
+        var candidate = folder.appendingPathComponent(name)
+        var n = 2
+        while FileManager.default.fileExists(atPath: candidate.path) {
+            candidate = folder.appendingPathComponent(ext.isEmpty ? "\(base) \(n)" : "\(base) \(n).\(ext)")
+            n += 1
+        }
+        begin(candidate)
+    }
+
+    func downloadDidFinish(_ download: WKDownload) {
+        guard let item = byDownload.removeValue(forKey: ObjectIdentifier(download)) else { return }
+        item.stopWatching()
+        item.progress = 1
+        item.state = .finished
+        if let url = item.destination {
+            DistributedNotificationCenter.default().post(name: .init("com.apple.DownloadFileFinished"), object: url.path)
+            if Prefs.bool(Prefs.openSafeFiles), Self.safeExtensions.contains(url.pathExtension.lowercased()) {
+                NSWorkspace.shared.open(url)
+            }
+        }
+        if DownloadRetention.current == .onSuccess {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in self?.remove(item) }
+        }
+        save()
+    }
+
+    func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+        guard let item = byDownload.removeValue(forKey: ObjectIdentifier(download)) else { return }
+        item.stopWatching()
+        item.state = (error as? URLError)?.code == .cancelled ? .cancelled : .failed
+        save()
+    }
+
+    // MARK: List
+
+    func cancel(_ item: DownloadItem) {
+        item.download?.cancel { _ in }
+    }
+
+    func reveal(_ item: DownloadItem) {
+        guard let url = item.destination, FileManager.default.fileExists(atPath: url.path) else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    func open(_ item: DownloadItem) {
+        guard let url = item.destination, FileManager.default.fileExists(atPath: url.path) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    func remove(_ item: DownloadItem) {
+        items.removeAll { $0.id == item.id }
+        save()
+    }
+
+    func clearFinished() {
+        items.removeAll { $0.state != .downloading }
+        save()
+    }
+
+    /// "After one day": drop finished items older than a day.
+    func prune() {
+        guard DownloadRetention.current == .oneDay else { return }
+        let cutoff = Date().addingTimeInterval(-86_400)
+        items.removeAll { $0.state != .downloading && $0.started < cutoff }
+    }
+
+    private func save() {
+        let saved = items.filter { $0.state != .downloading }.map(\.saved)
+        UserDefaults.standard.set(try? JSONEncoder().encode(saved), forKey: "downloadList")
+    }
+}
+
+// MARK: - Toolbar button and list
+
+struct DownloadsButton: View {
+    @ObservedObject private var downloads = Downloads.shared
+    @State private var showing = false
+
+    var body: some View {
+        if !downloads.items.isEmpty {
+            ToolbarIconButton(symbol: "arrow.down.circle", help: "Downloads") { showing.toggle() }
+                .overlay {
+                    if downloads.activeCount > 0 {
+                        ActiveRing(items: downloads.items.filter { $0.state == .downloading })
+                            .allowsHitTesting(false)
+                    }
+                }
+                .popover(isPresented: $showing, arrowEdge: .bottom) { DownloadsList() }
+                .onAppear { downloads.prune() }
+        }
+    }
+}
+
+private struct ActiveRing: View {
+    let items: [DownloadItem]
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.25)) { _ in
+            let progress = items.isEmpty ? 0 : items.map(\.progress).reduce(0, +) / Double(items.count)
+            Circle()
+                .trim(from: 0, to: max(0.03, progress))
+                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .frame(width: 21, height: 21)
+                .animation(.easeOut(duration: 0.25), value: progress)
+        }
+    }
+}
+
+private struct DownloadsList: View {
+    @ObservedObject private var downloads = Downloads.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Downloads").font(.system(size: 13, weight: .semibold))
+                Spacer()
+                Button("Clear") { downloads.clearFinished() }
+                    .buttonStyle(.link)
+                    .font(.system(size: 12))
+                    .disabled(downloads.items.allSatisfy { $0.state == .downloading })
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+            ScrollView {
+                VStack(spacing: 2) {
+                    ForEach(downloads.items) { item in
+                        DownloadRow(item: item)
+                    }
+                }
+                .padding(.horizontal, 6)
+                .padding(.bottom, 8)
+            }
+            .frame(maxHeight: 340)
+        }
+        .frame(width: 340)
+    }
+}
+
+private struct DownloadRow: View {
+    @ObservedObject var item: DownloadItem
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(nsImage: icon)
+                .resizable()
+                .frame(width: 32, height: 32)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.filename)
+                    .font(.system(size: 12.5))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                switch item.state {
+                case .downloading:
+                    ProgressView(value: item.progress)
+                        .progressViewStyle(.linear)
+                        .controlSize(.small)
+                case .finished:
+                    Text(sizeText).font(.system(size: 11)).foregroundStyle(.secondary)
+                case .failed:
+                    Text("Failed").font(.system(size: 11)).foregroundStyle(Color.orange)
+                case .cancelled:
+                    Text("Cancelled").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 4)
+            if item.state == .downloading {
+                Button { Downloads.shared.cancel(item) } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Stop")
+            } else if item.state == .finished {
+                Button { Downloads.shared.reveal(item) } label: {
+                    Image(systemName: "magnifyingglass.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Show in Finder")
+            }
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(Color.primary.opacity(hovering ? 0.06 : 0)))
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .onTapGesture(count: 2) { Downloads.shared.open(item) }
+        .contextMenu {
+            Button("Open") { Downloads.shared.open(item) }.disabled(item.state != .finished)
+            Button("Show in Finder") { Downloads.shared.reveal(item) }.disabled(item.state != .finished)
+            Divider()
+            Button("Remove from List") { Downloads.shared.remove(item) }
+        }
+    }
+
+    private var icon: NSImage {
+        if let url = item.destination, FileManager.default.fileExists(atPath: url.path) {
+            return NSWorkspace.shared.icon(forFile: url.path)
+        }
+        return NSWorkspace.shared.icon(for: .data)
+    }
+
+    private var sizeText: String {
+        let size = item.totalBytes > 0 ? ByteCountFormatter.string(fromByteCount: item.totalBytes, countStyle: .file) : ""
+        return [size, item.started.formatted(date: .omitted, time: .shortened)].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+}

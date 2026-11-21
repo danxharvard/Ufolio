@@ -1,12 +1,50 @@
 import SwiftUI
 import WebKit
 
-enum SettingsTab: String {
-    case general, appearance, privacy, adBlocker, location, updates
+enum SettingsTab: String, CaseIterable, Identifiable {
+    case general, appearance, adBlocker, privacy, passwords, location, updates
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general: return "General"
+        case .appearance: return "Appearance"
+        case .adBlocker: return "Hush Shields"
+        case .privacy: return "Privacy & Security"
+        case .passwords: return "Passwords & AutoFill"
+        case .location: return "Location"
+        case .updates: return "Software Update"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .general: return "gearshape.fill"
+        case .appearance: return "paintbrush.fill"
+        case .adBlocker: return "shield.lefthalf.filled"
+        case .privacy: return "hand.raised.fill"
+        case .passwords: return "key.fill"
+        case .location: return "location.fill"
+        case .updates: return "arrow.down.circle.fill"
+        }
+    }
+
+    /// The tile colours, picked to match the System Settings palette.
+    var colors: [Color] {
+        switch self {
+        case .general: return [Color(white: 0.62), Color(white: 0.45)]
+        case .appearance: return [Color(red: 0.30, green: 0.55, blue: 1.0), Color(red: 0.42, green: 0.32, blue: 0.95)]
+        case .adBlocker: return [Color(red: 0.55, green: 0.40, blue: 1.0), Color(red: 0.36, green: 0.26, blue: 0.86)]
+        case .privacy: return [Color(red: 0.25, green: 0.60, blue: 1.0), Color(red: 0.10, green: 0.42, blue: 0.95)]
+        case .passwords: return [Color(red: 0.60, green: 0.62, blue: 0.66), Color(red: 0.40, green: 0.42, blue: 0.46)]
+        case .location: return [Color(red: 0.25, green: 0.75, blue: 1.0), Color(red: 0.10, green: 0.50, blue: 0.95)]
+        case .updates: return [Color(red: 0.62, green: 0.62, blue: 0.65), Color(red: 0.44, green: 0.44, blue: 0.48)]
+        }
+    }
 }
 
 enum SettingsOpener {
-    /// Opens Hush Settings (⌘,), optionally on a particular tab.
+    /// Opens Hush Settings (⌘,), optionally on a particular section.
     static func open(tab: SettingsTab? = nil) {
         if let tab { UserDefaults.standard.set(tab.rawValue, forKey: "settingsTab") }
         NSApp.activate(ignoringOtherApps: true)
@@ -16,59 +54,83 @@ enum SettingsOpener {
     }
 }
 
-/// Hush Settings: one place for every browser setting, in the native macOS style.
+/// Hush Settings, laid out like macOS System Settings: a sidebar of coloured
+/// icon tiles, and each section in Apple's grouped style.
 struct SettingsView: View {
     @AppStorage("settingsTab") private var selection = SettingsTab.general.rawValue
     @AppStorage(Prefs.accent) private var accent = AccentChoice.system.rawValue
 
+    private var current: Binding<SettingsTab?> {
+        Binding(get: { SettingsTab(rawValue: selection) ?? .general },
+                set: { if let tab = $0 { selection = tab.rawValue } })
+    }
+
     var body: some View {
-        TabView(selection: $selection) {
-            GeneralSettings()
-                .tabItem { Label("General", systemImage: "gearshape") }
-                .tag(SettingsTab.general.rawValue)
-            AppearanceSettings()
-                .tabItem { Label("Appearance", systemImage: "paintbrush") }
-                .tag(SettingsTab.appearance.rawValue)
-            PrivacySettings()
-                .tabItem { Label("Privacy", systemImage: "hand.raised") }
-                .tag(SettingsTab.privacy.rawValue)
-            AdBlockerSettings()
-                .tabItem { Label("Ad Blocker", systemImage: "shield.lefthalf.filled") }
-                .tag(SettingsTab.adBlocker.rawValue)
-            LocationSettings()
-                .tabItem { Label("Location", systemImage: "location") }
-                .tag(SettingsTab.location.rawValue)
-            UpdateSettings()
-                .tabItem { Label("Updates", systemImage: "arrow.down.circle") }
-                .tag(SettingsTab.updates.rawValue)
+        NavigationSplitView {
+            List(SettingsTab.allCases, selection: current) { tab in
+                Label {
+                    Text(tab.title)
+                } icon: {
+                    IconTile(symbol: tab.symbol, colors: tab.colors, size: 22)
+                }
+                .padding(.vertical, 1)
+                .tag(tab)
+            }
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 215, max: 240)
+        } detail: {
+            let tab = current.wrappedValue ?? .general
+            Group {
+                switch tab {
+                case .general: GeneralSettings()
+                case .appearance: AppearanceSettings()
+                case .adBlocker: AdBlockerSettings()
+                case .privacy: PrivacySettings()
+                case .passwords: PasswordSettings()
+                case .location: LocationSettings()
+                case .updates: UpdateSettings()
+                }
+            }
+            .navigationTitle(tab.title)
+            .id(tab)
         }
-        .frame(width: 680, height: 600)
+        .frame(width: 880, height: 660)
         .accentColor(AccentChoice(rawValue: accent)?.color)
     }
 }
 
 // MARK: - Shared pieces
 
-/// The large icon, title and description at the top of a settings tab.
-private struct SettingsHeader: View {
+/// A System Settings–style rounded icon tile.
+struct IconTile: View {
     let symbol: String
     let colors: [Color]
-    let title: String
+    var size: CGFloat = 22
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: size * 0.52, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(
+                RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
+                    .fill(LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom))
+                    .shadow(color: .black.opacity(0.12), radius: 0.5, y: 0.5)
+            )
+    }
+}
+
+/// The large tile, title and description at the top of a settings section.
+private struct SettingsHeader: View {
+    let tab: SettingsTab
     let subtitle: String
 
     var body: some View {
         HStack(spacing: 14) {
-            Image(systemName: symbol)
-                .font(.system(size: 22, weight: .medium))
-                .foregroundStyle(.white)
-                .frame(width: 46, height: 46)
-                .background(
-                    RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .fill(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing))
-                )
-                .shadow(color: colors.last?.opacity(0.35) ?? .clear, radius: 6, y: 3)
+            IconTile(symbol: tab.symbol, colors: tab.colors, size: 48)
+                .shadow(color: (tab.colors.last ?? .clear).opacity(0.3), radius: 6, y: 3)
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 15, weight: .semibold))
+                Text(tab.title).font(.system(size: 15, weight: .semibold))
                 Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -95,42 +157,49 @@ private struct DescribedToggle: View {
     }
 }
 
-/// Sites the user has allowed or refused, for the given permissions.
+/// Grey explanatory text under a section.
+private struct Footnote: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View {
+        Text(text).font(.system(size: 11)).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Sites you've answered, with a menu to change each answer.
 private struct RememberedPermissions: View {
     let kinds: [PermissionKind]
     @ObservedObject private var permissions = SitePermissions.shared
 
-    private var rows: [(host: String, entries: [(PermissionKind, Bool)])] {
-        permissions.decisions.keys.sorted().compactMap { host in
-            let entries = kinds.compactMap { kind in
-                permissions.decisions[host]?[kind.rawValue].map { (kind, $0) }
-            }
-            return entries.isEmpty ? nil : (host, entries)
+    private var rows: [(host: String, kind: PermissionKind, allowed: Bool)] {
+        permissions.decisions.keys.sorted().flatMap { host in
+            kinds.compactMap { kind in permissions.decisions[host]?[kind.rawValue].map { (host, kind, $0) } }
         }
     }
 
     var body: some View {
         if rows.isEmpty {
-            Text("No websites have asked yet.")
+            Text("No websites yet. When you choose Always Allow, the site appears here.")
                 .foregroundStyle(.secondary)
         } else {
             ForEach(rows, id: \.host) { row in
                 HStack(spacing: 10) {
                     Favicon(url: URL(string: "https://\(row.host)"), size: 16)
                     Text(row.host)
+                    if kinds.count > 1 {
+                        Image(systemName: row.kind.symbol).foregroundStyle(.secondary).font(.system(size: 11))
+                    }
                     Spacer()
-                    ForEach(row.entries, id: \.0) { kind, allowed in
-                        Label(allowed ? "Allowed" : "Denied", systemImage: kind.symbol)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(allowed ? Color.green : Color.secondary)
-                    }
-                    Button {
-                        permissions.forget(row.host, kinds: kinds)
+                    Menu {
+                        Button("Always Allow") { permissions.set(true, for: row.host, [row.kind]) }
+                        Button("Don’t Allow") { permissions.set(false, for: row.host, [row.kind]) }
+                        Divider()
+                        Button("Ask Next Time") { permissions.forget(row.host, kinds: [row.kind]) }
                     } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                        Text(row.allowed ? "Always Allow" : "Don’t Allow")
                     }
-                    .buttonStyle(.plain)
-                    .help("Forget this decision; the site will ask again")
+                    .fixedSize()
                 }
             }
         }
@@ -143,16 +212,67 @@ private struct GeneralSettings: View {
     @AppStorage(Prefs.searchEngine) private var engine = SearchEngine.google.rawValue
     @AppStorage(Prefs.searchSuggestions) private var suggestions = true
     @AppStorage(Prefs.launchBehavior) private var launch = LaunchBehavior.startPage.rawValue
+    @AppStorage(Prefs.newWindowPage) private var newWindowPage = NewTabPage.startPage.rawValue
     @AppStorage(Prefs.newTabPage) private var newTabPage = NewTabPage.startPage.rawValue
     @AppStorage(Prefs.homepage) private var homepage = ""
+    @AppStorage(Prefs.historyRetention) private var historyRetention = HistoryRetention.year.rawValue
     @AppStorage(Prefs.downloadFolder) private var downloadFolder = ""
+    @AppStorage(Prefs.downloadRetention) private var downloadRetention = DownloadRetention.oneDay.rawValue
     @AppStorage(Prefs.askWhereToSave) private var askWhereToSave = false
-    @State private var isDefaultBrowser = false
+    @AppStorage(Prefs.openSafeFiles) private var openSafeFiles = false
+    @AppStorage(Prefs.askDefaultBrowser) private var askDefault = true
+    @State private var isDefaultBrowser = DefaultBrowser.isDefault
+    @State private var confirmClearHistory = false
+    @State private var importStatus: String?
+    @State private var importing = false
 
     private var engineName: String { (SearchEngine(rawValue: engine) ?? .google).name }
 
     var body: some View {
         Form {
+            Section {
+                SettingsHeader(tab: .general, subtitle: "How Hush starts, searches, remembers and downloads.")
+            }
+
+            Section {
+                HStack(spacing: 10) {
+                    Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 28, height: 28)
+                    Text(isDefaultBrowser ? "Hush is your default web browser." : "Hush isn’t your default web browser.")
+                    Spacer()
+                    if isDefaultBrowser {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.green)
+                    } else {
+                        Button("Set Default…") { DefaultBrowser.makeDefault { isDefaultBrowser = $0 } }
+                    }
+                }
+                if !isDefaultBrowser {
+                    Toggle("Ask when Hush opens", isOn: $askDefault)
+                }
+            } header: { Text("Default browser") }
+
+            Section {
+                Picker("Hush opens with", selection: $launch) {
+                    ForEach(LaunchBehavior.allCases) { Text($0.label).tag($0.rawValue) }
+                }
+                Picker("New windows open with", selection: $newWindowPage) {
+                    ForEach(NewTabPage.allCases) { Text($0.label).tag($0.rawValue) }
+                }
+                Picker("New tabs open with", selection: $newTabPage) {
+                    ForEach(NewTabPage.allCases) { Text($0.label).tag($0.rawValue) }
+                }
+                LabeledContent("Homepage") {
+                    HStack {
+                        TextField("", text: $homepage, prompt: Text("example.com"))
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 260)
+                        Button("Set to Current Page") {
+                            if let url = BrowserModel.frontmost?.selectedTab?.url { homepage = url.absoluteString }
+                        }
+                        .disabled(BrowserModel.frontmost?.selectedTab?.url == nil)
+                    }
+                }
+            } header: { Text("Startup") }
+
             Section {
                 Picker("Search engine", selection: $engine) {
                     ForEach(SearchEngine.allCases) { Text($0.name).tag($0.rawValue) }
@@ -163,24 +283,28 @@ private struct GeneralSettings: View {
             } header: { Text("Search") }
 
             Section {
-                Picker("Hush opens with", selection: $launch) {
-                    ForEach(LaunchBehavior.allCases) { Text($0.label).tag($0.rawValue) }
+                Picker("Remove history items", selection: $historyRetention) {
+                    ForEach(HistoryRetention.allCases) { Text($0.label).tag($0.rawValue) }
                 }
-                Picker("New tabs open with", selection: $newTabPage) {
-                    ForEach(NewTabPage.allCases) { Text($0.label).tag($0.rawValue) }
-                }
-                if newTabPage == NewTabPage.homepage.rawValue {
-                    HStack {
-                        TextField("Homepage", text: $homepage, prompt: Text("example.com"))
-                        Button("Use Current Page") {
-                            if let url = BrowserModel.frontmost?.selectedTab?.url { homepage = url.absoluteString }
+                HStack {
+                    Menu("Import from Another Browser") {
+                        ForEach(BrowserImporter.available()) { source in
+                            Button(source.name) { runImport(source) }
                         }
                     }
+                    .fixedSize()
+                    .disabled(importing)
+                    if importing { ProgressView().controlSize(.small) }
+                    if let importStatus { Text(importStatus).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2) }
+                    Spacer()
+                    Button("Clear History…") { confirmClearHistory = true }
                 }
-            } header: { Text("Startup") }
+            } header: { Text("History") } footer: {
+                Footnote("History stays on this Mac. It powers Frequently Visited and address-bar suggestions.")
+            }
 
             Section {
-                LabeledContent("Save downloads to") {
+                LabeledContent("File download location") {
                     HStack(spacing: 8) {
                         Image(nsImage: NSWorkspace.shared.icon(forFile: Downloads.folder.path))
                             .resizable().frame(width: 16, height: 16)
@@ -188,23 +312,38 @@ private struct GeneralSettings: View {
                         Button("Change…", action: chooseFolder)
                     }
                 }
-                Toggle("Ask where to save each download", isOn: $askWhereToSave)
-            } header: { Text("Downloads") }
-
-            Section {
-                HStack {
-                    Image(systemName: isDefaultBrowser ? "checkmark.seal.fill" : "safari")
-                        .foregroundStyle(isDefaultBrowser ? Color.green : Color.secondary)
-                    Text(isDefaultBrowser ? "Hush is your default web browser" : "Hush isn’t your default web browser")
-                    Spacer()
-                    if !isDefaultBrowser {
-                        Button("Make Default", action: makeDefault)
-                    }
+                Picker("Remove download list items", selection: $downloadRetention) {
+                    ForEach(DownloadRetention.allCases) { Text($0.label).tag($0.rawValue) }
                 }
-            } header: { Text("Default browser") }
+                Toggle("Ask where to save each download", isOn: $askWhereToSave)
+                DescribedToggle(title: "Open “safe” files after downloading",
+                                detail: "“Safe” files include movies, pictures, sounds, PDFs, text documents and archives.",
+                                isOn: $openSafeFiles)
+            } header: { Text("Downloads") }
         }
         .formStyle(.grouped)
-        .onAppear(perform: checkDefault)
+        .onAppear { isDefaultBrowser = DefaultBrowser.isDefault }
+        .alert("Clear all history?", isPresented: $confirmClearHistory) {
+            Button("Clear History", role: .destructive) { HistoryStore.shared.clear() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes every page Hush remembers, including Frequently Visited. It can’t be undone.")
+        }
+    }
+
+    private func runImport(_ source: BrowserImporter.Source) {
+        importing = true
+        importStatus = nil
+        DispatchQueue.global(qos: .userInitiated).async {
+            let message: String
+            do {
+                let count = try BrowserImporter.importTopSites(from: source)
+                message = "Imported \(count) pages from \(source.name)."
+            } catch {
+                message = error.localizedDescription
+            }
+            DispatchQueue.main.async { importing = false; importStatus = message }
+        }
     }
 
     private func chooseFolder() {
@@ -216,20 +355,6 @@ private struct GeneralSettings: View {
         panel.prompt = "Choose"
         if panel.runModal() == .OK, let url = panel.url { downloadFolder = url.path }
     }
-
-    private func checkDefault() {
-        let handler = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "https://example.com")!)
-        isDefaultBrowser = handler?.standardizedFileURL == Bundle.main.bundleURL.standardizedFileURL
-    }
-
-    private func makeDefault() {
-        // macOS shows its own confirmation for this.
-        for scheme in ["http", "https"] {
-            NSWorkspace.shared.setDefaultApplication(at: Bundle.main.bundleURL, toOpenURLsWithScheme: scheme) { _ in
-                DispatchQueue.main.async { checkDefault() }
-            }
-        }
-    }
 }
 
 // MARK: - Appearance
@@ -240,6 +365,7 @@ private struct AppearanceSettings: View {
     @AppStorage(Prefs.startBackground) private var background = StartBackground.twilight.rawValue
     @AppStorage(Prefs.startGreeting) private var greeting = true
     @AppStorage(Prefs.startBookmarks) private var startBookmarks = true
+    @AppStorage(Prefs.startFrequent) private var startFrequent = true
     @AppStorage(Prefs.showBookmarkBar) private var bookmarkBar = true
     @AppStorage(Prefs.alwaysShowTabBar) private var alwaysTabBar = false
     @AppStorage(Prefs.showFullAddress) private var fullAddress = false
@@ -250,6 +376,9 @@ private struct AppearanceSettings: View {
 
     var body: some View {
         Form {
+            Section {
+                SettingsHeader(tab: .appearance, subtitle: "Make Hush look and feel the way you like.")
+            }
             Section {
                 HStack(spacing: 18) {
                     ForEach(AppearanceMode.allCases) { mode in
@@ -273,7 +402,8 @@ private struct AppearanceSettings: View {
                 }
                 .pickerStyle(.segmented)
                 Toggle("Show greeting", isOn: $greeting)
-                Toggle("Show bookmarks", isOn: $startBookmarks)
+                Toggle("Show Favourites", isOn: $startBookmarks)
+                Toggle("Show Frequently Visited", isOn: $startFrequent)
             } header: { Text("Start page") }
 
             Section {
@@ -410,10 +540,7 @@ private struct PrivacySettings: View {
     var body: some View {
         Form {
             Section {
-                SettingsHeader(symbol: "hand.raised.fill",
-                               colors: [Color(red: 0.25, green: 0.55, blue: 1), Color(red: 0.35, green: 0.3, blue: 0.95)],
-                               title: "Privacy",
-                               subtitle: "Hush keeps what you do on one site from following you to the next.")
+                SettingsHeader(tab: .privacy, subtitle: "Hush keeps what you do on one site from following you to the next.")
             }
 
             Section {
@@ -426,7 +553,7 @@ private struct PrivacySettings: View {
                 DescribedToggle(title: "Ask websites not to sell or share my data",
                                 detail: "Sends the Global Privacy Control signal, which some laws require sites to honour.",
                                 isOn: $gpc)
-                DescribedToggle(title: "Warn about fraudulent websites",
+                DescribedToggle(title: "Warn when visiting a fraudulent website",
                                 detail: "Uses the same Safe Browsing check as Safari.",
                                 isOn: $fraud)
             } header: { Text("Tracking protection") }
@@ -771,10 +898,7 @@ private struct LocationSettings: View {
     var body: some View {
         Form {
             Section {
-                SettingsHeader(symbol: "location.fill",
-                               colors: [Color(red: 0.2, green: 0.75, blue: 0.95), Color(red: 0.15, green: 0.45, blue: 0.95)],
-                               title: "Location",
-                               subtitle: "Let Hush use your approximate location for a more personal browser. Nothing is shared without your say.")
+                SettingsHeader(tab: .location, subtitle: "Let Hush use your approximate location for a more personal browser. Nothing is shared without your say.")
             }
 
             Section {
@@ -815,7 +939,7 @@ private struct LocationSettings: View {
 
             Section {
                 RememberedPermissions(kinds: [.location])
-            } header: { Text("Websites you’ve answered") }
+            } header: { Text("Your answers") }
         }
         .formStyle(.grouped)
         .onChange(of: weatherOn) { on in
@@ -936,5 +1060,284 @@ private struct UpdateSettings: View {
     private var lastCheckedText: String {
         guard let date = updater.lastChecked else { return "Not checked yet" }
         return "Last checked \(date.formatted(.relative(presentation: .named)))"
+    }
+}
+
+// MARK: - Passwords & AutoFill
+
+private struct PasswordSettings: View {
+    @AppStorage(Prefs.autofillContact) private var contact = true
+    @AppStorage(Prefs.autofillPasswords) private var passwords = true
+    @AppStorage(Prefs.autofillCards) private var cards = true
+    @State private var unlocked = false
+    @State private var logins: [SavedLogin] = []
+    @State private var cardList: [CardVault.Summary] = []
+    @State private var revealed: [String: String] = [:]
+    @State private var search = ""
+    @State private var neverSave = PasswordVault.neverSave
+    @State private var showAddCard = false
+    @State private var myName = MyCard.status == .authorized ? MyCard.displayName : nil
+    @State private var copiedID: String?
+
+    private var filtered: [SavedLogin] {
+        let q = search.lowercased()
+        return q.isEmpty ? logins : logins.filter { $0.host.contains(q) || $0.account.lowercased().contains(q) }
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                SettingsHeader(tab: .passwords,
+                               subtitle: "Kept in your Mac’s keychain and filled in only after Touch ID or your Mac’s password.")
+            }
+
+            Section {
+                AutofillToggleRow(title: "Using information from my contact card",
+                                  detail: myName.map { "Fills in forms as \($0)." } ?? "Fills in names, emails, phone numbers and addresses.",
+                                  isOn: $contact, button: "Edit…") {
+                    if MyCard.status == .notDetermined {
+                        MyCard.requestAccess { _ in myName = MyCard.displayName }
+                    } else {
+                        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Contacts.app"))
+                    }
+                }
+                AutofillToggleRow(title: "Usernames and passwords",
+                                  detail: "Offers to save passwords when you sign in, and fills them in next time.",
+                                  isOn: $passwords, button: unlocked ? nil : "Edit…") { unlock() }
+                AutofillToggleRow(title: "Credit cards",
+                                  detail: "Fills in card details on checkout pages. Security codes are never stored.",
+                                  isOn: $cards, button: "Add Card…") { showAddCard = true }
+            } header: { Text("AutoFill web forms") } footer: {
+                Footnote("AutoFill only works on secure (https) pages, and only fills a password on the exact site it was saved for.")
+            }
+
+            Section {
+                if !unlocked {
+                    HStack {
+                        Image(systemName: "lock.fill").foregroundStyle(.secondary)
+                        Text("Your passwords are locked.")
+                        Spacer()
+                        Button("Unlock…", action: unlock)
+                            .keyboardShortcut(.defaultAction)
+                    }
+                } else if logins.isEmpty {
+                    Text("No saved passwords yet. Hush offers to save one when you sign in to a website.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    TextField("Search", text: $search, prompt: Text("Search passwords"))
+                        .textFieldStyle(.roundedBorder)
+                    ForEach(filtered) { login in
+                        HStack(spacing: 10) {
+                            Favicon(url: URL(string: "https://\(login.host)"), size: 20)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(login.host).font(.system(size: 12.5, weight: .medium))
+                                Text(login.account.isEmpty ? "(no username)" : login.account)
+                                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text(revealed[login.id] ?? "••••••••")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .lineLimit(1)
+                            Button {
+                                if revealed[login.id] != nil { revealed[login.id] = nil }
+                                else { revealed[login.id] = PasswordVault.password(for: login) ?? "" }
+                            } label: { Image(systemName: revealed[login.id] == nil ? "eye" : "eye.slash") }
+                                .buttonStyle(.borderless).help("Show password")
+                            Button { copy(login) } label: {
+                                Image(systemName: copiedID == login.id ? "checkmark" : "doc.on.doc")
+                            }
+                            .buttonStyle(.borderless).help("Copy password (cleared from the clipboard after 90 seconds)")
+                            Button {
+                                PasswordVault.delete(login)
+                                logins.removeAll { $0.id == login.id }
+                            } label: { Image(systemName: "trash") }
+                                .buttonStyle(.borderless).help("Delete")
+                        }
+                    }
+                }
+            } header: {
+                HStack {
+                    Text("Passwords")
+                    Spacer()
+                    if unlocked {
+                        Button("Lock") { lock() }.buttonStyle(.link).font(.system(size: 11))
+                    }
+                }
+            }
+
+            Section {
+                if cardList.isEmpty {
+                    Text("No cards saved.").foregroundStyle(.secondary)
+                }
+                ForEach(cardList) { card in
+                    HStack(spacing: 10) {
+                        Image(systemName: "creditcard.fill").foregroundStyle(Color.accentColor)
+                        Text(card.label)
+                        Spacer()
+                        Button {
+                            CardVault.delete(card.id)
+                            cardList = CardVault.list()
+                        } label: { Image(systemName: "trash") }
+                            .buttonStyle(.borderless).help("Delete")
+                    }
+                }
+            } header: { Text("Credit cards") }
+
+            if !neverSave.isEmpty {
+                Section {
+                    ForEach(neverSave, id: \.self) { host in
+                        HStack {
+                            Favicon(url: URL(string: "https://\(host)"), size: 16)
+                            Text(host)
+                            Spacer()
+                            Button("Remove") {
+                                PasswordVault.neverSave = PasswordVault.neverSave.filter { $0 != host }
+                                neverSave = PasswordVault.neverSave
+                            }
+                            .controlSize(.small)
+                        }
+                    }
+                } header: { Text("Never save passwords for") }
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear { cardList = CardVault.list() }
+        .onDisappear { lock() }
+        .sheet(isPresented: $showAddCard) {
+            AddCardSheet { cardList = CardVault.list() }
+        }
+    }
+
+    private func unlock() {
+        UserAuth.confirm("show your saved passwords") { ok in
+            guard ok else { return }
+            logins = PasswordVault.logins()
+            unlocked = true
+        }
+    }
+
+    private func lock() {
+        unlocked = false
+        revealed = [:]
+        logins = []
+    }
+
+    /// Copies a password and clears it from the clipboard 90 s later (if it's still there).
+    private func copy(_ login: SavedLogin) {
+        guard let password = PasswordVault.password(for: login) else { return }
+        let board = NSPasteboard.general
+        board.clearContents()
+        board.setString(password, forType: .string)
+        let change = board.changeCount
+        copiedID = login.id
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { if copiedID == login.id { copiedID = nil } }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 90) {
+            if board.changeCount == change { board.clearContents() }
+        }
+    }
+}
+
+private struct AutofillToggleRow: View {
+    let title: String
+    let detail: String
+    @Binding var isOn: Bool
+    let button: String?
+    let action: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Toggle("", isOn: $isOn).toggleStyle(.checkbox).labelsHidden()
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(detail).font(.system(size: 11)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            if let button {
+                Button(button, action: action).disabled(!isOn)
+            }
+        }
+    }
+}
+
+private struct AddCardSheet: View {
+    let onSave: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var number = ""
+    @State private var name = ""
+    @State private var month = Calendar.current.component(.month, from: Date())
+    @State private var year = Calendar.current.component(.year, from: Date()) + 2
+    @State private var error: String?
+
+    private var thisYear: Int { Calendar.current.component(.year, from: Date()) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                IconTile(symbol: "creditcard.fill", colors: SettingsTab.passwords.colors, size: 40)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Add a Card").font(.system(size: 15, weight: .semibold))
+                    Text("Saved in your Mac’s keychain. Hush never stores the security code.")
+                        .font(.system(size: 11.5)).foregroundStyle(.secondary)
+                }
+            }
+            Form {
+                TextField("Card number", text: $number)
+                TextField("Name on card", text: $name)
+                LabeledContent("Expires") {
+                    HStack {
+                        Picker("", selection: $month) {
+                            ForEach(1...12, id: \.self) { Text(String(format: "%02d", $0)).tag($0) }
+                        }
+                        .labelsHidden().frame(width: 70)
+                        Picker("", selection: $year) {
+                            ForEach(thisYear...(thisYear + 15), id: \.self) { Text(String($0)).tag($0) }
+                        }
+                        .labelsHidden().frame(width: 90)
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .frame(height: 170)
+            if let error {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11.5)).foregroundStyle(Color.orange)
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Add Card", action: save).keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 420)
+    }
+
+    private func save() {
+        let digits = number.filter(\.isNumber)
+        guard (12...19).contains(digits.count), Self.luhn(digits) else {
+            error = "That card number doesn’t look right."
+            return
+        }
+        let card = SavedCard(name: name.trimmingCharacters(in: .whitespaces), number: digits, expMonth: month, expYear: year)
+        guard CardVault.save(card) else {
+            error = "The card couldn’t be saved to your keychain."
+            return
+        }
+        onSave()
+        dismiss()
+    }
+
+    /// The standard check-digit test every real card number passes.
+    static func luhn(_ digits: String) -> Bool {
+        var sum = 0
+        for (i, ch) in digits.reversed().enumerated() {
+            guard var d = ch.wholeNumberValue else { return false }
+            if i % 2 == 1 { d *= 2; if d > 9 { d -= 9 } }
+            sum += d
+        }
+        return sum % 10 == 0
     }
 }

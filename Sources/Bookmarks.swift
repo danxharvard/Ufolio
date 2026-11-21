@@ -15,8 +15,7 @@ final class BookmarkStore: ObservableObject {
     private let fileURL: URL
 
     private init() {
-        let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Hush Browser", isDirectory: true)
+        let folder = AppPaths.support
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         fileURL = folder.appendingPathComponent("bookmarks.json")
         load()
@@ -251,58 +250,77 @@ actor FaviconCache {
 struct StartPage: View {
     @ObservedObject var model: BrowserModel
     @ObservedObject private var store = BookmarkStore.shared
+    @ObservedObject private var history = HistoryStore.shared
     @ObservedObject private var weather = LocalWeather.shared
-    @Environment(\.colorScheme) private var scheme
     @AppStorage(Prefs.startBackground) private var backgroundStyle = StartBackground.twilight.rawValue
     @AppStorage(Prefs.startGreeting) private var showGreeting = true
     @AppStorage(Prefs.startBookmarks) private var showBookmarks = true
+    @AppStorage(Prefs.startFrequent) private var showFrequent = true
     @AppStorage(Prefs.startPageWeather) private var showWeather = false
 
-    private let columns = [GridItem(.adaptive(minimum: 96, maximum: 110), spacing: 18)]
+    private let tileColumns = [GridItem(.adaptive(minimum: 92, maximum: 104), spacing: 16)]
+    private let cardColumns = [GridItem(.adaptive(minimum: 128, maximum: 150), spacing: 14)]
 
     var body: some View {
+        let frequent = showFrequent ? history.frequentSites(limit: 8) : []
         ZStack {
             StartBackgroundView(style: StartBackground(rawValue: backgroundStyle) ?? .twilight)
-            VStack(spacing: 34) {
-                VStack(spacing: 8) {
-                    Text("Hush")
-                        .font(.system(size: 54, weight: .thin, design: .rounded))
-                        .tracking(2)
-                    if showGreeting || (showWeather && weather.temperature != nil) {
-                        HStack(spacing: 8) {
-                            if showGreeting { Text(greeting) }
-                            if showWeather, let temperature = weather.temperature {
-                                if showGreeting { Text("·").foregroundStyle(.tertiary) }
-                                Image(systemName: weather.symbol)
-                                    .symbolRenderingMode(.multicolor)
-                                Text("\(temperature)°")
-                                if let city = weather.city {
-                                    Text(city)
+            ScrollView {
+                VStack(spacing: 38) {
+                    header
+                    if showBookmarks && !store.items.isEmpty {
+                        StartSection(title: "Favourites") {
+                            LazyVGrid(columns: tileColumns, alignment: .leading, spacing: 18) {
+                                ForEach(store.items) { bookmark in
+                                    StartTile(bookmark: bookmark) {
+                                        model.open(bookmark.url, inNewTab: NSEvent.modifierFlags.contains(.command))
+                                    }
                                 }
                             }
                         }
-                        .font(.system(size: 14, weight: .regular, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .transition(.opacity)
                     }
-                }
-                if showBookmarks && !store.items.isEmpty {
-                    LazyVGrid(columns: columns, spacing: 18) {
-                        ForEach(store.items) { bookmark in
-                            StartTile(bookmark: bookmark) {
-                                model.open(bookmark.url, inNewTab: NSEvent.modifierFlags.contains(.command))
+                    if !frequent.isEmpty {
+                        StartSection(title: "Frequently Visited") {
+                            LazyVGrid(columns: cardColumns, alignment: .leading, spacing: 14) {
+                                ForEach(frequent) { site in
+                                    FrequentCard(site: site, model: model)
+                                }
                             }
                         }
                     }
-                    .frame(maxWidth: 620)
                 }
+                .frame(maxWidth: 700)
+                .padding(.horizontal, 40)
+                .padding(.top, 70)
+                .padding(.bottom, 50)
+                .frame(maxWidth: .infinity)
             }
-            .padding(40)
-            .offset(y: -30)
             .animation(.easeOut(duration: 0.3), value: weather.temperature)
         }
         .onAppear { weather.refreshIfNeeded() }
         .onChange(of: showWeather) { on in if on { weather.request() } }
+    }
+
+    private var header: some View {
+        VStack(spacing: 8) {
+            Text("Hush")
+                .font(.system(size: 54, weight: .thin, design: .rounded))
+                .tracking(2)
+            if showGreeting || (showWeather && weather.temperature != nil) {
+                HStack(spacing: 8) {
+                    if showGreeting { Text(greeting) }
+                    if showWeather, let temperature = weather.temperature {
+                        if showGreeting { Text("·").foregroundStyle(.tertiary) }
+                        Image(systemName: weather.symbol).symbolRenderingMode(.multicolor)
+                        Text("\(temperature)°")
+                        if let city = weather.city { Text(city) }
+                    }
+                }
+                .font(.system(size: 14, weight: .regular, design: .rounded))
+                .foregroundStyle(.secondary)
+                .transition(.opacity)
+            }
+        }
     }
 
     private var greeting: String {
@@ -311,6 +329,73 @@ struct StartPage: View {
         case 5..<12: return "Good morning"
         case 12..<18: return "Good afternoon"
         default: return "Good evening"
+        }
+    }
+}
+
+private struct StartSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A Frequently Visited site: a soft frosted card with the site's icon and name.
+private struct FrequentCard: View {
+    let site: FrequentSite
+    @ObservedObject var model: BrowserModel
+    @State private var hovering = false
+
+    var body: some View {
+        Button {
+            model.open(site.url, inNewTab: NSEvent.modifierFlags.contains(.command))
+        } label: {
+            VStack(spacing: 10) {
+                Favicon(url: site.url, size: 30)
+                    .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
+                VStack(spacing: 2) {
+                    Text(site.title)
+                        .font(.system(size: 12, weight: .medium))
+                        .lineLimit(1)
+                    Text(site.host)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.vertical, 16)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(.regularMaterial)
+                    .shadow(color: .black.opacity(hovering ? 0.14 : 0.05), radius: hovering ? 12 : 4, y: hovering ? 6 : 2)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.06))
+            )
+            .scaleEffect(hovering ? 1.03 : 1)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: hovering)
+        .help(site.url.absoluteString)
+        .contextMenu {
+            Button("Open in New Tab") { model.open(site.url, inNewTab: true) }
+            Button("Add to Favourites") { BookmarkStore.shared.toggle(url: site.url, title: site.title) }
+                .disabled(BookmarkStore.shared.contains(site.url))
+            Divider()
+            Button("Remove from Frequently Visited") { HistoryStore.shared.hideFromStartPage(site.host) }
         }
     }
 }

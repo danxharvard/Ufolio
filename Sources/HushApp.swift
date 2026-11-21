@@ -57,6 +57,12 @@ struct HushCommands: Commands {
     @AppStorage(Prefs.appearance) private var appearance = AppearanceMode.system.rawValue
 
     var body: some Commands {
+        // SwiftUI refuses to quit while one of its sheets is open, so Quit closes them first.
+        CommandGroup(replacing: .appTermination) {
+            Button("Quit Hush Browser") { QuitHelper.quit() }
+                .keyboardShortcut("q")
+        }
+
         CommandGroup(after: .appInfo) {
             Button("Check for Updates…") {
                 SettingsOpener.open(tab: .updates)
@@ -120,5 +126,19 @@ struct HushCommands: Commands {
                 }
             }
         }
+    }
+}
+
+enum QuitHelper {
+    static let closeSheets = Notification.Name("HushCloseSheets")
+
+    static func quit() {
+        let hasSheet = NSApp.windows.contains { !$0.sheets.isEmpty }
+        guard hasSheet else { NSApp.terminate(nil); return }
+        NotificationCenter.default.post(name: closeSheets, object: nil)
+        for window in NSApp.windows {
+            for sheet in window.sheets { window.endSheet(sheet) }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { NSApp.terminate(nil) }
     }
 }

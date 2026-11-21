@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct Suggestion: Identifiable, Equatable {
-    enum Kind { case search, website, bookmark }
+    enum Kind { case search, website, bookmark, history }
     let id = UUID()
     let kind: Kind
     /// Shown in the list.
@@ -67,7 +67,7 @@ final class SuggestionsModel: ObservableObject {
             let localTexts = Set(local.map { $0.text.lowercased() })
             let searches = remote
                 .filter { !localTexts.contains($0.lowercased()) }
-                .prefix(8 - min(local.count, 3))
+                .prefix(max(3, 8 - local.count))
                 .map { Suggestion(kind: .search, title: $0, text: $0) }
             self.items = local + searches
         }
@@ -85,6 +85,13 @@ final class SuggestionsModel: ObservableObject {
         for mark in marks.prefix(3) {
             result.append(Suggestion(kind: .bookmark, title: mark.title,
                                      detail: mark.url.host?.strippingWWW, text: mark.url.absoluteString))
+        }
+        // Pages you've visited before, best match first.
+        let taken = Set(result.map { $0.text })
+        for entry in HistoryStore.shared.search(q, limit: 6) where !taken.contains(entry.url.absoluteString) {
+            guard result.count < 5 else { break }
+            result.append(Suggestion(kind: .history, title: entry.title.isEmpty ? (entry.url.host ?? "") : entry.title,
+                                     detail: entry.url.host?.strippingWWW, text: entry.url.absoluteString))
         }
         return result
     }
@@ -171,7 +178,7 @@ private struct SuggestionRow: View {
         case .website:
             Image(systemName: "globe")
                 .foregroundStyle(isSelected ? Color.white : Color.secondary)
-        case .bookmark:
+        case .bookmark, .history:
             Favicon(url: URL(string: item.text), size: 16)
         }
     }

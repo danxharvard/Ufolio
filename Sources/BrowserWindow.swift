@@ -10,6 +10,8 @@ struct BrowserWindow: View {
 
     private var showTabStrip: Bool { model.tabs.count > 1 || alwaysShowTabBar }
     @State private var windowWidth: CGFloat = 1280
+    @State private var showWelcome = false
+    @State private var showDefaultPrompt = false
 
     private var addressWidth: CGFloat {
         min(720, max(260, windowWidth - 420))
@@ -54,6 +56,43 @@ struct BrowserWindow: View {
             }
         )
         .background(WindowReader { model.window = $0 })
+        .sheet(isPresented: $showWelcome) {
+            WelcomeView {
+                UserDefaults.standard.set(true, forKey: Prefs.hasOnboarded)
+                showWelcome = false
+                model.focusAddressBar()
+            }
+        }
+        .background(
+            Color.clear.sheet(isPresented: $showDefaultPrompt) {
+                DefaultBrowserPrompt { showDefaultPrompt = false }
+            }
+        )
+        // Links opened from other apps (when Hush is the default browser) arrive here.
+        .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
+        .onOpenURL { url in
+            guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return }
+            if let tab = model.selectedTab, tab.isBlank {
+                tab.load(url)
+            } else {
+                model.newTab(url: url)
+            }
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: QuitHelper.closeSheets)) { _ in
+            showWelcome = false
+            showDefaultPrompt = false
+        }
+        .onAppear {
+            switch LaunchPrompts.next() {
+            case .welcome:
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showWelcome = true }
+            case .defaultBrowser:
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { showDefaultPrompt = true }
+            case nil:
+                break
+            }
+        }
         .toolbar { toolbarContent }
         .focusedSceneObject(model)
         .navigationTitle(model.selectedTab?.displayTitle ?? "Hush")
@@ -74,6 +113,7 @@ struct BrowserWindow: View {
             }
         }
         ToolbarItemGroup(placement: .primaryAction) {
+            DownloadsButton()
             if let tab = model.selectedTab {
                 ShieldsButton(tab: tab)
             }

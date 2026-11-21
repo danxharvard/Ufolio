@@ -37,7 +37,10 @@ final class BrowserModel: ObservableObject {
             selectedID = tabs.first?.id
         }
         Self.didRestoreSession = true
-        if tabs.isEmpty { newTab(focus: true) }
+        if tabs.isEmpty {
+            // A new window opens the homepage if Settings › General says so.
+            if let home = NewTabPage.windowURL { newTab(url: home) } else { newTab(focus: true, usePreferredPage: false) }
+        }
     }
 
     /// Remembers this window's open pages (for "Tabs from last time").
@@ -60,7 +63,7 @@ final class BrowserModel: ObservableObject {
 
     @discardableResult
     func newTab(url: URL? = nil, configuration: WKWebViewConfiguration? = nil,
-                select: Bool = true, focus: Bool = false) -> BrowserTab {
+                select: Bool = true, focus: Bool = false, usePreferredPage: Bool = true) -> BrowserTab {
         let tab = BrowserTab(model: self, configuration: configuration)
         if let current = selectedTab, let index = tabs.firstIndex(where: { $0 === current }) {
             tabs.insert(tab, at: index + 1)
@@ -69,7 +72,7 @@ final class BrowserModel: ObservableObject {
         }
         if select { selectedID = tab.id }
         // A plain new tab opens the homepage if one is set in Settings.
-        let page = url ?? (configuration == nil ? NewTabPage.url : nil)
+        let page = url ?? (configuration == nil && usePreferredPage ? NewTabPage.url : nil)
         if let page { tab.load(page) }
         if focus && page == nil { focusAddressBar() }
         return tab

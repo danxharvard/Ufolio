@@ -40,6 +40,10 @@
 			</array>
 		</dict>
 	</array>
+	<key>LSFileQuarantineEnabled</key>
+	<true/>
+	<key>NSContactsUsageDescription</key>
+	<string>Hush can fill in forms with your details from your own contact card.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Websites you visit may ask to use your camera.</string>
 	<key>NSMicrophoneUsageDescription</key>

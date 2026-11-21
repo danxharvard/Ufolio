@@ -36,8 +36,7 @@ final class ContentBlocker: ObservableObject {
     private var store: WKContentRuleListStore { WKContentRuleListStore.default() }
 
     private init() {
-        folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Hush Browser/Filters", isDirectory: true)
+        folder = AppPaths.support.appendingPathComponent("Filters", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         if let data = try? Data(contentsOf: folder.appendingPathComponent("lists.json")),
            let saved = try? JSONDecoder().decode([FilterList].self, from: data) {
@@ -64,6 +63,7 @@ final class ContentBlocker: ObservableObject {
 
     private static func settingsSignature() -> String {
         [Prefs.adBlockEnabled, Prefs.trackerBlockEnabled, Prefs.hideCookieBanners, Prefs.collapseAdSpace,
+         Prefs.autofillPasswords, Prefs.autofillCards, Prefs.autofillContact,
          Prefs.blockThirdPartyCookies, Prefs.httpsUpgrade, Prefs.globalPrivacyControl]
             .map { Prefs.bool($0) ? "1" : "0" }.joined()
     }
@@ -143,6 +143,7 @@ final class ContentBlocker: ObservableObject {
             }
         }
         if Prefs.bool(Prefs.globalPrivacyControl) { controller.addUserScript(UserScripts.globalPrivacyControl) }
+        if AutofillCenter.isEnabled { controller.addUserScript(AutofillCenter.script) }
     }
 
     // MARK: Per-site shields
@@ -511,8 +512,13 @@ enum UserScripts {
         });
       }
 
+      // At most one scan every 0.6 s, and none while the tab is in the background.
       var timer = null;
-      function schedule() { clearTimeout(timer); timer = setTimeout(sweep, 250); }
+      function schedule() {
+        if (timer || document.hidden) return;
+        timer = setTimeout(function () { timer = null; sweep(); }, 600);
+      }
+      document.addEventListener('visibilitychange', function () { if (!document.hidden) schedule(); });
       document.addEventListener('DOMContentLoaded', schedule);
       window.addEventListener('load', function () {
         schedule();
@@ -523,7 +529,7 @@ enum UserScripts {
         new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
       });
     })();
-    """#, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+    """#, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .defaultClient)
 
     /// Hides common cookie-consent pop-ups and un-freezes page scrolling they lock.
     static let hideCookieBanners: WKUserScript = {
@@ -548,7 +554,7 @@ enum UserScripts {
           setTimeout(unlock, 1500); setTimeout(unlock, 4000);
         })();
         """
-        return WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        return WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .defaultClient)
     }()
 }
 

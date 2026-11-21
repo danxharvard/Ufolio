@@ -14,12 +14,23 @@ enum Prefs {
     static let startBackground = "startBackground"
     static let startGreeting = "startShowGreeting"
     static let startBookmarks = "startShowBookmarks"
+    static let startFrequent = "startShowFrequent"
     static let defaultZoom = "defaultZoom"
     // General
     static let searchEngine = "searchEngine"
     static let searchSuggestions = "searchSuggestions"
     static let launchBehavior = "launchBehavior"
     static let newTabPage = "newTabPage"
+    static let newWindowPage = "newWindowPage"
+    static let historyRetention = "historyRetention"
+    static let downloadRetention = "downloadRetention"
+    static let openSafeFiles = "openSafeFiles"
+    static let askDefaultBrowser = "askDefaultBrowser"
+    static let hasOnboarded = "hasOnboarded"
+    // AutoFill
+    static let autofillPasswords = "autofillPasswords"
+    static let autofillCards = "autofillCards"
+    static let autofillContact = "autofillContact"
     static let homepage = "homepage"
     static let downloadFolder = "downloadFolder"
     static let askWhereToSave = "askWhereToSave"
@@ -54,11 +65,21 @@ enum Prefs {
         startBackground: StartBackground.twilight.rawValue,
         startGreeting: true,
         startBookmarks: true,
+        startFrequent: true,
         defaultZoom: 1.0,
         searchEngine: SearchEngine.google.rawValue,
         searchSuggestions: true,
         launchBehavior: LaunchBehavior.startPage.rawValue,
         newTabPage: NewTabPage.startPage.rawValue,
+        newWindowPage: NewTabPage.startPage.rawValue,
+        historyRetention: HistoryRetention.year.rawValue,
+        downloadRetention: DownloadRetention.oneDay.rawValue,
+        openSafeFiles: false,
+        askDefaultBrowser: true,
+        hasOnboarded: false,
+        autofillPasswords: true,
+        autofillCards: true,
+        autofillContact: true,
         homepage: "",
         downloadFolder: "",
         askWhereToSave: false,
@@ -211,8 +232,13 @@ enum NewTabPage: String, CaseIterable, Identifiable {
     var label: String { self == .startPage ? "Start page" : "Homepage" }
 
     /// The page a new tab should load, or nil for the start page.
-    static var url: URL? {
-        guard NewTabPage(rawValue: Prefs.string(Prefs.newTabPage)) == .homepage else { return nil }
+    static var url: URL? { page(for: Prefs.newTabPage) }
+
+    /// The page a new window should load, or nil for the start page.
+    static var windowURL: URL? { page(for: Prefs.newWindowPage) }
+
+    private static func page(for key: String) -> URL? {
+        guard NewTabPage(rawValue: Prefs.string(key)) == .homepage else { return nil }
         return URLResolver.resolve(Prefs.string(Prefs.homepage))
     }
 }
@@ -244,4 +270,63 @@ enum PermissionPolicy: String, CaseIterable, Identifiable {
     case ask, never
     var id: String { rawValue }
     var label: String { self == .ask ? "Ask each time" : "Never allow" }
+}
+
+enum HistoryRetention: String, CaseIterable, Identifiable {
+    case day, week, twoWeeks, month, year, manually
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .day: return "After one day"
+        case .week: return "After one week"
+        case .twoWeeks: return "After two weeks"
+        case .month: return "After one month"
+        case .year: return "After one year"
+        case .manually: return "Manually"
+        }
+    }
+
+    var maxAge: TimeInterval? {
+        let day: TimeInterval = 86_400
+        switch self {
+        case .day: return day
+        case .week: return 7 * day
+        case .twoWeeks: return 14 * day
+        case .month: return 31 * day
+        case .year: return 365 * day
+        case .manually: return nil
+        }
+    }
+
+    static var current: HistoryRetention { HistoryRetention(rawValue: Prefs.string(Prefs.historyRetention)) ?? .year }
+}
+
+enum DownloadRetention: String, CaseIterable, Identifiable {
+    case oneDay, onQuit, onSuccess, manually
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .oneDay: return "After one day"
+        case .onQuit: return "When Hush quits"
+        case .onSuccess: return "Upon successful download"
+        case .manually: return "Manually"
+        }
+    }
+
+    static var current: DownloadRetention { DownloadRetention(rawValue: Prefs.string(Prefs.downloadRetention)) ?? .oneDay }
+}
+
+/// Where Hush keeps its files. Any copy with a different bundle ID (a test build)
+/// gets its own folder, so it can never touch your real bookmarks, history or lists.
+enum AppPaths {
+    static let support: URL = {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let id = Bundle.main.bundleIdentifier ?? ""
+        let name = id == "com.danxharvard.hushbrowser" || id.isEmpty ? "Hush Browser" : "Hush Browser (\(id))"
+        let folder = base.appendingPathComponent(name, isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
+    }()
 }

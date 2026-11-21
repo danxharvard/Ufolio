@@ -17,6 +17,11 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     @Published private(set) var isSecure = false
     /// Ads and trackers blocked on the current page.
     @Published private(set) var blockedOnPage = 0
+    /// The last address loaded by the user (typed, bookmark…), as opposed to by a page.
+    private var userLoadedURL: URL?
+    /// JavaScript dialogs shown on this page, and whether the user silenced them.
+    private var dialogsShown = 0
+    private var dialogsSilenced = false
 
     private var observers: Set<AnyCancellable> = []
 
@@ -46,6 +51,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         let zoom = Prefs.double(Prefs.defaultZoom)
         webView.pageZoom = zoom > 0 ? zoom : 1
         ContentBlocker.shared.attach(webView.configuration.userContentController)
+        AutofillCenter.shared.register(self)
 
         func bind<T>(_ keyPath: KeyPath<WKWebView, T>, _ apply: @escaping (BrowserTab, T) -> Void) {
             webView.publisher(for: keyPath)
@@ -53,7 +59,10 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
                 .sink { [weak self] value in if let self { apply(self, value) } }
                 .store(in: &observers)
         }
-        bind(\.title) { $0.title = $1 ?? "" }
+        bind(\.title) { tab, title in
+            tab.title = title ?? ""
+            if let url = tab.url, let title, !title.isEmpty { HistoryStore.shared.updateTitle(url, title: title) }
+        }
         bind(\.url) { tab, url in
             tab.url = url
             tab.model?.scheduleSessionSave()
@@ -77,6 +86,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     var host: String? { url?.host }
 
     func load(_ url: URL) {
+        userLoadedURL = url
         webView.load(URLRequest(url: url))
     }
 
@@ -113,12 +123,18 @@ extension BrowserTab: WKNavigationDelegate {
             decisionHandler(.cancel, preferences)
             return
         }
-        // Hand non-web links (mailto:, facetime:, app links…) to macOS.
-        if let url = action.request.url, let scheme = url.scheme?.lowercased(),
-           !["http", "https", "about", "blob", "data", "file"].contains(scheme) {
-            NSWorkspace.shared.open(url)
-            decisionHandler(.cancel, preferences)
-            return
+        if let url = action.request.url, let scheme = url.scheme?.lowercased() {
+            // Pages may not send you to data:/javascript: addresses (a phishing trick); you still can.
+            if ["data", "javascript"].contains(scheme), action.targetFrame?.isMainFrame ?? true, url != userLoadedURL {
+                decisionHandler(.cancel, preferences)
+                return
+            }
+            // Links to other apps (mailto:, zoommtg:, facetime:…) open only after you say so.
+            if !["http", "https", "about", "blob", "data", "file", "javascript"].contains(scheme) {
+                decisionHandler(.cancel, preferences)
+                confirmOpeningApp(for: url)
+                return
+            }
         }
         if action.targetFrame?.isMainFrame ?? true {
             // Per-site shields must be in place before the page starts loading.
@@ -136,6 +152,27 @@ extension BrowserTab: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         blockedOnPage = 0
+        dialogsShown = 0
+        dialogsSilenced = false
+    }
+
+    /// Asks before a page opens another app, the way Safari does.
+    private func confirmOpeningApp(for url: URL) {
+        guard let app = NSWorkspace.shared.urlForApplication(toOpen: url), let window = webView.window else { return }
+        let name = FileManager.default.displayName(atPath: app.path).replacingOccurrences(of: ".app", with: "")
+        let alert = NSAlert()
+        alert.messageText = "Open this link in “\(name)”?"
+        alert.informativeText = "\(host?.strippingWWW ?? "This page") wants to open another app on your Mac."
+        alert.addButton(withTitle: "Open")
+        alert.addButton(withTitle: "Cancel")
+        alert.icon = NSWorkspace.shared.icon(forFile: app.path)
+        alert.beginSheetModal(for: window) { response in
+            if response == .alertFirstButtonReturn { NSWorkspace.shared.open(url) }
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        if let url = webView.url { HistoryStore.shared.record(url, title: webView.title ?? "") }
     }
 
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
@@ -161,7 +198,8 @@ extension BrowserTab: WKNavigationDelegate {
             BlockStats.shared.record(identifier)
             // Tell the page's ad-space collapser that ads really were blocked here.
             if self.blockedOnPage == 1 && Prefs.bool(Prefs.collapseAdSpace) {
-                webView.evaluateJavaScript("window.__hushAdsBlocked = true; window.__hushSweep && window.__hushSweep();")
+                webView.evaluateJavaScript("window.__hushAdsBlocked = true; window.__hushSweep && window.__hushSweep();",
+                                           in: nil, in: .defaultClient) { _ in }
             }
         }
     }
@@ -187,23 +225,36 @@ extension BrowserTab: WKUIDelegate {
         panel.begin { completionHandler($0 == .OK ? panel.urls : nil) }
     }
 
+    /// A page's alert/confirm, shown as a sheet on this window only, titled with the
+    /// origin WebKit reports. After two, the user can silence the page.
+    private func pageDialog(_ message: String, frame: WKFrameInfo, confirm: Bool,
+                            completion: @escaping (Bool) -> Void) {
+        guard !dialogsSilenced, let window = webView.window else { completion(false); return }
+        dialogsShown += 1
+        let alert = NSAlert()
+        let origin = frame.securityOrigin.host
+        alert.messageText = origin.isEmpty ? "This page says" : "\(origin.strippingWWW) says"
+        alert.informativeText = String(message.prefix(2_000))
+        alert.addButton(withTitle: "OK")
+        if confirm { alert.addButton(withTitle: "Cancel") }
+        if dialogsShown > 1 {
+            alert.showsSuppressionButton = true
+            alert.suppressionButton?.title = "Don’t show more messages from this page"
+        }
+        alert.beginSheetModal(for: window) { [weak self] response in
+            if alert.suppressionButton?.state == .on { self?.dialogsSilenced = true }
+            completion(response == .alertFirstButtonReturn)
+        }
+    }
+
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
                  initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
-        let alert = NSAlert()
-        alert.messageText = frame.request.url?.host ?? "This page says"
-        alert.informativeText = message
-        alert.runModal()
-        completionHandler()
+        pageDialog(message, frame: frame, confirm: false) { _ in completionHandler() }
     }
 
     func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
                  initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
-        let alert = NSAlert()
-        alert.messageText = frame.request.url?.host ?? "This page says"
-        alert.informativeText = message
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Cancel")
-        completionHandler(alert.runModal() == .alertFirstButtonReturn)
+        pageDialog(message, frame: frame, confirm: true, completion: completionHandler)
     }
 
     // Camera and microphone (public WebKit API, macOS 12+).
@@ -236,63 +287,6 @@ extension BrowserTab: WKUIDelegate {
                                     decisionHandler: @escaping (Bool) -> Void) {
         SitePermissions.shared.request([.location], host: frame.securityOrigin.host, window: webView.window,
                                        completion: decisionHandler)
-    }
-}
-
-/// Saves downloads to the chosen folder (or asks where) and bounces the Downloads stack in the Dock.
-final class Downloads: NSObject, WKDownloadDelegate {
-    static let shared = Downloads()
-    private var destinations: [ObjectIdentifier: URL] = [:]
-
-    static var folder: URL {
-        let saved = Prefs.string(Prefs.downloadFolder)
-        if !saved.isEmpty { return URL(fileURLWithPath: saved, isDirectory: true) }
-        return FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
-    }
-
-    func download(_ download: WKDownload, decideDestinationUsing response: URLResponse,
-                  suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
-        if Prefs.bool(Prefs.askWhereToSave) {
-            let panel = NSSavePanel()
-            panel.nameFieldStringValue = suggestedFilename
-            panel.directoryURL = Self.folder
-            let finish: (NSApplication.ModalResponse) -> Void = { response in
-                let url = response == .OK ? panel.url : nil
-                if let url {
-                    try? FileManager.default.removeItem(at: url) // the panel already confirmed replacing it
-                    self.destinations[ObjectIdentifier(download)] = url
-                }
-                completionHandler(url)
-            }
-            if let window = download.webView?.window {
-                panel.beginSheetModal(for: window, completionHandler: finish)
-            } else {
-                finish(panel.runModal())
-            }
-            return
-        }
-
-        let folder = Self.folder
-        let base = (suggestedFilename as NSString).deletingPathExtension
-        let ext = (suggestedFilename as NSString).pathExtension
-        var candidate = folder.appendingPathComponent(suggestedFilename)
-        var n = 2
-        while FileManager.default.fileExists(atPath: candidate.path) {
-            candidate = folder.appendingPathComponent(ext.isEmpty ? "\(base) \(n)" : "\(base) \(n).\(ext)")
-            n += 1
-        }
-        destinations[ObjectIdentifier(download)] = candidate
-        completionHandler(candidate)
-    }
-
-    func downloadDidFinish(_ download: WKDownload) {
-        guard let url = destinations.removeValue(forKey: ObjectIdentifier(download)) else { return }
-        DistributedNotificationCenter.default().post(
-            name: .init("com.apple.DownloadFileFinished"), object: url.path)
-    }
-
-    func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
-        destinations.removeValue(forKey: ObjectIdentifier(download))
     }
 }
 

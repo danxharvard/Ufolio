@@ -10,7 +10,10 @@ A lightweight, native macOS web browser built on WebKit (the engine behind Safar
   (EasyList, uBlock/Adblock Plus lists, hosts files, Safari content-blocker JSON)
 - Privacy: third-party cookie blocking, HTTPS upgrade, Global Privacy Control, fraud warnings,
   per-site location/camera/microphone permissions, one-click clearing of website data
-- Optional personal start page with your town and local weather
+- Start page with Favourites and Frequently Visited, plus optional local weather
+- Passwords & AutoFill (Keychain-backed, Touch ID): passwords, credit cards, your contact card
+- History with address-bar suggestions, and import from Safari, Chrome, Brave, Edge, Arc, Vivaldi, Firefox
+- Downloads list with progress
 - Updates itself from GitHub releases (Settings › Updates)
 - Tabs (⌘T, ⌘W, ⇧⌘[ / ⇧⌘]), zoom, downloads, restore last session
 - Under 3 MB, universal (Intel and Apple Silicon), macOS 13 or later
@@ -38,7 +41,8 @@ This produces `build/Hush Browser.app`, `build/HushBrowser-<version>.dmg` (the i
 
 ## Releasing an update
 
-1. Put the new version number in `VERSION` (e.g. `0.3.0`) and commit.
+1. Go through [RELEASING.md](RELEASING.md) (security, bug and performance review), then put the new
+   version number in `VERSION`, note the changes in `CHANGELOG.md` and commit.
 2. Tag and push:
 
    ```bash
@@ -67,6 +71,10 @@ quit — or straight away from Settings › Updates.
 | `Sources/FilterConverter.swift` | Turns imported filter lists into WebKit rules |
 | `Sources/Location.swift` | Site permissions and local weather for the start page |
 | `Sources/Updater.swift` | Checks for, downloads and installs updates |
+| `Sources/History.swift` | History, Frequently Visited and importing from other browsers |
+| `Sources/Autofill.swift` | Passwords, cards and contact AutoFill (Keychain + Touch ID) |
+| `Sources/Downloads.swift` | Downloads and the downloads list |
+| `Sources/Welcome.swift` | Welcome screen and default-browser prompt |
 | `scripts/build-app.sh` | Builds the app bundle and DMG |
 | `scripts/make-icon.swift` | Draws the app icon |
 
@@ -78,7 +86,8 @@ quit — or straight away from Settings › Updates.
 - Location for the start page is rounded to about 1 km and sent only to Open-Meteo (weather) and
   Apple (town name), and only if you turn it on.
 - Site icons are fetched from each site directly, not through a third-party icon service.
-- Bookmarks are stored locally in `~/Library/Application Support/Hush Browser/bookmarks.json`.
+- Bookmarks and history are stored only on this Mac, in `~/Library/Application Support/Hush Browser/`.
+- Passwords and cards are stored in the macOS Keychain and filled only after Touch ID or your password.
 
 ## License
 
