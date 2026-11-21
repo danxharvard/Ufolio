@@ -27,8 +27,12 @@ jobs:
             echo "Tag v$TAG doesn't match VERSION ($FILE)"; exit 1
           fi
 
+      # In its own Python environment: the runner's system Python refuses package installs.
       - name: Install the installer-window tool
-        run: python3 -m pip install --user dmgbuild
+        run: |
+          python3 -m venv "$RUNNER_TEMP/dmgenv"
+          "$RUNNER_TEMP/dmgenv/bin/python3" -m pip install --quiet dmgbuild
+          echo "$RUNNER_TEMP/dmgenv/bin" >> "$GITHUB_PATH"
 
       - name: Build app, update zip and installer
         run: ./scripts/build-app.sh
