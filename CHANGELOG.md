@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.0
+
+**New: extensions in the toolbar**
+- Up to three of your extensions now have a button right next to Hush Guard.
+- Got more than three? A small extensions button shows how many more there are, and opens
+  Settings › Extensions, where every extension is listed.
+- To pick which three get a button, choose Show in Toolbar from an extension's ⋯ menu in
+  Settings › Extensions. The same menu has Use on Current Page for the others.
+
 ## 0.12.1
 
 **Improved**

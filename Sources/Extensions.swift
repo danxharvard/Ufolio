@@ -265,6 +265,19 @@ final class ExtensionStore: ObservableObject {
         }
     }
 
+    /// Extensions with their own button next to Hush Guard: the first three running ones.
+    func inToolbar(_ ext: InstalledExtension) -> Bool {
+        installed.filter(\.enabled).prefix(3).contains { $0.id == ext.id }
+    }
+
+    /// Moves an extension to the front, so it gets one of the three toolbar buttons.
+    @MainActor
+    func showInToolbar(_ ext: InstalledExtension) {
+        guard let i = installed.firstIndex(where: { $0.id == ext.id }), i > 0 else { return }
+        installed.insert(installed.remove(at: i), at: 0)
+        save()
+    }
+
     @MainActor
     func remove(_ ext: InstalledExtension) {
         if #available(macOS 15.4, *) { ExtensionManager.shared.unload(ext.id) }
@@ -545,15 +558,53 @@ struct ExtensionButtons: View {
 @available(macOS 15.4, *)
 private struct ExtensionButtonRow: View {
     @ObservedObject var manager: ExtensionManager
+    @ObservedObject private var store = ExtensionStore.shared
+    /// How many extensions get their own button next to Hush Guard; the rest live in Settings.
+    static let limit = 3
 
     var body: some View {
+        // In the order you added them, skipping ones that are turned off or haven't loaded.
+        let running = store.installed.filter { $0.enabled && manager.contexts[$0.id] != nil }
+        let tab = BrowserModel.frontmost?.selectedTab
         HStack(spacing: 2) {
-            ForEach(manager.contexts.keys.sorted(), id: \.self) { id in
-                if let context = manager.contexts[id], let action = context.action(for: BrowserModel.frontmost?.selectedTab) {
-                    ExtensionButton(id: id, action: action, manager: manager)
+            ForEach(running.prefix(Self.limit)) { ext in
+                if let action = manager.contexts[ext.id]?.action(for: tab) {
+                    ExtensionButton(id: ext.id, action: action, manager: manager)
                 }
             }
+            if running.count > Self.limit {
+                MoreExtensionsButton(count: running.count - Self.limit)
+            }
         }
+    }
+}
+
+/// Shown when more than three extensions are running: opens Settings › Extensions.
+private struct MoreExtensionsButton: View {
+    let count: Int
+    @State private var hovering = false
+
+    var body: some View {
+        Button { SettingsOpener.open(tab: .extensions) } label: {
+            Image(systemName: "puzzlepiece.extension")
+                .font(.system(size: 13))
+                .overlay(alignment: .topTrailing) {
+                    Text("+\(count)")
+                        .font(.system(size: 7.5, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 2.5)
+                        .frame(minHeight: 11)
+                        .background(Capsule().fill(Color.secondary))
+                        .offset(x: 9, y: -5)
+                }
+                .frame(width: 28, height: 26)
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(hovering ? 0.08 : 0)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .help(count == 1 ? "1 more extension in Settings › Extensions" : "\(count) more extensions in Settings › Extensions")
+        .onHover { hovering = $0 }
     }
 }
 

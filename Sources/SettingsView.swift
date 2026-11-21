@@ -1666,7 +1666,11 @@ private struct ExtensionSettings: View {
                     ForEach(store.installed) { ext in
                         ExtensionRow(ext: ext)
                     }
-                } header: { SectionTitle("Installed") }
+                } header: { SectionTitle("Installed") } footer: {
+                    if store.installed.filter(\.enabled).count > 3 {
+                        Footnote("The first three extensions that are turned on have a button next to Hush Guard. Choose Show in Toolbar from an extension’s ⋯ menu to give it one.")
+                    }
+                }
             }
         }
         .formStyle(SafariFormStyle())
@@ -1717,6 +1721,15 @@ private struct ExtensionRow: View {
             }
             Spacer()
             Menu {
+                if ext.enabled {
+                    if #available(macOS 15.4, *) {
+                        Button("Use on Current Page") { ExtensionManager.shared.performAction(ext.id) }
+                    }
+                    if !store.inToolbar(ext) {
+                        Button("Show in Toolbar") { store.showInToolbar(ext) }
+                    }
+                    Divider()
+                }
                 if let source = ext.source, let url = URL(string: source) {
                     Button("Open in Chrome Web Store") { BrowserModel.frontmost?.newTab(url: url) }
                 }

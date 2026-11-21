@@ -144,8 +144,8 @@ struct BrowserWindow: View {
             }
         }
         ToolbarItemGroup(placement: .primaryAction) {
-            ExtensionButtons()
             DownloadsButton()
+            ExtensionButtons()       // up to three, right beside Hush Guard
             SelectedTab(model: model) { ShieldsButton(tab: $0) }
             ToolbarIconButton(symbol: "plus", help: "New Tab (⌘T)") {
                 model.newTab(focus: true)
