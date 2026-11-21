@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         BlockStats.shared.save()
+        PrivacyReport.shared.save()
     }
 
     /// Clicking Hush in the Dock with no window open brings one back.
@@ -114,6 +115,9 @@ struct HushCommands: Commands {
         }
 
         CommandMenu("History") {
+            Button("Reopen Closed Tab") { browser?.reopenClosedTab() }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
+            Divider()
             Button("Back") { browser?.selectedTab?.webView.goBack() }
                 .keyboardShortcut("[")
             Button("Forward") { browser?.selectedTab?.webView.goForward() }

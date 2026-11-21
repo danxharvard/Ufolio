@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.0
+
+**New start page**
+- Frosted and translucent: your desktop shows softly through, with your theme as a tint.
+- Recently Closed Tabs, with Clear All. Plus History › Reopen Closed Tab (⇧⌘T).
+- Favourites as large, app-icon-style tiles.
+- Suggestions: cards tinted with each site's own colour, with when you last visited.
+- Privacy Report: trackers blocked in the last 30 days, the share of websites that tried to track
+  you, and the most widespread tracker, with Show More for the full list.
+- Each section can be switched on or off in Settings › Appearance.
+
+**Also new**
+- A slim "Make Hush your default browser?" banner under the bookmarks bar replaces the pop-up.
+  Closing it hides it for two weeks.
+
+**Fixed**
+- The address bar could show the previous tab's address after switching tabs (or opening a new
+  tab). Toolbar items now follow the selected tab directly.
+- A new tab's icon in the tab bar was a stray red square.
+- Site icons are fetched once per site, even when many parts of the page ask at once.
+- Clear History now also clears Recently Closed Tabs and the Privacy Report.
+
+**Tested** in all six theme combinations (Twilight, Aurora, Plain × light, dark): address bar
+position, clicks, typing an address, switching tabs, clean quit.
+
 ## 0.3.2
 
 **Fixed**

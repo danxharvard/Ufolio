@@ -15,6 +15,9 @@ enum Prefs {
     static let startGreeting = "startShowGreeting"
     static let startBookmarks = "startShowBookmarks"
     static let startFrequent = "startShowFrequent"
+    static let startRecentlyClosed = "startShowRecentlyClosed"
+    static let startPrivacyReport = "startShowPrivacyReport"
+    static let startTranslucent = "startTranslucent"
     static let defaultZoom = "defaultZoom"
     // General
     static let searchEngine = "searchEngine"
@@ -66,6 +69,9 @@ enum Prefs {
         startGreeting: true,
         startBookmarks: true,
         startFrequent: true,
+        startRecentlyClosed: true,
+        startPrivacyReport: true,
+        startTranslucent: true,
         defaultZoom: 1.0,
         searchEngine: SearchEngine.google.rawValue,
         searchSuggestions: true,

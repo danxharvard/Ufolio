@@ -24,7 +24,14 @@ private struct TabPill: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Favicon(url: tab.url, size: 14)
+            if tab.url == nil {
+                Image(systemName: "moon.stars")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 14, height: 14)
+            } else {
+                Favicon(url: tab.url, size: 14)
+            }
             Text(tab.displayTitle)
                 .font(.system(size: 12, weight: isSelected ? .medium : .regular))
                 .lineLimit(1)

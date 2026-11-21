@@ -16,8 +16,10 @@ struct AddressBar: View {
     @State private var isEditing = false
     @State private var hovering = false
 
-    private var displayText: String {
-        guard let url = tab.url else { return "" }
+    private var displayText: String { display(tab.url) }
+
+    private func display(_ url: URL?) -> String {
+        guard let url else { return "" }
         if showFullAddress { return url.absoluteString }
         return url.host?.strippingWWW ?? url.absoluteString
     }
@@ -92,8 +94,15 @@ struct AddressBar: View {
         .animation(.easeOut(duration: 0.15), value: isEditing)
         .animation(.easeOut(duration: 0.12), value: hovering)
         .onAppear { text = displayText }
-        .onChange(of: tab.url) { _ in if !isEditing { text = displayText } }
-        .onChange(of: showFullAddress) { _ in if !isEditing { text = displayText } }
+        // onChange actions can still see the previous values, so always use the new value
+        // or read the selected tab from the model, never the captured `tab`.
+        .onChange(of: tab.url) { newURL in if !isEditing { text = display(newURL) } }
+        // Switching tabs must show the new tab's address (or nothing, for a new tab).
+        .onChange(of: tab.id) { _ in
+            if !isEditing { text = display(model.selectedTab?.url) }
+            suggestions.dismiss()
+        }
+        .onChange(of: showFullAddress) { _ in if !isEditing { text = display(model.selectedTab?.url) } }
     }
 
     private var leadingSymbol: String {

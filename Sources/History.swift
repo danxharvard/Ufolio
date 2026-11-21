@@ -22,6 +22,7 @@ struct FrequentSite: Identifiable {
     var title: String
     var url: URL
     var score: Double
+    var lastVisit: Date
     var id: String { host }
 }
 
@@ -73,14 +74,15 @@ final class HistoryStore: ObservableObject {
     }
 
     /// The sites you visit most, one tile per site.
-    func frequentSites(limit: Int = 8) -> [FrequentSite] {
-        var bySite: [String: (score: Double, best: HistoryEntry)] = [:]
+    func frequentSites(limit: Int = 8, excluding: Set<String> = []) -> [FrequentSite] {
+        var bySite: [String: (score: Double, best: HistoryEntry, last: Date)] = [:]
         for entry in entries.values {
-            guard let host = entry.url.host?.lowercased().strippingWWW, !hiddenHosts.contains(host) else { continue }
+            guard let host = entry.url.host?.lowercased().strippingWWW, !hiddenHosts.contains(host),
+                  !excluding.contains(host) else { continue }
             let current = bySite[host]
             let score = (current?.score ?? 0) + entry.score
             let best = current.map { $0.best.visits >= entry.visits ? $0.best : entry } ?? entry
-            bySite[host] = (score, best)
+            bySite[host] = (score, best, max(current?.last ?? .distantPast, entry.lastVisit))
         }
         return bySite
             .sorted { $0.value.score > $1.value.score }
@@ -89,7 +91,7 @@ final class HistoryStore: ObservableObject {
                 let scheme = value.best.url.scheme ?? "https"
                 let home = URL(string: "\(scheme)://\(value.best.url.host ?? host)/") ?? value.best.url
                 return FrequentSite(host: host, title: Self.siteName(host: host, title: value.best.title),
-                                    url: home, score: value.score)
+                                    url: home, score: value.score, lastVisit: value.last)
             }
     }
 
@@ -164,12 +166,29 @@ final class HistoryStore: ObservableObject {
     /// "GitHub: Let’s build from here" → "GitHub"; falls back to a tidy host name.
     static func siteName(host: String, title: String) -> String {
         let separators = [" | ", " - ", " — ", " – ", ": ", " · "]
+        // The site's own name: "bbc" for news.bbc.co.uk, "github" for github.com.
+        let base = Domains.site(host).split(separator: ".").first.map { String($0).lowercased() } ?? host
         for sep in separators where title.contains(sep) {
             let parts = title.components(separatedBy: sep).map { $0.trimmingCharacters(in: .whitespaces) }
-            if let short = parts.min(by: { $0.count < $1.count }), (2...24).contains(short.count) { return short }
+                .filter { (2...24).contains($0.count) }
+            // Prefer the part that names the site ("Home - BBC News" → "BBC News" on bbc.co.uk).
+            if let named = parts.first(where: { $0.lowercased().replacingOccurrences(of: " ", with: "").contains(base) }) {
+                return named
+            }
+            if let short = parts.min(by: { $0.count < $1.count }) { return short }
         }
         if (2...24).contains(title.count) { return title }
-        let base = host.split(separator: ".").dropLast().last.map(String.init) ?? host
+        // "News, sport and opinion from the Guardian" on theguardian.com → "The Guardian".
+        let words = title.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
+        for size in 1...3 where words.count >= size {
+            for start in 0...(words.count - size) {
+                let run = words[start..<(start + size)]
+                if run.joined().lowercased() == base {
+                    let name = run.joined(separator: " ")
+                    return name.prefix(1).uppercased() + name.dropFirst()
+                }
+            }
+        }
         return base.prefix(1).uppercased() + base.dropFirst()
     }
 }

@@ -324,10 +324,14 @@ private struct GeneralSettings: View {
         .formStyle(.grouped)
         .onAppear { isDefaultBrowser = DefaultBrowser.isDefault }
         .alert("Clear all history?", isPresented: $confirmClearHistory) {
-            Button("Clear History", role: .destructive) { HistoryStore.shared.clear() }
+            Button("Clear History", role: .destructive) {
+                HistoryStore.shared.clear()
+                RecentlyClosed.shared.clear()
+                PrivacyReport.shared.reset()
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This removes every page Hush remembers, including Frequently Visited. It can’t be undone.")
+            Text("This removes every page Hush remembers, including Suggestions, Recently Closed Tabs and the Privacy Report. It can’t be undone.")
         }
     }
 
@@ -366,6 +370,9 @@ private struct AppearanceSettings: View {
     @AppStorage(Prefs.startGreeting) private var greeting = true
     @AppStorage(Prefs.startBookmarks) private var startBookmarks = true
     @AppStorage(Prefs.startFrequent) private var startFrequent = true
+    @AppStorage(Prefs.startRecentlyClosed) private var startClosed = true
+    @AppStorage(Prefs.startPrivacyReport) private var startPrivacy = true
+    @AppStorage(Prefs.startTranslucent) private var startTranslucent = true
     @AppStorage(Prefs.showBookmarkBar) private var bookmarkBar = true
     @AppStorage(Prefs.alwaysShowTabBar) private var alwaysTabBar = false
     @AppStorage(Prefs.showFullAddress) private var fullAddress = false
@@ -401,9 +408,14 @@ private struct AppearanceSettings: View {
                     ForEach(StartBackground.allCases) { Text($0.label).tag($0.rawValue) }
                 }
                 .pickerStyle(.segmented)
+                DescribedToggle(title: "Translucent background",
+                                detail: "Lets your desktop show softly through the start page, like frosted glass.",
+                                isOn: $startTranslucent)
                 Toggle("Show greeting", isOn: $greeting)
+                Toggle("Show Recently Closed Tabs", isOn: $startClosed)
                 Toggle("Show Favourites", isOn: $startBookmarks)
-                Toggle("Show Frequently Visited", isOn: $startFrequent)
+                Toggle("Show Suggestions", isOn: $startFrequent)
+                Toggle("Show Privacy Report", isOn: $startPrivacy)
             } header: { Text("Start page") }
 
             Section {

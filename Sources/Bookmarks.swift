@@ -220,287 +220,77 @@ private struct Monogram: View {
     }
 }
 
+/// A site's icon plus what the start page needs to lay it out nicely.
+struct SiteIcon {
+    let image: NSImage
+    /// The largest version's width in pixels (big icons can fill a tile).
+    let pixels: Int
+    /// The icon's main colour, for tinting cards.
+    let tint: NSColor?
+
+    var isLarge: Bool { pixels >= 96 }
+}
+
 actor FaviconCache {
     static let shared = FaviconCache()
-    private var cache: [String: NSImage] = [:]
+    private var cache: [String: SiteIcon] = [:]
     private var misses: Set<String> = []
+    private var inFlight: [String: Task<SiteIcon?, Never>] = [:]
 
     func icon(for url: URL?) async -> NSImage? {
+        await info(for: url)?.image
+    }
+
+    /// Fetches each site's icon once, even when many views ask at the same moment.
+    func info(for url: URL?) async -> SiteIcon? {
         guard let url, let host = url.host, let scheme = url.scheme, scheme.hasPrefix("http") else { return nil }
         if let hit = cache[host] { return hit }
         if misses.contains(host) { return nil }
+        if let running = inFlight[host] { return await running.value }
 
-        for path in ["/apple-touch-icon.png", "/favicon.ico"] {
-            guard let iconURL = URL(string: "https://\(host)\(path)") else { continue }
-            var request = URLRequest(url: iconURL)
-            request.timeoutInterval = 5
-            if let (data, response) = try? await URLSession.shared.data(for: request),
-               (response as? HTTPURLResponse)?.statusCode == 200,
-               let image = NSImage(data: data), image.isValid, image.size.width > 0 {
-                cache[host] = image
-                return image
-            }
-        }
-        misses.insert(host)
-        return nil
-    }
-}
-
-/// What a new tab shows: a calm clock-free page with your bookmarks as tiles.
-struct StartPage: View {
-    @ObservedObject var model: BrowserModel
-    @ObservedObject private var store = BookmarkStore.shared
-    @ObservedObject private var history = HistoryStore.shared
-    @ObservedObject private var weather = LocalWeather.shared
-    @AppStorage(Prefs.startBackground) private var backgroundStyle = StartBackground.twilight.rawValue
-    @AppStorage(Prefs.startGreeting) private var showGreeting = true
-    @AppStorage(Prefs.startBookmarks) private var showBookmarks = true
-    @AppStorage(Prefs.startFrequent) private var showFrequent = true
-    @AppStorage(Prefs.startPageWeather) private var showWeather = false
-
-    private let tileColumns = [GridItem(.adaptive(minimum: 92, maximum: 104), spacing: 16)]
-    private let cardColumns = [GridItem(.adaptive(minimum: 128, maximum: 150), spacing: 14)]
-
-    var body: some View {
-        let frequent = showFrequent ? history.frequentSites(limit: 8) : []
-        ZStack {
-            StartBackgroundView(style: StartBackground(rawValue: backgroundStyle) ?? .twilight)
-            ScrollView {
-                VStack(spacing: 38) {
-                    header
-                    if showBookmarks && !store.items.isEmpty {
-                        StartSection(title: "Favourites") {
-                            LazyVGrid(columns: tileColumns, alignment: .leading, spacing: 18) {
-                                ForEach(store.items) { bookmark in
-                                    StartTile(bookmark: bookmark) {
-                                        model.open(bookmark.url, inNewTab: NSEvent.modifierFlags.contains(.command))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if !frequent.isEmpty {
-                        StartSection(title: "Frequently Visited") {
-                            LazyVGrid(columns: cardColumns, alignment: .leading, spacing: 14) {
-                                ForEach(frequent) { site in
-                                    FrequentCard(site: site, model: model)
-                                }
-                            }
-                        }
-                    }
-                }
-                .frame(maxWidth: 700)
-                .padding(.horizontal, 40)
-                .padding(.top, 70)
-                .padding(.bottom, 50)
-                .frame(maxWidth: .infinity)
-            }
-            .animation(.easeOut(duration: 0.3), value: weather.temperature)
-        }
-        .onAppear { weather.refreshIfNeeded() }
-        .onChange(of: showWeather) { on in if on { weather.request() } }
-    }
-
-    private var header: some View {
-        VStack(spacing: 8) {
-            Text("Hush")
-                .font(.system(size: 54, weight: .thin, design: .rounded))
-                .tracking(2)
-            if showGreeting || (showWeather && weather.temperature != nil) {
-                HStack(spacing: 8) {
-                    if showGreeting { Text(greeting) }
-                    if showWeather, let temperature = weather.temperature {
-                        if showGreeting { Text("·").foregroundStyle(.tertiary) }
-                        Image(systemName: weather.symbol).symbolRenderingMode(.multicolor)
-                        Text("\(temperature)°")
-                        if let city = weather.city { Text(city) }
-                    }
-                }
-                .font(.system(size: 14, weight: .regular, design: .rounded))
-                .foregroundStyle(.secondary)
-                .transition(.opacity)
-            }
-        }
-    }
-
-    private var greeting: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        switch hour {
-        case 5..<12: return "Good morning"
-        case 12..<18: return "Good afternoon"
-        default: return "Good evening"
-        }
-    }
-}
-
-private struct StartSection<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(title)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-                .padding(.leading, 4)
-            content
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-/// A Frequently Visited site: a soft frosted card with the site's icon and name.
-private struct FrequentCard: View {
-    let site: FrequentSite
-    @ObservedObject var model: BrowserModel
-    @State private var hovering = false
-
-    var body: some View {
-        Button {
-            model.open(site.url, inNewTab: NSEvent.modifierFlags.contains(.command))
-        } label: {
-            VStack(spacing: 10) {
-                Favicon(url: site.url, size: 30)
-                    .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
-                VStack(spacing: 2) {
-                    Text(site.title)
-                        .font(.system(size: 12, weight: .medium))
-                        .lineLimit(1)
-                    Text(site.host)
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+        let task = Task<SiteIcon?, Never> {
+            for path in ["/apple-touch-icon.png", "/apple-touch-icon-precomposed.png", "/favicon.ico"] {
+                guard let iconURL = URL(string: "https://\(host)\(path)") else { continue }
+                var request = URLRequest(url: iconURL)
+                request.timeoutInterval = 5
+                if let (data, response) = try? await URLSession.shared.data(for: request),
+                   (response as? HTTPURLResponse)?.statusCode == 200,
+                   let image = NSImage(data: data), image.isValid, image.size.width > 0 {
+                    let pixels = image.representations.map(\.pixelsWide).max() ?? Int(image.size.width)
+                    return SiteIcon(image: image, pixels: pixels, tint: Self.mainColor(of: image))
                 }
             }
-            .padding(.vertical, 16)
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.regularMaterial)
-                    .shadow(color: .black.opacity(hovering ? 0.14 : 0.05), radius: hovering ? 12 : 4, y: hovering ? 6 : 2)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.06))
-            )
-            .scaleEffect(hovering ? 1.03 : 1)
+            return nil
         }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: hovering)
-        .help(site.url.absoluteString)
-        .contextMenu {
-            Button("Open in New Tab") { model.open(site.url, inNewTab: true) }
-            Button("Add to Favourites") { BookmarkStore.shared.toggle(url: site.url, title: site.title) }
-                .disabled(BookmarkStore.shared.contains(site.url))
-            Divider()
-            Button("Remove from Frequently Visited") { HistoryStore.shared.hideFromStartPage(site.host) }
-        }
+        inFlight[host] = task
+        let result = await task.value
+        inFlight[host] = nil
+        if let result { cache[host] = result } else { misses.insert(host) }
+        return result
     }
-}
 
-/// The start page's backdrop: a soft twilight gradient, slow-drifting aurora, or plain.
-struct StartBackgroundView: View {
-    let style: StartBackground
-    @Environment(\.colorScheme) private var scheme
-    @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
-
-    var body: some View {
-        Group {
-            switch style {
-            case .plain:
-                Color(nsColor: .windowBackgroundColor)
-            case .twilight:
-                LinearGradient(
-                    colors: scheme == .dark
-                        ? [Color(red: 0.09, green: 0.09, blue: 0.13), Color(red: 0.13, green: 0.11, blue: 0.19)]
-                        : [Color(red: 0.98, green: 0.97, blue: 1.0), Color(red: 0.93, green: 0.93, blue: 0.98)],
-                    startPoint: .top, endPoint: .bottom)
-            case .aurora:
-                AuroraView(dark: scheme == .dark, animate: !reduceMotion)
+    /// The average of the icon's coloured pixels (ignoring transparent and near-white ones).
+    private static func mainColor(of image: NSImage) -> NSColor? {
+        let side = 16
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side, bitsPerSample: 8,
+                                         samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        image.draw(in: NSRect(x: 0, y: 0, width: side, height: side))
+        NSGraphicsContext.restoreGraphicsState()
+        var r = 0.0, g = 0.0, b = 0.0, n = 0.0
+        for x in 0..<side {
+            for y in 0..<side {
+                guard let c = rep.colorAt(x: x, y: y), c.alphaComponent > 0.5 else { continue }
+                let brightness = (c.redComponent + c.greenComponent + c.blueComponent) / 3
+                let spread = max(c.redComponent, c.greenComponent, c.blueComponent) - min(c.redComponent, c.greenComponent, c.blueComponent)
+                guard brightness < 0.92 || spread > 0.12 else { continue } // skip white backgrounds
+                let weight = 0.3 + spread // colourful pixels count more
+                r += c.redComponent * weight; g += c.greenComponent * weight; b += c.blueComponent * weight; n += weight
             }
         }
-        // A backdrop must never catch clicks or spill outside the page.
-        .clipped()
-        .allowsHitTesting(false)
-    }
-}
-
-/// Slowly drifting colour fields. Drawn frame by frame from the clock (no long-running
-/// SwiftUI animation that could leak into the toolbar), with cheap radial gradients.
-private struct AuroraView: View {
-    let dark: Bool
-    let animate: Bool
-    /// Pauses the drift when the window isn't the one in use (saves power).
-    @Environment(\.controlActiveState) private var activeState
-
-    private struct Field {
-        let color: Color
-        let from: CGPoint   // centre at the start of the drift, as fractions of the size
-        let to: CGPoint     // centre at the other end
-        let radius: CGFloat // fraction of the width
-        let speed: Double   // seconds for one drift there and back
-    }
-
-    private let fields = [
-        Field(color: Color(red: 0.45, green: 0.35, blue: 0.95), from: CGPoint(x: 0.25, y: 0.32), to: CGPoint(x: 0.34, y: 0.22), radius: 0.48, speed: 28),
-        Field(color: Color(red: 0.15, green: 0.65, blue: 0.85), from: CGPoint(x: 0.66, y: 0.40), to: CGPoint(x: 0.74, y: 0.55), radius: 0.40, speed: 34),
-        Field(color: Color(red: 0.95, green: 0.45, blue: 0.65), from: CGPoint(x: 0.56, y: 0.72), to: CGPoint(x: 0.46, y: 0.80), radius: 0.36, speed: 40),
-    ]
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 24, paused: !animate || activeState == .inactive)) { context in
-            Canvas { ctx, size in
-                ctx.fill(Path(CGRect(origin: .zero, size: size)),
-                         with: .color(dark ? Color(red: 0.07, green: 0.07, blue: 0.11) : Color(red: 0.97, green: 0.97, blue: 0.99)))
-                let t = animate ? context.date.timeIntervalSinceReferenceDate : 0
-                let strength = dark ? 0.55 : 0.32
-                for field in fields {
-                    let phase = (sin(t * 2 * .pi / field.speed) + 1) / 2
-                    let center = CGPoint(x: (field.from.x + (field.to.x - field.from.x) * phase) * size.width,
-                                         y: (field.from.y + (field.to.y - field.from.y) * phase) * size.height)
-                    let r = field.radius * size.width
-                    let rect = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
-                    ctx.fill(Path(ellipseIn: rect), with: .radialGradient(
-                        Gradient(stops: [
-                            .init(color: field.color.opacity(strength), location: 0),
-                            .init(color: field.color.opacity(strength * 0.45), location: 0.45),
-                            .init(color: field.color.opacity(0), location: 1),
-                        ]),
-                        center: center, startRadius: 0, endRadius: r))
-                }
-            }
-        }
-    }
-}
-
-private struct StartTile: View {
-    let bookmark: Bookmark
-    let action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 9) {
-                Favicon(url: bookmark.url, size: 34)
-                    .padding(14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color(nsColor: .controlBackgroundColor))
-                            .shadow(color: .black.opacity(hovering ? 0.14 : 0.06),
-                                    radius: hovering ? 12 : 5, y: hovering ? 6 : 2)
-                    )
-                Text(bookmark.title)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .scaleEffect(hovering ? 1.04 : 1)
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: hovering)
-        .help(bookmark.url.absoluteString)
+        guard n > 0 else { return nil }
+        return NSColor(red: r / n, green: g / n, blue: b / n, alpha: 1)
     }
 }

@@ -7,6 +7,9 @@ final class BrowserModel: ObservableObject {
     @Published var selectedID: UUID?
     /// Bumped to ask the address bar to take keyboard focus.
     @Published var addressFocusToken = 0
+    /// The window's width, which sizes the address bar.
+    @Published var windowWidth: CGFloat = 1280
+    var addressWidth: CGFloat { min(720, max(260, windowWidth - 420)) }
     /// The window showing this model (set by the view once it's on screen).
     weak var window: NSWindow?
 
@@ -86,6 +89,7 @@ final class BrowserModel: ObservableObject {
     func close(_ tab: BrowserTab) {
         guard let index = tabs.firstIndex(where: { $0 === tab }) else { return }
         let wasSelected = tab.id == selectedTab?.id
+        if let url = tab.url { RecentlyClosed.shared.add(title: tab.title, url: url) }
         tab.tearDown()
         tabs.remove(at: index)
         scheduleSessionSave()
@@ -95,6 +99,16 @@ final class BrowserModel: ObservableObject {
         }
         if wasSelected {
             selectedID = tabs[min(index, tabs.count - 1)].id
+        }
+    }
+
+    /// Brings back the most recently closed tab (or a chosen one).
+    func reopenClosedTab(_ closed: ClosedTab? = nil) {
+        guard let tab = RecentlyClosed.shared.take(closed) else { return }
+        if let current = selectedTab, current.isBlank {
+            current.load(tab.url)
+        } else {
+            newTab(url: tab.url)
         }
     }
 

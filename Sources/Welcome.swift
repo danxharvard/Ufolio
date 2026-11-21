@@ -30,7 +30,8 @@ enum LaunchPrompts {
         guard !handled else { return nil }
         handled = true
         if !Prefs.bool(Prefs.hasOnboarded) { return .welcome }
-        if Prefs.bool(Prefs.askDefaultBrowser) && !DefaultBrowser.isDefault { return .defaultBrowser }
+        let snoozed = (UserDefaults.standard.object(forKey: "defaultBannerSnoozedUntil") as? Date).map { $0 > Date() } ?? false
+        if Prefs.bool(Prefs.askDefaultBrowser) && !snoozed && !DefaultBrowser.isDefault { return .defaultBrowser }
         return nil
     }
 }
@@ -198,49 +199,48 @@ private struct ImportButton: View {
     }
 }
 
-// MARK: - Default browser prompt
+// MARK: - Default browser banner
 
-struct DefaultBrowserPrompt: View {
+/// A slim bar under the bookmarks bar asking to make Hush the default browser.
+/// Closing it hides it for two weeks; Settings › General › "Ask when Hush opens" turns it off.
+struct DefaultBrowserBanner: View {
     let onClose: () -> Void
-    @State private var dontAskAgain = false
+    @State private var hoveringClose = false
 
     var body: some View {
-        VStack(spacing: 16) {
+        HStack(spacing: 14) {
+            Button {
+                UserDefaults.standard.set(Date().addingTimeInterval(14 * 86_400), forKey: "defaultBannerSnoozedUntil")
+                onClose()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Color.secondary.opacity(hoveringClose ? 1 : 0.7))
+            }
+            .buttonStyle(.plain)
+            .onHover { hoveringClose = $0 }
+            .help("Not now")
+
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
-                .frame(width: 72, height: 72)
-                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
-            VStack(spacing: 6) {
-                Text("Make Hush your default browser?")
-                    .font(.system(size: 17, weight: .semibold))
-                Text("Links you open from Mail, Messages and other apps will open in Hush.")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Toggle("Don’t ask again", isOn: $dontAskAgain)
-                .toggleStyle(.checkbox)
-                .font(.system(size: 12))
-            HStack(spacing: 10) {
-                Button("Not Now") { close() }
-                    .keyboardShortcut(.cancelAction)
-                    .frame(maxWidth: .infinity)
-                Button("Use Hush") {
-                    DefaultBrowser.makeDefault()
-                    close()
-                }
-                .keyboardShortcut(.defaultAction)
-                .frame(maxWidth: .infinity)
-            }
-            .controlSize(.large)
-        }
-        .padding(24)
-        .frame(width: 360)
-    }
+                .frame(width: 36, height: 36)
+                .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
 
-    private func close() {
-        if dontAskAgain { UserDefaults.standard.set(false, forKey: Prefs.askDefaultBrowser) }
-        onClose()
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Make Hush your default browser?")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Hush blocks ads and trackers, keeps your history on this Mac, and is light on battery.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 12)
+            Button("Make Hush Default") {
+                DefaultBrowser.makeDefault { isDefault in if isDefault { onClose() } }
+            }
+            .controlSize(.regular)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 }

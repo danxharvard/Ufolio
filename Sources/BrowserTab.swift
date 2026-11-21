@@ -172,7 +172,10 @@ extension BrowserTab: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        if let url = webView.url { HistoryStore.shared.record(url, title: webView.title ?? "") }
+        if let url = webView.url {
+            HistoryStore.shared.record(url, title: webView.title ?? "")
+            if let host = url.host, url.scheme?.hasPrefix("http") == true { PrivacyReport.shared.recordVisit(site: host) }
+        }
     }
 
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
@@ -196,6 +199,9 @@ extension BrowserTab: WKNavigationDelegate {
         DispatchQueue.main.async {
             self.blockedOnPage += 1
             BlockStats.shared.record(identifier)
+            if category == .trackers || category == .ads || category == .lists {
+                PrivacyReport.shared.recordBlocked(tracker: url, on: self.host)
+            }
             // Tell the page's ad-space collapser that ads really were blocked here.
             if self.blockedOnPage == 1 && Prefs.bool(Prefs.collapseAdSpace) {
                 webView.evaluateJavaScript("window.__hushAdsBlocked = true; window.__hushSweep && window.__hushSweep();",

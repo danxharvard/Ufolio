@@ -9,23 +9,26 @@ struct BrowserWindow: View {
     @AppStorage(Prefs.alwaysShowTabBar) private var alwaysShowTabBar = false
 
     private var showTabStrip: Bool { model.tabs.count > 1 || alwaysShowTabBar }
-    @State private var windowWidth: CGFloat = 1280
     @State private var showWelcome = false
-    @State private var showDefaultPrompt = false
+    @State private var showDefaultBanner = false
 
-    private var addressWidth: CGFloat {
-        min(720, max(260, windowWidth - 420))
-    }
 
     var body: some View {
         VStack(spacing: 0) {
-            if showTabStrip || showBookmarkBar {
+            if showTabStrip || showBookmarkBar || showDefaultBanner {
                 VStack(spacing: 0) {
                     if showTabStrip {
                         TabStrip(model: model)
                     }
                     if showBookmarkBar {
                         BookmarkBar(model: model)
+                    }
+                    if showDefaultBanner {
+                        Hairline()
+                        DefaultBrowserBanner {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { showDefaultBanner = false }
+                        }
+                        .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
                 .background(VisualEffect(material: .titlebar))
@@ -41,7 +44,7 @@ struct BrowserWindow: View {
                     SuggestionList(suggestions: suggestions) { choice in
                         go(choice.text)
                     }
-                    .frame(width: addressWidth)
+                    .frame(width: model.addressWidth)
                     .padding(.top, 6)
                     .transition(.opacity.combined(with: .offset(y: -4)))
                 }
@@ -51,30 +54,26 @@ struct BrowserWindow: View {
         .background(
             GeometryReader { geo in
                 Color.clear
-                    .onAppear { windowWidth = geo.size.width }
-                    .onChange(of: geo.size.width) { windowWidth = $0 }
+                    .onAppear { model.windowWidth = geo.size.width }
+                    .onChange(of: geo.size.width) { model.windowWidth = $0 }
             }
         )
         .background(WindowReader { model.window = $0 })
         // The welcome screen and default-browser question are drawn inside the window,
         // over a dimmed backdrop (SwiftUI sheets could end up off-screen and lock the window).
         .overlay {
-            if showWelcome || showDefaultPrompt {
+            if showWelcome {
                 LaunchCardOverlay {
-                    if showWelcome {
-                        WelcomeView {
-                            UserDefaults.standard.set(true, forKey: Prefs.hasOnboarded)
-                            showWelcome = false
-                            model.focusAddressBar()
-                        }
-                    } else {
-                        DefaultBrowserPrompt { showDefaultPrompt = false }
+                    WelcomeView {
+                        UserDefaults.standard.set(true, forKey: Prefs.hasOnboarded)
+                        showWelcome = false
+                        model.focusAddressBar()
                     }
                 }
                 .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.25), value: showWelcome || showDefaultPrompt)
+        .animation(.easeOut(duration: 0.25), value: showWelcome)
         // Links opened from other apps (when Hush is the default browser) arrive here.
         .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         .onOpenURL { url in
@@ -88,14 +87,16 @@ struct BrowserWindow: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: QuitHelper.closeSheets)) { _ in
             showWelcome = false
-            showDefaultPrompt = false
+            showDefaultBanner = false
         }
         .onAppear {
             switch LaunchPrompts.next() {
             case .welcome:
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showWelcome = true }
             case .defaultBrowser:
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { showDefaultPrompt = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showDefaultBanner = true }
+                }
             case nil:
                 break
             }
@@ -108,22 +109,20 @@ struct BrowserWindow: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        // Each toolbar item watches the selected tab itself: SwiftUI doesn't reliably
+        // refresh toolbar items when the window's own state changes.
         ToolbarItemGroup(placement: .navigation) {
-            if let tab = model.selectedTab {
-                NavButtons(tab: tab)
-            }
+            SelectedTab(model: model) { NavButtons(tab: $0) }
         }
         ToolbarItem(placement: .principal) {
-            if let tab = model.selectedTab {
+            SelectedTab(model: model) { tab in
                 AddressBar(model: model, tab: tab, suggestions: suggestions, onGo: go)
-                    .frame(width: addressWidth)
+                    .frame(width: model.addressWidth)
             }
         }
         ToolbarItemGroup(placement: .primaryAction) {
             DownloadsButton()
-            if let tab = model.selectedTab {
-                ShieldsButton(tab: tab)
-            }
+            SelectedTab(model: model) { ShieldsButton(tab: $0) }
             ToolbarIconButton(symbol: "plus", help: "New Tab (⌘T)") {
                 model.newTab(focus: true)
             }
@@ -158,12 +157,12 @@ private struct TabPage: View {
     @ObservedObject var tab: BrowserTab
 
     var body: some View {
-        ZStack {
+        // A blank tab shows only the start page, so its translucent backdrop
+        // isn't drawn over an empty white web view.
+        if tab.isBlank {
+            StartPage(model: model)
+        } else {
             WebViewHost(webView: tab.webView)
-                .opacity(tab.isBlank ? 0 : 1)
-            if tab.isBlank {
-                StartPage(model: model)
-            }
         }
     }
 }
@@ -344,10 +343,11 @@ struct Hairline: View {
 
 struct VisualEffect: NSViewRepresentable {
     var material: NSVisualEffectView.Material
+    var blending: NSVisualEffectView.BlendingMode = .withinWindow
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = material
-        view.blendingMode = .withinWindow
+        view.blendingMode = blending
         view.state = .followsWindowActiveState
         return view
     }
@@ -411,5 +411,15 @@ private struct LaunchCardOverlay<Card: View>: View {
     private func scale(in space: CGSize) -> CGFloat {
         guard size.width > 0, size.height > 0 else { return 1 }
         return min(1, (space.width - 40) / size.width, (space.height - 40) / size.height)
+    }
+}
+
+/// Shows content for the window's selected tab, and re-renders whenever the selection changes.
+struct SelectedTab<Content: View>: View {
+    @ObservedObject var model: BrowserModel
+    @ViewBuilder let content: (BrowserTab) -> Content
+
+    var body: some View {
+        if let tab = model.selectedTab { content(tab) }
     }
 }
