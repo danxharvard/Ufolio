@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.2
+
+**Improved**
+- Hush Guard panel: the count is large and centred with its description underneath, and the panel
+  now has a solid background so it stays readable over bright pages.
+- Settings › Software Update: earlier versions sit at the bottom, showing three with Show More.
+- The Hush card in the Settings sidebar lines up with the search field.
+- Settings section icons have a tighter, softer glow.
+
 ## 0.9.1
 
 **New**

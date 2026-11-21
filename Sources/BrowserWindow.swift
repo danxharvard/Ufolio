@@ -356,15 +356,18 @@ struct ShieldsPanel: View {
                     }
                 }
 
-                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                VStack(spacing: 2) {
                     Text("\(tab.blockedOnPage)")
-                        .font(.system(size: 32, weight: .semibold, design: .rounded))
+                        .font(.system(size: 44, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.primary)
                         .monospacedDigit()
                         .contentTransitionIfAvailable()
                     Text(tab.blockedOnPage == 1 ? "ad or tracker hushed on this page" : "ads and trackers hushed on this page")
-                        .font(.system(size: 12))
+                        .font(.system(size: 12.5))
                         .foregroundStyle(.secondary)
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
 
                 Divider()
 
@@ -381,6 +384,8 @@ struct ShieldsPanel: View {
             .padding(16)
         }
         .frame(width: 320)
+        // A solid backdrop so the panel stays readable over bright (white) pages.
+        .background(Color(nsColor: .windowBackgroundColor).opacity(0.97))
     }
 }
 

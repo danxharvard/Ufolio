@@ -101,7 +101,8 @@ struct SettingsView: View {
         NavigationSplitView {
             List(selection: current) {
                 SidebarCard { selection = SettingsTab.updates.rawValue }
-                    .listRowInsets(EdgeInsets(top: 4, leading: 6, bottom: 10, trailing: 6))
+                    .padding(.horizontal, -7)   // line up exactly with the search field above
+                    .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 10, trailing: 0))
                 ForEach(visibleTabs) { tab in
                     HStack(spacing: 10) {
                         IconTile(symbol: tab.symbol, colors: tab.colors, size: 22)
@@ -171,7 +172,8 @@ private struct SidebarCard: View {
                 Spacer(minLength: 0)
             }
             .padding(10)
-            .background(RoundedRectangle(cornerRadius: 11, style: .continuous)
+            .frame(maxWidth: .infinity)
+            .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(Color.primary.opacity(hovering ? 0.09 : 0.05)))
             .contentShape(Rectangle())
         }
@@ -182,6 +184,7 @@ private struct SidebarCard: View {
 }
 
 // MARK: - Shared pieces
+
 
 /// A System Settings–style rounded icon tile.
 struct IconTile: View {
@@ -217,12 +220,10 @@ private struct SettingsHeader: View {
     var body: some View {
         VStack(spacing: 10) {
             ZStack {
-                Circle()
-                    .fill(RadialGradient(colors: [(tab.colors.first ?? .accentColor).opacity(0.35), .clear],
-                                         center: .center, startRadius: 0, endRadius: 60))
-                    .frame(width: 120, height: 120)
                 IconTile(symbol: tab.symbol, colors: tab.colors, size: 58)
-                    .shadow(color: (tab.colors.last ?? .clear).opacity(0.35), radius: 10, y: 5)
+                    // A tight, soft halo close to the icon (no wide glow muddying the grey).
+                    .shadow(color: (tab.colors.first ?? .clear).opacity(0.45), radius: 6)
+                    .shadow(color: .black.opacity(0.18), radius: 3, y: 2)
             }
             .frame(height: 74)
             Text(tab.title).font(.system(size: 20, weight: .bold))
@@ -1126,6 +1127,11 @@ private struct LocationSettings: View {
 
 private struct UpdateSettings: View {
     @ObservedObject private var updater = Updater.shared
+    @State private var showAllVersions = false
+
+    private var earlierVersions: [ReleaseNotes.Version] {
+        ReleaseNotes.bundled.versions.filter { $0.version != updater.currentVersion }
+    }
     @AppStorage(Prefs.autoCheckUpdates) private var autoCheck = true
     @AppStorage(Prefs.autoInstallUpdates) private var autoInstall = true
 
@@ -1159,17 +1165,6 @@ private struct UpdateSettings: View {
                 } header: { Text("What’s in Hush \(installed.version)") }
             }
 
-            let earlier = ReleaseNotes.bundled.versions.filter { $0.version != updater.currentVersion }.prefix(8)
-            if !earlier.isEmpty {
-                Section {
-                    ForEach(Array(earlier)) { version in
-                        DisclosureGroup("Hush \(version.version)") {
-                            ReleaseNotesView(notes: version).padding(.vertical, 6)
-                        }
-                    }
-                } header: { Text("Earlier versions") }
-            }
-
             if let notes = updater.releaseNotes, isShowingRelease {
                 Section {
                     ScrollView {
@@ -1196,6 +1191,22 @@ private struct UpdateSettings: View {
                 Text("Updates come from github.com/\(Updater.repo). Each download is checked against GitHub’s fingerprint before it’s installed.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if !earlierVersions.isEmpty {
+                Section {
+                    ForEach(showAllVersions ? earlierVersions : Array(earlierVersions.prefix(3))) { version in
+                        DisclosureGroup("Hush \(version.version)") {
+                            ReleaseNotesView(notes: version).padding(.vertical, 6)
+                        }
+                    }
+                    if earlierVersions.count > 3 {
+                        Button(showAllVersions ? "Show Less" : "Show More") {
+                            withAnimation(.easeOut(duration: 0.2)) { showAllVersions.toggle() }
+                        }
+                        .buttonStyle(.link)
+                    }
+                } header: { Text("Earlier versions") }
             }
         }
         .formStyle(.grouped)
