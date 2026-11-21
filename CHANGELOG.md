@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1
+
+**Fixed**
+- "Hush Guard Settings…", Hush Browser › Check for Updates… and the AutoFill "Settings…" link did
+  nothing on macOS 14 and later. They now open Settings on the right section.
+
 ## 0.7.0
 
 **New look**

@@ -48,8 +48,16 @@ enum SettingsOpener {
     static func open(tab: SettingsTab? = nil) {
         if let tab { UserDefaults.standard.set(tab.rawValue, forKey: "settingsTab") }
         NSApp.activate(ignoringOtherApps: true)
-        if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
-            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+        // Since macOS 14 the old "showSettingsWindow:" action is ignored, so use the app
+        // menu's own Settings… item (⌘,), which always works. Close any open popover first.
+        DispatchQueue.main.async {
+            let appMenu = NSApp.mainMenu?.items.first?.submenu
+            if let menu = appMenu,
+               let index = menu.items.firstIndex(where: { $0.keyEquivalent == "," && $0.keyEquivalentModifierMask == .command }) {
+                menu.performActionForItem(at: index)
+            } else {
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            }
         }
     }
 }
