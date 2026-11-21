@@ -17,6 +17,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     @Published private(set) var isSecure = false
     /// Ads and trackers blocked on the current page.
     @Published private(set) var blockedOnPage = 0
+    @Published private(set) var adsOnPage = 0
+    @Published private(set) var trackersOnPage = 0
     /// Set when a page was stopped because it looks like a fake copy of a site you use.
     @Published var lookalike: (match: Lookalike.Match, url: URL)?
     /// Quick translation: the page's language when it isn't yours, and where translation is up to.
@@ -29,6 +31,14 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     @Published var isPinned = false
 
     var isPrivate: Bool { model?.isPrivate ?? false }
+
+    /// JavaScript switched off for just this tab (right-click the tab).
+    @Published private(set) var javaScriptOff = false
+
+    func toggleJavaScript() {
+        javaScriptOff.toggle()
+        if url != nil { webView.reload() }
+    }
 
     /// Reader: whether the page has an article, and the article while Reader is showing.
     @Published private(set) var readerAvailable = false
@@ -301,6 +311,12 @@ extension BrowserTab: WKNavigationDelegate {
         }
         if action.targetFrame?.isMainFrame ?? true, let url = action.request.url,
            let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+            // Debouncing and De-AMP: skip tracking redirects and AMP copies, straight to the real page.
+            if action.navigationType != .backForward, let real = CleanLinks.skipRedirect(url) {
+                decisionHandler(.cancel, preferences)
+                webView.load(URLRequest(url: real))
+                return
+            }
             // Clean Links: reload the same page without tracking tags.
             if CleanLinks.isEnabled, action.request.httpMethod ?? "GET" == "GET", let clean = CleanLinks.cleaned(url) {
                 decisionHandler(.cancel, preferences)
@@ -319,7 +335,7 @@ extension BrowserTab: WKNavigationDelegate {
             ContentBlocker.shared.update(webView.configuration.userContentController,
                                          forHost: action.request.url?.host)
         }
-        preferences.allowsContentJavaScript = Prefs.bool(Prefs.javaScript)
+        preferences.allowsContentJavaScript = Prefs.bool(Prefs.javaScript) && !javaScriptOff
         decisionHandler(action.shouldPerformDownload ? .download : .allow, preferences)
     }
 
@@ -330,6 +346,8 @@ extension BrowserTab: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         blockedOnPage = 0
+        adsOnPage = 0
+        trackersOnPage = 0
         if translation != .none { setTranslation(.none, language: nil) }
         if reader != nil { reader = nil }
         if readerAvailable { readerAvailable = false }
@@ -389,6 +407,7 @@ extension BrowserTab: WKNavigationDelegate {
         guard category != .other else { return }
         DispatchQueue.main.async {
             self.blockedOnPage += 1
+            if category == .trackers { self.trackersOnPage += 1 } else { self.adsOnPage += 1 }
             BlockStats.shared.record(identifier)
             if !self.isPrivate, category == .trackers || category == .ads || category == .lists {
                 PrivacyReport.shared.recordBlocked(tracker: url, on: self.host)

@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.20.0
+
+**New: fingerprinting protection**
+- Sites that try to recognise your Mac by how it draws graphics, plays audio or reports its
+  hardware get answers with tiny, invisible differences. These are the same on one site
+  (so it keeps working) but different on every other site and every time you open Hush, so
+  you can't be followed between them. Turn it off in Settings › Privacy & Security.
+
+**New: blocking levels**
+- Choose **Standard** (everyday), **Strict** or **Off** in the Hush Guard panel or Settings ›
+  Hush Guard. Strict also blocks social widgets, fingerprinting services and tracking pings,
+  blocks all third-party cookies and hides more about your Mac. A few sites may need
+  Standard.
+
+**New: skip tracking redirects**
+- Links that bounce you through a tracker (l.facebook.com, google.com/url, out.reddit.com and
+  more) now go straight to the real page, which is faster and leaves the tracker out.
+
+**New: De-AMP**
+- Google's AMP copies of articles open as the publisher's real page.
+
+**New: JavaScript off for one tab**
+- Right-click a tab, or use the Hush Guard panel, to turn JavaScript off just for that tab.
+
+**New look: Hush Guard panel**
+- The animated moon and stars stay. Below them:
+  - this page's count, and the site with a clear on/off switch;
+  - separate counts for ads and trackers, and your fingerprinting status;
+  - the blocking level;
+  - quick buttons for JavaScript, Hide Elements and Forget This Site.
+
 ## 0.19.0
 
 **New: Private Browsing**

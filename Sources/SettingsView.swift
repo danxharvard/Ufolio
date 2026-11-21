@@ -25,9 +25,9 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: return "default browser homepage startup new tab window search engine suggestions history import downloads safe files favourites"
         case .appearance: return "theme dark light night day accent colour color start page background aurora twilight translucent motion animation zoom bookmarks bar tab bar address magic theme colours site colour"
         case .performance: return "performance speed fast power battery saver eco carbon energy green memory ram tab sleep graphics 120hz smooth frame rate video pause"
-        case .adBlocker: return "ads ad blocker trackers block filter list easylist cookie banners collapse zapper hidden elements counter statistics"
+        case .adBlocker: return "blocking mode strict standard off ads ad blocker trackers block filter list easylist cookie banners collapse zapper hidden elements counter statistics"
         case .extensions: return "chrome extension extensions web store add-on plugin dark reader"
-        case .privacy: return "cookies https tracking gpc fraud phishing look-alike clean links camera microphone pop-ups autoplay javascript website data clear"
+        case .privacy: return "fingerprinting farbling redirects debounce amp cookies https tracking gpc fraud phishing look-alike clean links camera microphone pop-ups autoplay javascript website data clear"
         case .passwords: return "autofill passwords credit cards contact card keychain touch id"
         case .location: return "location weather town postcode personalise start page permission maps"
         case .updates: return "update updates version changelog what's new release notes"
@@ -308,6 +308,9 @@ private struct DescribedToggle: View {
     private static let icons: [String: (String, [Color])] = [
         "Show search suggestions": ("magnifyingglass", blue),
         "Suggest favourites": ("star.fill", orange),
+        "Fingerprinting protection": ("touchid", purple),
+        "Skip tracking redirects": ("arrow.uturn.right", teal),
+        "Open original pages instead of AMP": ("bolt.slash.fill", orange),
         "Magic Theme": ("wand.and.stars", pink),
         "Pause sound and video in background tabs": ("pause.circle.fill", green),
         "Free up memory automatically": ("memorychip.fill", blue),
@@ -735,6 +738,9 @@ private struct PrivacySettings: View {
     @AppStorage(Prefs.httpsUpgrade) private var https = true
     @AppStorage(Prefs.globalPrivacyControl) private var gpc = true
     @AppStorage(Prefs.cleanLinks) private var cleanLinks = true
+    @AppStorage(Prefs.fingerprintProtection) private var fingerprinting = true
+    @AppStorage(Prefs.debounceLinks) private var debounce = true
+    @AppStorage(Prefs.deAMP) private var deAMP = true
     @AppStorage(Prefs.lookalikeWarning) private var lookalike = true
     @AppStorage(Prefs.fraudWarning) private var fraud = true
     @AppStorage(Prefs.cameraPolicy) private var camera = PermissionPolicy.ask.rawValue
@@ -757,9 +763,18 @@ private struct PrivacySettings: View {
                 DescribedToggle(title: "Upgrade connections to HTTPS",
                                 detail: "Loads the secure version of a site whenever it exists.",
                                 isOn: $https)
+                DescribedToggle(title: "Fingerprinting protection",
+                                detail: "Adds tiny, invisible noise to the details sites use to recognise your Mac, different on every site.",
+                                isOn: $fingerprinting)
                 DescribedToggle(title: "Clean tracking from links",
                                 detail: "Removes tags like utm_source and fbclid that follow you between sites.",
                                 isOn: $cleanLinks)
+                DescribedToggle(title: "Skip tracking redirects",
+                                detail: "Goes straight to the real page instead of through link trackers like l.facebook.com.",
+                                isOn: $debounce)
+                DescribedToggle(title: "Open original pages instead of AMP",
+                                detail: "Swaps Google’s AMP copies of articles for the publisher’s real page.",
+                                isOn: $deAMP)
                 DescribedToggle(title: "Warn about look-alike websites",
                                 detail: "Stops fake copies of sites you use, like paypa1.com, before they load.",
                                 isOn: $lookalike)
@@ -829,6 +844,59 @@ private struct PrivacySettings: View {
 
 // MARK: - Ad blocker
 
+extension BlockingMode {
+    var symbol: String {
+        switch self {
+        case .standard: return "shield.lefthalf.filled"
+        case .strict: return "shield.fill"
+        case .off: return "shield.slash"
+        }
+    }
+    var colors: [Color] {
+        switch self {
+        case .standard: return [Color(red: 0.55, green: 0.40, blue: 1.0), Color(red: 0.36, green: 0.26, blue: 0.86)]
+        case .strict: return [Color(red: 1.0, green: 0.45, blue: 0.35), Color(red: 0.88, green: 0.24, blue: 0.30)]
+        case .off: return [Color(white: 0.62), Color(white: 0.45)]
+        }
+    }
+}
+
+struct BlockingModeCard: View {
+    let mode: BlockingMode
+    let selected: Bool
+    var compact = false
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    IconTile(symbol: mode.symbol, colors: mode.colors, size: compact ? 22 : 28)
+                    Spacer()
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selected ? Color.accentColor : Color.secondary.opacity(0.5))
+                }
+                Text(mode.label).font(.system(size: compact ? 12 : 13, weight: .semibold))
+                if !compact {
+                    Text(mode.detail).font(.system(size: 11)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            .padding(compact ? 9 : 11)
+            .frame(maxWidth: .infinity, minHeight: compact ? 0 : 108, alignment: .topLeading)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.primary.opacity(selected ? 0.08 : hovering ? 0.05 : 0.03)))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(selected ? Color.accentColor.opacity(0.8) : Color.primary.opacity(0.07), lineWidth: selected ? 1.5 : 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+    }
+}
+
 private struct AdBlockerSettings: View {
     @ObservedObject private var blocker = ContentBlocker.shared
     @ObservedObject private var stats = BlockStats.shared
@@ -838,6 +906,7 @@ private struct AdBlockerSettings: View {
     @AppStorage(Prefs.hideCookieBanners) private var cookieBanners = true
     @AppStorage(Prefs.collapseAdSpace) private var collapse = true
     @AppStorage(Prefs.autoRejectCookies) private var autoReject = true
+    @AppStorage(Prefs.blockingMode) private var mode = BlockingMode.standard.rawValue
     @State private var showWebSheet = false
     @State private var confirmReset = false
 
@@ -846,6 +915,16 @@ private struct AdBlockerSettings: View {
             Section {
                 StatsCard(stats: stats) { confirmReset = true }
             }
+
+            Section {
+                HStack(spacing: 10) {
+                    ForEach(BlockingMode.allCases) { option in
+                        BlockingModeCard(mode: option, selected: mode == option.rawValue) {
+                            withAnimation(.easeOut(duration: 0.15)) { mode = option.rawValue }
+                        }
+                    }
+                }
+            } header: { SectionTitle("Blocking") }
 
             Section {
                 Toggle("Block ads", isOn: $ads)

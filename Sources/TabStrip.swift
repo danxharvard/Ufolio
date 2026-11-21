@@ -228,6 +228,7 @@ private struct ChromeTab: View {
             Divider()
             Button(tab.isPinned ? "Unpin Tab" : "Pin Tab") { model.togglePin(tab) }
             Button(tab.isMuted ? "Unmute Tab" : "Mute Tab") { tab.toggleMute() }
+            Button(tab.javaScriptOff ? "Turn On JavaScript in This Tab" : "Turn Off JavaScript in This Tab") { tab.toggleJavaScript() }
             if tab.url != nil {
                 Divider()
                 Button("Forget This Site…") { SiteForgetter.confirmAndForget(tab) }

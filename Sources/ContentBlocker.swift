@@ -68,8 +68,9 @@ final class ContentBlocker: ObservableObject {
     private static func settingsSignature() -> String {
         [Prefs.adBlockEnabled, Prefs.trackerBlockEnabled, Prefs.hideCookieBanners, Prefs.collapseAdSpace, Prefs.autoRejectCookies,
          Prefs.autofillPasswords, Prefs.autofillCards, Prefs.autofillContact,
-         Prefs.blockThirdPartyCookies, Prefs.httpsUpgrade, Prefs.globalPrivacyControl]
-            .map { Prefs.bool($0) ? "1" : "0" }.joined()
+         Prefs.blockThirdPartyCookies, Prefs.httpsUpgrade, Prefs.globalPrivacyControl,
+         Prefs.fingerprintProtection, Prefs.deAMP]
+            .map { Prefs.bool($0) ? "1" : "0" }.joined() + Prefs.string(Prefs.blockingMode)
     }
 
     // MARK: Setup
@@ -139,6 +140,10 @@ final class ContentBlocker: ObservableObject {
         }
     }
 
+    #if SNAPSHOT
+    var debugCompiled: String { compiled.keys.sorted().joined(separator: ",") }
+    #endif
+
     func refresh() {
         for controller in controllers.allObjects { configure(controller) }
     }
@@ -168,8 +173,12 @@ final class ContentBlocker: ObservableObject {
         controller.removeAllContentRuleLists()
         controller.removeAllUserScripts()
         let host = hostOf.object(forKey: controller) as String?
-        let shieldsOn = !(host.map(isShieldsDown) ?? false)
+        // Off mode switches Hush Guard off everywhere; otherwise per-site shields decide.
+        let shieldsOn = BlockingMode.current != .off && !(host.map(isShieldsDown) ?? false)
         if shieldsOn {
+            if Fingerprinting.isEnabled {
+                controller.addUserScript(BlockingMode.current == .strict ? Fingerprinting.strict : Fingerprinting.standard)
+            }
             for id in activeIdentifiers {
                 if let list = compiled[id] { controller.add(list) }
             }
@@ -180,6 +189,7 @@ final class ContentBlocker: ObservableObject {
             }
         }
         if Prefs.bool(Prefs.globalPrivacyControl) { controller.addUserScript(UserScripts.globalPrivacyControl) }
+        if CleanLinks.deAMPEnabled { controller.addUserScript(CleanLinks.deAMPScript) }
         if AutofillCenter.isEnabled { controller.addUserScript(AutofillCenter.script) }
     }
 
@@ -352,7 +362,7 @@ final class ContentBlocker: ObservableObject {
 // MARK: - Built-in protection
 
 enum BuiltInRules: String, CaseIterable {
-    case ads, trackers, thirdPartyCookies, httpsUpgrade
+    case ads, trackers, thirdPartyCookies, httpsUpgrade, strict
 
     var identifier: String { "hush-\(rawValue)-v2" }
 
@@ -362,6 +372,7 @@ enum BuiltInRules: String, CaseIterable {
         case .trackers: return Prefs.bool(Prefs.trackerBlockEnabled)
         case .thirdPartyCookies: return Prefs.bool(Prefs.blockThirdPartyCookies)
         case .httpsUpgrade: return Prefs.bool(Prefs.httpsUpgrade)
+        case .strict: return BlockingMode.current == .strict
         }
     }
 
@@ -380,6 +391,14 @@ enum BuiltInRules: String, CaseIterable {
                 "trigger": ["url-filter": ".*", "load-type": ["third-party"]] as [String: Any],
                 "action": ["type": "block-cookies"],
             ]]
+        case .strict:
+            // Strict: social widgets, fingerprinting services, tracking pings and all third-party cookies.
+            rules = Self.strictDomains.map(Self.blockThirdParty) + [
+                ["trigger": ["url-filter": ".*", "resource-type": ["ping"], "load-type": ["third-party"]] as [String: Any],
+                 "action": ["type": "block"]],
+                ["trigger": ["url-filter": ".*", "load-type": ["third-party"]] as [String: Any],
+                 "action": ["type": "block-cookies"]],
+            ]
         case .httpsUpgrade:
             rules = [[
                 "trigger": ["url-filter": "^http://", "unless-domain": ["localhost", "*.local", "*.localhost", "*.test"]] as [String: Any],
@@ -433,6 +452,15 @@ enum BuiltInRules: String, CaseIterable {
         "sc-static.net", "tr.snapchat.com",
     ]
 
+    static let strictDomains = [
+        "platform.twitter.com", "platform.x.com", "syndication.twitter.com", "widgets.pinterest.com",
+        "assets.pinterest.com", "platform.linkedin.com", "static.addtoany.com", "s7.addthis.com",
+        "fingerprintjs.com", "fpjs.io", "fpcdn.io", "fpnpmcdn.net", "tiqcdn.com", "ensighten.com",
+        "js-agent.newrelic.com", "ingest.sentry.io", "cdn.mxpnl.com", "js.hs-analytics.net",
+        "googleoptimize.com", "cdn.segment.com", "cdn.heapanalytics.com", "static.hotjar.com",
+        "s.pinimg.com", "sb.scorecardresearch.com", "cdn.taboola.com", "widgets.outbrain.com",
+    ]
+
     static let adSelectors = [
         "ins.adsbygoogle", ".adsbygoogle", "[id^='google_ads_iframe']", "[id^='div-gpt-ad']",
         "[data-google-query-id]", ".ad-slot", ".ad-banner", ".ad-container", ".adsbox",
@@ -445,7 +473,7 @@ enum BuiltInRules: String, CaseIterable {
 
     static func category(of identifier: String) -> Category {
         if identifier.hasPrefix("hush-ads") { return .ads }
-        if identifier.hasPrefix("hush-trackers") { return .trackers }
+        if identifier.hasPrefix("hush-trackers") || identifier.hasPrefix("hush-strict") { return .trackers }
         if identifier.hasPrefix("hush-list-") { return .lists }
         return .other
     }

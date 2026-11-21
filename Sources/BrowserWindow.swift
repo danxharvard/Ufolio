@@ -315,8 +315,10 @@ private struct ShieldsButton: View {
     @AppStorage(Prefs.trackerBlockEnabled) private var trackersOn = true
     @State private var showing = false
 
+    @AppStorage(Prefs.blockingMode) private var blockingMode = BlockingMode.standard.rawValue
+
     private var shieldsUp: Bool {
-        guard adsOn || trackersOn else { return false }
+        guard blockingMode != BlockingMode.off.rawValue, adsOn || trackersOn else { return false }
         guard let host = tab.host else { return true }
         return !blocker.isShieldsDown(host)
     }
@@ -373,71 +375,183 @@ struct ShieldsPanel: View {
     @ObservedObject var tab: BrowserTab
     let shieldsUp: Bool
     @ObservedObject private var stats = BlockStats.shared
+    @AppStorage(Prefs.blockingMode) private var mode = BlockingMode.standard.rawValue
+    @AppStorage(Prefs.fingerprintProtection) private var fingerprinting = true
+
+    private var blockingMode: BlockingMode { BlockingMode(rawValue: mode) ?? .standard }
 
     var body: some View {
         VStack(spacing: 0) {
+            // The animated moon and stars, with this page's count beneath.
             GuardIllustration(on: shieldsUp, blocked: tab.blockedOnPage)
                 .frame(height: 150)
-
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 10) {
-                    if tab.url == nil {
-                        HushLogoTile(size: 24)
-                    } else {
-                        Favicon(url: tab.url, size: 22)
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(tab.host?.strippingWWW ?? "Hush Guard")
-                            .font(.system(size: 13.5, weight: .semibold))
-                            .lineLimit(1)
-                        Text(shieldsUp ? "Hush Guard is on" : "Hush Guard is off for this site")
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(shieldsUp ? Color.accentColor : Color.secondary)
-                    }
-                    Spacer()
-                    if let host = tab.host {
-                        Toggle("", isOn: Binding(
-                            get: { !ContentBlocker.shared.isShieldsDown(host) },
-                            set: { up in
-                                ContentBlocker.shared.setShields(up, for: host)
-                                tab.webView.reload()
-                            }))
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                        .help("Turn Hush Guard off if this site doesn’t work properly")
-                    }
-                }
-
-                VStack(spacing: 2) {
-                    Text("\(tab.blockedOnPage)")
-                        .font(.system(size: 44, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color.primary)
-                        .monospacedDigit()
-                        .contentTransitionIfAvailable()
-                    Text(tab.blockedOnPage == 1 ? "ad or tracker hushed on this page" : "ads and trackers hushed on this page")
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
-
-                Divider()
-
-                HStack {
-                    Text("\(stats.total.formatted()) hushed in total")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Hush Guard Settings…") { SettingsOpener.open(tab: .adBlocker) }
-                        .buttonStyle(.link)
-                        .font(.system(size: 11.5))
-                }
+            VStack(spacing: 1) {
+                Text("\(tab.blockedOnPage)")
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .contentTransitionIfAvailable()
+                Text(shieldsUp ? (tab.blockedOnPage == 1 ? "thing hushed on this page" : "things hushed on this page")
+                               : "Hush Guard is off for this site")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
             }
-            .padding(16)
+            .padding(.top, -6)
+            .padding(.bottom, 14)
+
+            VStack(spacing: 10) {
+                siteCard
+                if shieldsUp {
+                    HStack(spacing: 8) {
+                        GuardStat(symbol: "rectangle.slash", label: "Ads", value: "\(tab.adsOnPage)", tint: Color(red: 0.95, green: 0.45, blue: 0.40))
+                        GuardStat(symbol: "eye.slash.fill", label: "Trackers", value: "\(tab.trackersOnPage)", tint: Color(red: 0.36, green: 0.62, blue: 1.0))
+                        GuardStat(symbol: "touchid", label: "Fingerprint",
+                                  value: fingerprinting && blockingMode != .off ? (blockingMode == .strict ? "Strict" : "Masked") : "Off",
+                                  tint: Color(red: 0.62, green: 0.48, blue: 1.0))
+                    }
+                }
+                levelPicker
+                if tab.url != nil { tabActions }
+            }
+            .padding(.horizontal, 14)
+
+            HStack {
+                Text("\(stats.total.formatted()) hushed in total")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Settings…") { SettingsOpener.open(tab: .adBlocker) }
+                    .buttonStyle(.link)
+                    .font(.system(size: 11))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
-        .frame(width: 320)
+        .frame(width: 340)
         // A solid backdrop so the panel stays readable over bright (white) pages.
         .background(Color(nsColor: .windowBackgroundColor).opacity(0.97))
+        .animation(.easeOut(duration: 0.2), value: shieldsUp)
+    }
+
+    /// This site, its status, and the on/off switch.
+    private var siteCard: some View {
+        HStack(spacing: 10) {
+            Group {
+                if tab.url == nil { HushLogoTile(size: 26) } else { Favicon(url: tab.url, size: 22) }
+            }
+            .frame(width: 28, height: 28)
+            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(0.05)))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(tab.host?.strippingWWW ?? "New Tab")
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Circle().fill(shieldsUp ? Color.green : Color.orange).frame(width: 6, height: 6)
+                    Text(shieldsUp ? "Protected" : (blockingMode == .off ? "Blocking is off everywhere" : "Off for this site"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            if let host = tab.host, blockingMode != .off {
+                Toggle("", isOn: Binding(
+                    get: { !ContentBlocker.shared.isShieldsDown(host) },
+                    set: { up in
+                        ContentBlocker.shared.setShields(up, for: host)
+                        tab.webView.reload()
+                    }))
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .help("Turn Hush Guard off if this site doesn’t work properly")
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.045)))
+    }
+
+    /// Standard / Strict / Off for every site.
+    private var levelPicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("BLOCKING").font(.system(size: 10, weight: .semibold)).tracking(0.8).foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                ForEach(BlockingMode.allCases) { option in
+                    let selected = blockingMode == option
+                    Button {
+                        mode = option.rawValue
+                        tab.webView.reload()
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: option.symbol).font(.system(size: 10.5, weight: .semibold))
+                            Text(option.label).font(.system(size: 12, weight: selected ? .semibold : .regular))
+                        }
+                        .foregroundStyle(selected ? Color.white : Color.primary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 28)
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(selected ? AnyShapeStyle(LinearGradient(colors: option.colors, startPoint: .top, endPoint: .bottom))
+                                           : AnyShapeStyle(Color.primary.opacity(0.05))))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(option.detail)
+                }
+            }
+        }
+    }
+
+    /// Quick actions for this tab.
+    private var tabActions: some View {
+        HStack(spacing: 6) {
+            GuardAction(symbol: tab.javaScriptOff ? "curlybraces.square.fill" : "curlybraces.square",
+                        label: tab.javaScriptOff ? "JS Off" : "JavaScript", active: tab.javaScriptOff) { tab.toggleJavaScript() }
+                .help(tab.javaScriptOff ? "Turn JavaScript back on in this tab" : "Turn JavaScript off in this tab")
+            GuardAction(symbol: "eye.slash", label: "Hide…", active: false) { ElementZapper.shared.start(in: tab) }
+                .help("Click things on the page to hide them for good")
+            GuardAction(symbol: "eraser", label: "Forget", active: false) { SiteForgetter.confirmAndForget(tab) }
+                .help("Forget This Site: delete its cookies, data and history")
+        }
+    }
+}
+
+private struct GuardStat: View {
+    let symbol: String
+    let label: String
+    let value: String
+    let tint: Color
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(systemName: symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(tint)
+            Text(value).font(.system(size: 15, weight: .bold, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+            Text(label).font(.system(size: 10)).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 9)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(tint.opacity(0.10)))
+    }
+}
+
+private struct GuardAction: View {
+    let symbol: String
+    let label: String
+    let active: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: symbol).font(.system(size: 13, weight: .medium))
+                Text(label).font(.system(size: 10.5))
+            }
+            .foregroundStyle(active ? Color.accentColor : Color.primary.opacity(0.8))
+            .frame(maxWidth: .infinity)
+            .frame(height: 46)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.primary.opacity(hovering ? 0.08 : 0.045)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }
 

@@ -63,6 +63,10 @@ enum Prefs {
     static let offerBookmarks = "offerBookmarks"
     static let powerMode = "powerMode"
     static let magicTheme = "magicTheme"
+    static let fingerprintProtection = "fingerprintProtection"
+    static let debounceLinks = "debounceLinks"
+    static let deAMP = "deAMP"
+    static let blockingMode = "blockingMode"
     static let pauseBackgroundMedia = "pauseBackgroundMedia"
     static let freeMemoryAutomatically = "freeMemoryAutomatically"
 
@@ -119,6 +123,10 @@ enum Prefs {
         offerBookmarks: true,
         powerMode: PowerMode.automatic.rawValue,
         magicTheme: false,
+        fingerprintProtection: true,
+        debounceLinks: true,
+        deAMP: true,
+        blockingMode: BlockingMode.standard.rawValue,
         pauseBackgroundMedia: false,
         freeMemoryAutomatically: true,
     ]
@@ -351,4 +359,27 @@ enum AppPaths {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder
     }()
+}
+
+
+/// How hard Hush Guard works: Standard for everyday browsing, Strict for more protection
+/// (a few sites may need it turned down), or Off.
+enum BlockingMode: String, CaseIterable, Identifiable {
+    case standard, strict, off
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .standard: return "Standard"
+        case .strict: return "Strict"
+        case .off: return "Off"
+        }
+    }
+    var detail: String {
+        switch self {
+        case .standard: return "Blocks ads, trackers and fingerprinting without breaking sites."
+        case .strict: return "Also blocks social widgets, tracking pings and hides more about your Mac. A few sites may not work."
+        case .off: return "No blocking anywhere. Not recommended."
+        }
+    }
+    static var current: BlockingMode { BlockingMode(rawValue: Prefs.string(Prefs.blockingMode)) ?? .standard }
 }

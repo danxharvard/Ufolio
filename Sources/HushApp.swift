@@ -85,6 +85,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ExtensionEvents.launch()
         PerformanceCenter.shared.start()
         Updater.shared.start()
+        #if SNAPSHOT
+        Snapshotter.run()   // automated screenshots in test builds only; never in releases
+        #endif
     }
 }
 
