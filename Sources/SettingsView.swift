@@ -541,6 +541,8 @@ private struct PrivacySettings: View {
     @AppStorage(Prefs.blockThirdPartyCookies) private var thirdPartyCookies = true
     @AppStorage(Prefs.httpsUpgrade) private var https = true
     @AppStorage(Prefs.globalPrivacyControl) private var gpc = true
+    @AppStorage(Prefs.cleanLinks) private var cleanLinks = true
+    @AppStorage(Prefs.lookalikeWarning) private var lookalike = true
     @AppStorage(Prefs.fraudWarning) private var fraud = true
     @AppStorage(Prefs.cameraPolicy) private var camera = PermissionPolicy.ask.rawValue
     @AppStorage(Prefs.blockPopups) private var popups = true
@@ -562,6 +564,12 @@ private struct PrivacySettings: View {
                 DescribedToggle(title: "Upgrade connections to HTTPS",
                                 detail: "Loads the secure version of a site whenever it exists.",
                                 isOn: $https)
+                DescribedToggle(title: "Clean tracking from links",
+                                detail: "Removes tags like utm_source and fbclid that follow you between sites.",
+                                isOn: $cleanLinks)
+                DescribedToggle(title: "Warn about look-alike websites",
+                                detail: "Stops fake copies of sites you use, like paypa1.com, before they load.",
+                                isOn: $lookalike)
                 DescribedToggle(title: "Ask websites not to sell or share my data",
                                 detail: "Sends the Global Privacy Control signal, which some laws require sites to honour.",
                                 isOn: $gpc)
@@ -635,6 +643,7 @@ private struct AdBlockerSettings: View {
     @AppStorage(Prefs.trackerBlockEnabled) private var trackers = true
     @AppStorage(Prefs.hideCookieBanners) private var cookieBanners = true
     @AppStorage(Prefs.collapseAdSpace) private var collapse = true
+    @AppStorage(Prefs.autoRejectCookies) private var autoReject = true
     @State private var showWebSheet = false
     @State private var confirmReset = false
 
@@ -650,6 +659,9 @@ private struct AdBlockerSettings: View {
                 DescribedToggle(title: "Collapse empty ad spaces",
                                 detail: "Closes the gaps and “Advertisement” labels blocked ads leave behind.",
                                 isOn: $collapse)
+                DescribedToggle(title: "Reject cookie banners automatically",
+                                detail: "Clicks “Reject all” on cookie pop-ups for you.",
+                                isOn: $autoReject)
                 DescribedToggle(title: "Hide cookie banners",
                                 detail: "Hides common “accept cookies” pop-ups without accepting anything.",
                                 isOn: $cookieBanners)

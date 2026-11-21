@@ -87,6 +87,15 @@ struct HushCommands: Commands {
                 .keyboardShortcut("l")
         }
 
+        CommandGroup(after: .pasteboard) {
+            Button("Copy Clean Link") {
+                guard let url = browser?.selectedTab?.url else { return }
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(CleanLinks.clean(url).absoluteString, forType: .string)
+            }
+            .keyboardShortcut("c", modifiers: [.command, .shift])
+        }
+
         CommandGroup(replacing: .saveItem) {
             Button("Close Tab") { browser?.closeSelectedTab() }
                 .keyboardShortcut("w")

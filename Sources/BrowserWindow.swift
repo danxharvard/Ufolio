@@ -157,12 +157,23 @@ private struct TabPage: View {
     @ObservedObject var tab: BrowserTab
 
     var body: some View {
-        // A blank tab shows only the start page, so its translucent backdrop
-        // isn't drawn over an empty white web view.
-        if tab.isBlank {
-            StartPage(model: model)
-        } else {
-            WebViewHost(webView: tab.webView)
+        ZStack {
+            // A blank tab shows only the start page, so its translucent backdrop
+            // isn't drawn over an empty white web view.
+            if tab.isBlank {
+                StartPage(model: model)
+            } else {
+                WebViewHost(webView: tab.webView)
+            }
+            if let block = tab.lookalike {
+                LookalikeWarning(match: block.match) {
+                    tab.load(URL(string: "https://\(block.match.real)")!)
+                } onContinue: {
+                    Lookalike.allow(Domains.site(block.url.host ?? ""))
+                    tab.load(block.url)
+                }
+                .transition(.opacity)
+            }
         }
     }
 }
@@ -421,5 +432,51 @@ struct SelectedTab<Content: View>: View {
 
     var body: some View {
         if let tab = model.selectedTab { content(tab) }
+    }
+}
+
+/// Shown instead of a page that looks like a fake copy of a site you use.
+struct LookalikeWarning: View {
+    let match: Lookalike.Match
+    let onGoToReal: () -> Void
+    let onContinue: () -> Void
+
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [Color(red: 0.55, green: 0.10, blue: 0.12), Color(red: 0.32, green: 0.05, blue: 0.08)],
+                           startPoint: .top, endPoint: .bottom)
+            VStack(spacing: 22) {
+                Image(systemName: "exclamationmark.shield.fill")
+                    .font(.system(size: 64, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.white)
+                VStack(spacing: 10) {
+                    Text("This might be a fake website")
+                        .font(.system(size: 28, weight: .bold))
+                    Text("“\(match.visited)” looks very like “\(match.real)”, a site you use. Fake look-alike sites are made to steal passwords and card details.")
+                        .font(.system(size: 15))
+                        .multilineTextAlignment(.center)
+                        .opacity(0.9)
+                        .frame(maxWidth: 520)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Button(action: onGoToReal) {
+                    Text("Go to \(match.real)")
+                        .font(.system(size: 14, weight: .semibold))
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(Color.white))
+                        .foregroundStyle(Color(red: 0.55, green: 0.10, blue: 0.12))
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.defaultAction)
+                Button("I understand the risk — continue to \(match.visited)", action: onContinue)
+                    .buttonStyle(.link)
+                    .foregroundStyle(.white.opacity(0.75))
+                    .font(.system(size: 12))
+            }
+            .foregroundStyle(.white)
+            .padding(40)
+        }
     }
 }

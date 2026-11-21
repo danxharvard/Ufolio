@@ -42,6 +42,10 @@ enum Prefs {
     static let trackerBlockEnabled = "trackerBlockEnabled"
     static let hideCookieBanners = "hideCookieBanners"
     static let collapseAdSpace = "collapseAdSpace"
+    static let autoRejectCookies = "autoRejectCookies"
+    static let cleanLinks = "cleanLinks"
+    static let lookalikeWarning = "lookalikeWarning"
+    static let tabSleepMinutes = "tabSleepMinutes"
     // Updates
     static let autoCheckUpdates = "autoCheckUpdates"
     static let autoInstallUpdates = "autoInstallUpdates"
@@ -93,6 +97,10 @@ enum Prefs {
         trackerBlockEnabled: true,
         hideCookieBanners: true,
         collapseAdSpace: true,
+        autoRejectCookies: true,
+        cleanLinks: true,
+        lookalikeWarning: true,
+        tabSleepMinutes: 15,
         autoCheckUpdates: true,
         autoInstallUpdates: true,
         blockThirdPartyCookies: true,

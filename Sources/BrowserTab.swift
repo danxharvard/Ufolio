@@ -17,6 +17,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     @Published private(set) var isSecure = false
     /// Ads and trackers blocked on the current page.
     @Published private(set) var blockedOnPage = 0
+    /// Set when a page was stopped because it looks like a fake copy of a site you use.
+    @Published var lookalike: (match: Lookalike.Match, url: URL)?
     /// The last address loaded by the user (typed, bookmark…), as opposed to by a page.
     private var userLoadedURL: URL?
     /// JavaScript dialogs shown on this page, and whether the user silenced them.
@@ -86,6 +88,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     var host: String? { url?.host }
 
     func load(_ url: URL) {
+        lookalike = nil
         userLoadedURL = url
         webView.load(URLRequest(url: url))
     }
@@ -133,6 +136,21 @@ extension BrowserTab: WKNavigationDelegate {
             if !["http", "https", "about", "blob", "data", "file", "javascript"].contains(scheme) {
                 decisionHandler(.cancel, preferences)
                 confirmOpeningApp(for: url)
+                return
+            }
+        }
+        if action.targetFrame?.isMainFrame ?? true, let url = action.request.url,
+           let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+            // Clean Links: reload the same page without tracking tags.
+            if CleanLinks.isEnabled, action.request.httpMethod ?? "GET" == "GET", let clean = CleanLinks.cleaned(url) {
+                decisionHandler(.cancel, preferences)
+                webView.load(URLRequest(url: clean))
+                return
+            }
+            // Look-alike sites: stop before anything loads and explain.
+            if action.navigationType != .backForward, let host = url.host, let match = Lookalike.check(host: host) {
+                decisionHandler(.cancel, preferences)
+                lookalike = (match, url)
                 return
             }
         }

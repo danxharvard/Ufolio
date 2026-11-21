@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0
+
+**New**
+- Clean Links: tracking tags (utm_…, fbclid, gclid and ~30 more) are removed before pages load.
+  Edit › Copy Clean Link (⇧⌘C) copies the current address without them.
+- Look-alike site warning: fake copies of sites you use (paypa1.com, аpple.com with a Cyrillic
+  "а", g00gle.com) are stopped before they load, with a button to go to the real site.
+- Cookie banners are rejected automatically ("Reject all") on the major consent tools.
+- Switches for all three in Settings (Privacy & Security, Hush Shields).
+
 ## 0.4.0
 
 **New start page**

@@ -66,7 +66,7 @@ final class ContentBlocker: ObservableObject {
     private var lastSignature = ""
 
     private static func settingsSignature() -> String {
-        [Prefs.adBlockEnabled, Prefs.trackerBlockEnabled, Prefs.hideCookieBanners, Prefs.collapseAdSpace,
+        [Prefs.adBlockEnabled, Prefs.trackerBlockEnabled, Prefs.hideCookieBanners, Prefs.collapseAdSpace, Prefs.autoRejectCookies,
          Prefs.autofillPasswords, Prefs.autofillCards, Prefs.autofillContact,
          Prefs.blockThirdPartyCookies, Prefs.httpsUpgrade, Prefs.globalPrivacyControl]
             .map { Prefs.bool($0) ? "1" : "0" }.joined()
@@ -154,6 +154,7 @@ final class ContentBlocker: ObservableObject {
             for id in activeIdentifiers {
                 if let list = compiled[id] { controller.add(list) }
             }
+            if Prefs.bool(Prefs.autoRejectCookies) { controller.addUserScript(UserScripts.rejectCookieBanners) }
             if Prefs.bool(Prefs.hideCookieBanners) { controller.addUserScript(UserScripts.hideCookieBanners) }
             if Prefs.bool(Prefs.collapseAdSpace) && (Prefs.bool(Prefs.adBlockEnabled) || lists.contains(where: \.enabled)) {
                 controller.addUserScript(UserScripts.collapseAdSpace)
@@ -548,6 +549,69 @@ enum UserScripts {
       });
     })();
     """#, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .defaultClient)
+
+    /// Clicks "Reject all" on cookie-consent pop-ups (OneTrust, Cookiebot, Didomi, Quantcast,
+    /// Usercentrics, Sourcepoint, TrustArc and lookalikes). It only ever clicks inside a recognised
+    /// consent pop-up, and only buttons whose text clearly means reject/decline.
+    static let rejectCookieBanners = WKUserScript(source: #"""
+    (function () {
+      if (window.__hushReject) return; window.__hushReject = true;
+      // Direct "reject" buttons of the big consent tools.
+      var DIRECT = [
+        '#onetrust-reject-all-handler', '.ot-pc-refuse-all-handler',
+        '#CybotCookiebotDialogBodyButtonDecline', '#CybotCookiebotDialogBodyLevelButtonLevelOptinDeclineAll',
+        '#didomi-notice-disagree-button', '.didomi-continue-without-agreeing',
+        'button[data-testid="uc-deny-all-button"]', '#truste-consent-required', '.truste-consent-required',
+        '.cc-deny', '.cmpboxbtnno', '#cookiescript_reject', '.iubenda-cs-reject-btn', '.osano-cm-denyAll',
+        '[data-cookiefirst-action="reject"]', '.fc-cta-do-not-consent', '#hs-eu-decline-button',
+        'button[mode="secondary"][aria-label*="reject" i]', '.sp_choice_type_REJECT_ALL', '.sp_choice_type_13'
+      ];
+      // Where consent pop-ups live; generic text matching only happens inside these.
+      var CONTAINERS = '[id*="cookie" i], [class*="cookie" i], [id*="consent" i], [class*="consent" i], ' +
+        '[id*="gdpr" i], [class*="gdpr" i], [id*="cmp" i], [class*="cmp" i], [id^="sp_message"], [class*="privacy-banner" i], ' +
+        '[aria-label*="cookie" i], [aria-label*="consent" i], [aria-label*="privacy" i], [role="dialog"], [aria-modal="true"]';
+      var REJECT = /^\s*(reject all|reject all cookies|reject|reject non-essential( cookies)?|reject optional cookies|decline|decline all|decline optional cookies|deny|deny all|refuse|refuse all|disagree|i disagree|do not accept|don['’]t accept|necessary (cookies )?only|only necessary( cookies)?|use necessary cookies only|accept (only )?(strictly )?necessary( cookies)?|continue without (accepting|agreeing)|nur notwendige|alle ablehnen|ablehnen|tout refuser|refuser|rechazar( todo)?|rifiuta( tutto)?|weigeren|alles weigeren)\s*$/i;
+      var done = false;
+
+      function visible(el) { var r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; }
+      function press(el) {
+        if (!el || done || !visible(el)) return false;
+        el.click();
+        done = true;
+        return true;
+      }
+      function inShadow(root, sel) {
+        var found = root.querySelector(sel);
+        if (found) return found;
+        var hosts = root.querySelectorAll('*');
+        for (var i = 0; i < hosts.length; i++) {
+          if (hosts[i].shadowRoot) { var f = inShadow(hosts[i].shadowRoot, sel); if (f) return f; }
+        }
+        return null;
+      }
+      function attempt() {
+        if (done) return;
+        for (var i = 0; i < DIRECT.length; i++) {
+          if (press(document.querySelector(DIRECT[i]))) return;
+        }
+        var uc = document.querySelector('#usercentrics-root');
+        if (uc && uc.shadowRoot && press(inShadow(uc.shadowRoot, 'button[data-testid="uc-deny-all-button"]'))) return;
+        var boxes = document.querySelectorAll(CONTAINERS);
+        for (var b = 0; b < boxes.length; b++) {
+          var box = boxes[b];
+          if (!/cookie|consent|privacy|gdpr|tracking|personal data|partners/i.test(box.innerText || '')) continue;
+          var buttons = box.querySelectorAll('button, [role="button"], a[href="#"], input[type="button"], input[type="submit"]');
+          for (var k = 0; k < buttons.length; k++) {
+            var t = (buttons[k].innerText || buttons[k].value || buttons[k].getAttribute('aria-label') || '').trim();
+            if (t.length < 40 && REJECT.test(t) && press(buttons[k])) return;
+          }
+        }
+      }
+      var tries = 0;
+      function loop() { attempt(); if (!done && ++tries < 20) setTimeout(loop, 500); }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loop); else loop();
+    })();
+    """#, injectionTime: .atDocumentEnd, forMainFrameOnly: false, in: .defaultClient)
 
     /// Hides common cookie-consent pop-ups and un-freezes page scrolling they lock.
     static let hideCookieBanners: WKUserScript = {
