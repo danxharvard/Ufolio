@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.0
+
+**New: Safari extensions** (macOS 15.4 or later)
+- Settings › Extensions now lists the Safari extensions that came with apps on your Mac (usually
+  from the Mac App Store). Click Add and the extension runs in Hush straight from its app.
+- Safari content blockers that include their rules as a file can share them with Hush Guard
+  (Import Rules). Some keep their rules private inside their app; Hush shows when that's the case.
+
+**Improved**
+- A little more space between the search field and the Hush card in the Settings sidebar.
+
 ## 0.9.2
 
 **Improved**

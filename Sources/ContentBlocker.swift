@@ -218,8 +218,8 @@ final class ContentBlocker: ObservableObject {
         }
     }
 
-    func importFile(_ url: URL) {
-        let name = url.deletingPathExtension().lastPathComponent
+    func importFile(_ url: URL, name customName: String? = nil) {
+        let name = customName ?? url.deletingPathExtension().lastPathComponent
         Task {
             do {
                 let data = try Data(contentsOf: url)

@@ -102,7 +102,7 @@ struct SettingsView: View {
             List(selection: current) {
                 SidebarCard { selection = SettingsTab.updates.rawValue }
                     .padding(.horizontal, -7)   // line up exactly with the search field above
-                    .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 10, trailing: 0))
+                    .listRowInsets(EdgeInsets(top: 12, leading: 0, bottom: 10, trailing: 0))
                 ForEach(visibleTabs) { tab in
                     HStack(spacing: 10) {
                         IconTile(symbol: tab.symbol, colors: tab.colors, size: 22)
@@ -1550,6 +1550,7 @@ private struct AddCardSheet: View {
 private struct ExtensionSettings: View {
     @ObservedObject private var store = ExtensionStore.shared
     @State private var link = ""
+    @State private var safariExtensions: [SafariExtensionInfo] = []
 
     var body: some View {
         Form {
@@ -1594,6 +1595,19 @@ private struct ExtensionSettings: View {
                 }
 
                 Section {
+                    if safariExtensions.isEmpty {
+                        Text("No Safari extensions found. They come inside apps, usually from the Mac App Store — install one and it appears here.")
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    ForEach(safariExtensions) { info in
+                        SafariExtensionRow(info: info)
+                    }
+                } header: { Text("Safari extensions on this Mac") } footer: {
+                    Footnote("Safari web extensions run in Hush straight from their app. Content blockers can share their rules with Hush Guard when the app includes them as a file.")
+                }
+
+                Section {
                     if store.installed.isEmpty {
                         Text("No extensions yet.").foregroundStyle(.secondary)
                     }
@@ -1604,6 +1618,14 @@ private struct ExtensionSettings: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear(perform: refreshSafari)
+    }
+
+    private func refreshSafari() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let found = SafariExtensionFinder.find()
+            DispatchQueue.main.async { safariExtensions = found }
+        }
     }
 
     private func add() {
@@ -1654,9 +1676,59 @@ private struct ExtensionRow: View {
                 .toggleStyle(.switch).labelsHidden().controlSize(.small)
         }
         .task {
-            let folder = store.directory(for: ext)
-            if #available(macOS 15.4, *), let loaded = try? await WKWebExtension(resourceBaseURL: folder) {
-                icon = loaded.icon(for: CGSize(width: 28, height: 28))
+            if #available(macOS 15.4, *) {
+                var loaded: WKWebExtension?
+                if let appex = ext.safariBundleURL, let bundle = Bundle(url: appex) {
+                    loaded = try? await WKWebExtension(appExtensionBundle: bundle)
+                } else {
+                    loaded = try? await WKWebExtension(resourceBaseURL: store.directory(for: ext))
+                }
+                icon = loaded?.icon(for: CGSize(width: 28, height: 28))
+            }
+        }
+    }
+}
+
+/// A Safari extension found in an installed app, with Add (web extensions) or
+/// Import Rules (content blockers that include their rules).
+private struct SafariExtensionRow: View {
+    let info: SafariExtensionInfo
+    @ObservedObject private var store = ExtensionStore.shared
+    @ObservedObject private var blocker = ContentBlocker.shared
+
+    private var added: Bool {
+        switch info.kind {
+        case .webExtension: return store.installed.contains { $0.id == "safari-" + info.bundleID }
+        case .contentBlocker: return blocker.lists.contains { $0.name == info.name }
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: info.appURL.path))
+                .resizable().frame(width: 28, height: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(info.name).font(.system(size: 13, weight: .medium))
+                Text(info.kind == .webExtension ? "Safari extension · \(info.appName)" : "Content blocker · \(info.appName)")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if added {
+                Label("Added", systemImage: "checkmark.circle.fill").foregroundStyle(Color.green).font(.system(size: 12))
+            } else {
+                switch info.kind {
+                case .webExtension:
+                    Button("Add") { Task { @MainActor in await store.install(safari: info) } }
+                        .disabled(store.isWorking)
+                case .contentBlocker:
+                    if let rules = info.blockerList {
+                        Button("Import Rules") { blocker.importFile(rules, name: info.name) }
+                            .disabled(blocker.isWorking)
+                    } else {
+                        Text("Rules not shareable").font(.system(size: 11)).foregroundStyle(.secondary)
+                            .help("This content blocker keeps its rules inside its own app, so Hush can’t read them.")
+                    }
+                }
             }
         }
     }

@@ -2,14 +2,68 @@ import AppKit
 import SwiftUI
 import WebKit
 
+// MARK: - Safari extensions on this Mac
+
+/// A Safari extension found inside an installed app (Safari extensions ship inside Mac apps,
+/// usually from the Mac App Store).
+struct SafariExtensionInfo: Identifiable {
+    enum Kind { case webExtension, contentBlocker }
+    let bundleID: String
+    let name: String
+    let appName: String
+    let appURL: URL
+    let appexURL: URL
+    let kind: Kind
+    var id: String { bundleID }
+
+    /// The content blocker's rules, if the app ships them as a file Hush can read.
+    var blockerList: URL? {
+        let file = appexURL.appendingPathComponent("Contents/Resources/blockerList.json")
+        return FileManager.default.fileExists(atPath: file.path) ? file : nil
+    }
+}
+
+enum SafariExtensionFinder {
+    static func find() -> [SafariExtensionInfo] {
+        let fm = FileManager.default
+        let folders = [URL(fileURLWithPath: "/Applications"), fm.homeDirectoryForCurrentUser.appendingPathComponent("Applications")]
+        var found: [SafariExtensionInfo] = []
+        for folder in folders {
+            guard let apps = try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else { continue }
+            for app in apps where app.pathExtension == "app" {
+                let plugins = app.appendingPathComponent("Contents/PlugIns")
+                guard let appexes = try? fm.contentsOfDirectory(at: plugins, includingPropertiesForKeys: nil) else { continue }
+                for appex in appexes where appex.pathExtension == "appex" {
+                    guard let bundle = Bundle(url: appex), let info = bundle.infoDictionary,
+                          let point = (info["NSExtension"] as? [String: Any])?["NSExtensionPointIdentifier"] as? String,
+                          let id = bundle.bundleIdentifier else { continue }
+                    let kind: SafariExtensionInfo.Kind
+                    switch point {
+                    case "com.apple.Safari.web-extension": kind = .webExtension
+                    case "com.apple.Safari.content-blocker": kind = .contentBlocker
+                    default: continue
+                    }
+                    let name = (info["CFBundleDisplayName"] as? String) ?? (info["CFBundleName"] as? String) ?? appex.deletingPathExtension().lastPathComponent
+                    found.append(SafariExtensionInfo(bundleID: id, name: name, appName: app.deletingPathExtension().lastPathComponent,
+                                                     appURL: app, appexURL: appex, kind: kind))
+                }
+            }
+        }
+        return found.sorted { $0.appName.localizedCaseInsensitiveCompare($1.appName) == .orderedAscending }
+    }
+}
+
 // MARK: - Installed extensions (any macOS)
 
 struct InstalledExtension: Codable, Identifiable, Equatable {
-    var id: String          // Chrome Web Store ID, or a generated one for unpacked folders
+    var id: String          // Chrome Web Store ID, "safari-<bundle id>", or generated for unpacked folders
     var name: String
     var version: String
     var enabled = true
-    var source: String?     // the Chrome Web Store page it came from
+    var source: String?     // the Chrome Web Store page, or "safari:<path to the .appex>"
+
+    var isSafari: Bool { source?.hasPrefix("safari:") == true }
+    var safariBundleURL: URL? { isSafari ? URL(fileURLWithPath: String(source!.dropFirst(7))) : nil }
 }
 
 /// Keeps track of installed extensions and installs new ones from the Chrome Web Store or a
@@ -85,6 +139,33 @@ final class ExtensionStore: ObservableObject {
             await finishInstall(from: staging, id: id, source: text.trimmingCharacters(in: .whitespacesAndNewlines))
         } catch {
             report(error.localizedDescription, error: true)
+        }
+    }
+
+    /// Adds a Safari web extension. It keeps running from inside its own app.
+    @MainActor
+    func install(safari info: SafariExtensionInfo) async {
+        guard #available(macOS 15.4, *) else { report("Extensions need macOS 15.4 or later.", error: true); return }
+        guard let bundle = Bundle(url: info.appexURL) else { report("Couldn’t open \(info.appName)’s extension.", error: true); return }
+        isWorking = true
+        statusIsError = false
+        do {
+            let ext = try await WKWebExtension(appExtensionBundle: bundle)
+            let name = ext.displayName ?? info.name
+            guard ExtensionManager.shared.confirmInstall(ext, name: name) else {
+                report("“\(name)” wasn’t added.", error: false)
+                return
+            }
+            let record = InstalledExtension(id: "safari-" + info.bundleID, name: name,
+                                            version: ext.displayVersion ?? ext.version ?? "",
+                                            source: "safari:" + info.appexURL.path)
+            installed.removeAll { $0.id == record.id }
+            installed.append(record)
+            save()
+            await ExtensionManager.shared.load(record)
+            report("Added “\(name)” from \(info.appName).", error: false)
+        } catch {
+            report("Hush couldn’t load this Safari extension: \(error.localizedDescription)", error: true)
         }
     }
 
@@ -189,7 +270,8 @@ final class ExtensionStore: ObservableObject {
         if #available(macOS 15.4, *) { ExtensionManager.shared.unload(ext.id) }
         installed.removeAll { $0.id == ext.id }
         save()
-        try? FileManager.default.removeItem(at: directory(for: ext))
+        // Safari extensions live inside their own app: never delete that.
+        if !ext.isSafari { try? FileManager.default.removeItem(at: directory(for: ext)) }
     }
 
     @MainActor
@@ -264,7 +346,13 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
     func load(_ record: InstalledExtension) async {
         guard contexts[record.id] == nil else { return }
         do {
-            let ext = try await WKWebExtension(resourceBaseURL: ExtensionStore.shared.directory(for: record))
+            let ext: WKWebExtension
+            if let appex = record.safariBundleURL {
+                guard let bundle = Bundle(url: appex) else { throw ExtensionError("Its app is no longer installed.") }
+                ext = try await WKWebExtension(appExtensionBundle: bundle)
+            } else {
+                ext = try await WKWebExtension(resourceBaseURL: ExtensionStore.shared.directory(for: record))
+            }
             let context = WKWebExtensionContext(for: ext)
             context.uniqueIdentifier = record.id
             // Permissions were shown to and accepted by the user when the extension was added.
