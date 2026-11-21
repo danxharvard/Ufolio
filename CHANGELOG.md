@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.1
+
+**New**
+- Add to Hush: on an extension's page in the Chrome Web Store, a bar above the page offers a
+  one-click Add to Hush button. No more copying links into Settings.
+- Long addresses: the address bar shows the website's name, and hovering over it shows the full address.
+- Each release on GitHub now lists exactly what's new, the same as Hush's What's New screen.
+
 ## 0.9.0
 
 **New**

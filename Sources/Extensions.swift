@@ -519,3 +519,75 @@ private struct AnchorReader: NSViewRepresentable {
     }
     func updateNSView(_ view: NSView, context: Context) {}
 }
+
+// MARK: - "Add to Hush" on Chrome Web Store pages
+
+/// A slim bar above Chrome Web Store extension pages with a one-click Add to Hush button
+/// (the store only shows its own button to Chrome itself).
+struct WebStoreBar: View {
+    @ObservedObject var tab: BrowserTab
+    @ObservedObject private var store = ExtensionStore.shared
+    @State private var adding = false
+
+    private var extensionID: String? {
+        guard ExtensionStore.isSupported, let url = tab.url, let host = url.host?.lowercased(),
+              host == "chromewebstore.google.com" || (host == "chrome.google.com" && url.path.hasPrefix("/webstore")),
+              url.path.contains("/detail/") else { return nil }
+        return ExtensionStore.webStoreID(from: url.absoluteString)
+    }
+
+    private var name: String {
+        let title = tab.title.replacingOccurrences(of: " - Chrome Web Store", with: "")
+            .replacingOccurrences(of: " – Chrome Web Store", with: "")
+        return title.isEmpty ? "this extension" : "“\(title)”"
+    }
+
+    var body: some View {
+        if let id = extensionID {
+            let installed = store.installed.contains { $0.id == id }
+            VStack(spacing: 0) {
+                Hairline()
+                HStack(spacing: 12) {
+                    IconTile(symbol: "puzzlepiece.extension.fill",
+                             colors: [Color(red: 1.0, green: 0.62, blue: 0.25), Color(red: 0.95, green: 0.42, blue: 0.18)], size: 30)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(installed ? "\(name) is in Hush" : "Add \(name) to Hush")
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(1)
+                        Text(statusLine(installed: installed))
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(store.statusIsError && adding ? Color.orange : Color.secondary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 12)
+                    if store.isWorking && adding {
+                        ProgressView().controlSize(.small)
+                    }
+                    if installed {
+                        Label("Added", systemImage: "checkmark.circle.fill")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(Color.green)
+                        Button("Manage…") { SettingsOpener.open(tab: .extensions) }
+                    } else {
+                        Button("Add to Hush") {
+                            adding = true
+                            let link = tab.url?.absoluteString ?? id
+                            Task { @MainActor in await store.install(fromWebStore: link) }
+                        }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(store.isWorking)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+            }
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    private func statusLine(installed: Bool) -> String {
+        if adding, let status = store.status { return status }
+        if installed { return "It works on tabs you open from now on." }
+        return "Hush can run most Chrome extensions. You’ll see what it can access first."
+    }
+}

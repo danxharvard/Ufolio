@@ -1,3 +1,5 @@
+---
+
 ## Install
 
 1. Download **HushBrowser-VERSION.dmg** below and open it.

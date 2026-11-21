@@ -36,6 +36,11 @@ struct BrowserWindow: View {
                 .overlay(alignment: .bottom) { Hairline() }
             }
 
+            // "Add to Hush" on Chrome Web Store pages (takes no space anywhere else).
+            SelectedTab(model: model) { tab in
+                WebStoreBar(tab: tab).background(VisualEffect(material: .titlebar))
+            }
+
             ZStack(alignment: .top) {
                 PageArea(model: model)
                 if let tab = model.selectedTab {

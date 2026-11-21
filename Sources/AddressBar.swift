@@ -16,11 +16,12 @@ struct AddressBar: View {
     @State private var isEditing = false
     @State private var hovering = false
 
-    private var displayText: String { display(tab.url) }
+    private var displayText: String { display(tab.url, hovering: hovering) }
 
-    private func display(_ url: URL?) -> String {
+    /// The site's name normally; the full address while the pointer is over the bar.
+    private func display(_ url: URL?, hovering: Bool = false) -> String {
         guard let url else { return "" }
-        if showFullAddress { return url.absoluteString }
+        if showFullAddress || hovering { return url.absoluteString }
         return url.host?.strippingWWW ?? url.absoluteString
     }
 
@@ -90,7 +91,10 @@ struct AddressBar: View {
                 .strokeBorder(Color.accentColor.opacity(isEditing ? 0.55 : 0), lineWidth: 1.5)
         )
         .shadow(color: .black.opacity(isEditing ? 0.08 : 0), radius: 6, y: 2)
-        .onHover { hovering = $0 }
+        .onHover { inside in
+            hovering = inside
+            if !isEditing { text = display(model.selectedTab?.url, hovering: inside) }
+        }
         .animation(.easeOut(duration: 0.15), value: isEditing)
         .animation(.easeOut(duration: 0.12), value: hovering)
         .onAppear { text = displayText }
