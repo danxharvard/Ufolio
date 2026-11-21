@@ -2,12 +2,20 @@
 
 A lightweight, native macOS web browser built on WebKit (the engine behind Safari).
 
-- Calm, minimal interface that follows Day/Night mode (View › Appearance)
-- Address bar with live Google suggestions as you type (↑/↓ to pick, Return to go)
+- Calm, minimal, native interface with Day/Night themes, accent colours and start-page styles
+- Address bar with live search suggestions (Google, DuckDuckGo, Bing, Brave Search or Ecosia)
 - Bookmarks and a bookmarks bar (⌘D to bookmark, ⇧⌘B to show/hide, right-click to rename/move/remove)
-- Built-in ad and tracker blocker (shield button in the toolbar)
-- Tabs (⌘T, ⌘W, ⇧⌘[ / ⇧⌘]), zoom (⌘+ / ⌘- / ⌘0), downloads to ~/Downloads
+- **Hush Shields**: built-in ad and tracker blocking, a blocked counter, per-site on/off,
+  collapsing of empty ad spaces, cookie-banner hiding, and import of your own filter lists
+  (EasyList, uBlock/Adblock Plus lists, hosts files, Safari content-blocker JSON)
+- Privacy: third-party cookie blocking, HTTPS upgrade, Global Privacy Control, fraud warnings,
+  per-site location/camera/microphone permissions, one-click clearing of website data
+- Optional personal start page with your town and local weather
+- Updates itself from GitHub releases (Settings › Updates)
+- Tabs (⌘T, ⌘W, ⇧⌘[ / ⇧⌘]), zoom, downloads, restore last session
 - Under 3 MB, universal (Intel and Apple Silicon), macOS 13 or later
+
+All settings live in **Hush Browser › Settings…** (⌘,).
 
 ## Install
 
@@ -25,8 +33,21 @@ Needs Apple's Command Line Tools (`xcode-select --install`); Xcode itself is opt
 ./scripts/build-app.sh
 ```
 
-This produces `build/Hush Browser.app` and `build/HushBrowser-<version>.dmg`.
-The version number lives in the `VERSION` file.
+This produces `build/Hush Browser.app`, `build/HushBrowser-<version>.dmg` (the installer) and
+`build/HushBrowser-<version>.zip` (what installed copies download to update themselves).
+
+## Releasing an update
+
+1. Put the new version number in `VERSION` (e.g. `0.3.0`) and commit.
+2. Tag and push:
+
+   ```bash
+   git tag v0.3.0 && git push origin main v0.3.0
+   ```
+
+GitHub Actions (`.github/workflows/release.yml`) builds the app and publishes a release with the
+DMG and the update zip. Installed copies check every few hours and install it the next time they
+quit — or straight away from Settings › Updates.
 
 ## Project layout
 
@@ -37,17 +58,25 @@ The version number lives in the `VERSION` file.
 | `Sources/BrowserModel.swift` | A window's tabs |
 | `Sources/BrowserTab.swift` | One tab: the WebKit view, navigation, pop-ups, downloads |
 | `Sources/AddressBar.swift` | Address field and turning typed text into a URL or search |
-| `Sources/Suggestions.swift` | Live Google and bookmark suggestions |
+| `Sources/Suggestions.swift` | Live search and bookmark suggestions |
 | `Sources/TabStrip.swift` | The tab strip |
 | `Sources/Bookmarks.swift` | Bookmark storage, bookmarks bar, site icons, start page |
-| `Sources/AdBlocker.swift` | Ad and tracker blocking rules |
+| `Sources/SettingsStore.swift` | Every setting's key and default, plus search engines and other options |
+| `Sources/SettingsView.swift` | The Settings window |
+| `Sources/ContentBlocker.swift` | Ad/tracker blocking, per-site shields, page scripts, blocked counter |
+| `Sources/FilterConverter.swift` | Turns imported filter lists into WebKit rules |
+| `Sources/Location.swift` | Site permissions and local weather for the start page |
+| `Sources/Updater.swift` | Checks for, downloads and installs updates |
 | `scripts/build-app.sh` | Builds the app bundle and DMG |
 | `scripts/make-icon.swift` | Draws the app icon |
 
 ## Privacy notes
 
-- Live suggestions send what you type in the address bar to Google as you type, the same way
-  Safari, Chrome and Firefox do with their default search engine.
+- Live suggestions send what you type in the address bar to your chosen search engine as you
+  type, like other browsers do. They can be turned off in Settings › General.
+- The ad counter uses WebKit's reporting of blocked requests (the private API Safari itself uses).
+- Location for the start page is rounded to about 1 km and sent only to Open-Meteo (weather) and
+  Apple (town name), and only if you turn it on.
 - Site icons are fetched from each site directly, not through a third-party icon service.
 - Bookmarks are stored locally in `~/Library/Application Support/Hush Browser/bookmarks.json`.
 

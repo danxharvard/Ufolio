@@ -15,15 +15,21 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     @Published private(set) var canGoBack = false
     @Published private(set) var canGoForward = false
     @Published private(set) var isSecure = false
+    /// Ads and trackers blocked on the current page.
+    @Published private(set) var blockedOnPage = 0
 
     private var observers: Set<AnyCancellable> = []
 
     static func makeConfiguration() -> WKWebViewConfiguration {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
+        config.userContentController = WKUserContentController()
         config.applicationNameForUserAgent = "Version/18.0 Safari/605.1.15"
         config.preferences.isElementFullscreenEnabled = true
+        config.preferences.isFraudulentWebsiteWarningEnabled = Prefs.bool(Prefs.fraudWarning)
+        config.preferences.javaScriptCanOpenWindowsAutomatically = !Prefs.bool(Prefs.blockPopups)
         config.defaultWebpagePreferences.preferredContentMode = .desktop
+        config.mediaTypesRequiringUserActionForPlayback = AutoplayPolicy.current.mediaTypes
         return config
     }
 
@@ -37,7 +43,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         webView.allowsMagnification = true
         webView.navigationDelegate = self
         webView.uiDelegate = self
-        AdBlocker.shared.attach(to: webView)
+        let zoom = Prefs.double(Prefs.defaultZoom)
+        webView.pageZoom = zoom > 0 ? zoom : 1
+        ContentBlocker.shared.attach(webView.configuration.userContentController)
 
         func bind<T>(_ keyPath: KeyPath<WKWebView, T>, _ apply: @escaping (BrowserTab, T) -> Void) {
             webView.publisher(for: keyPath)
@@ -46,7 +54,10 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
                 .store(in: &observers)
         }
         bind(\.title) { $0.title = $1 ?? "" }
-        bind(\.url) { $0.url = $1 }
+        bind(\.url) { tab, url in
+            tab.url = url
+            tab.model?.scheduleSessionSave()
+        }
         bind(\.isLoading) { $0.isLoading = $1 }
         bind(\.estimatedProgress) { $0.progress = $1 }
         bind(\.canGoBack) { $0.canGoBack = $1 }
@@ -63,6 +74,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     /// True for a fresh tab that hasn't loaded anything yet: show the start page.
     var isBlank: Bool { url == nil && !isLoading }
 
+    var host: String? { url?.host }
+
     func load(_ url: URL) {
         webView.load(URLRequest(url: url))
     }
@@ -76,7 +89,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     }
 
     func resetZoom() {
-        webView.pageZoom = 1
+        let zoom = Prefs.double(Prefs.defaultZoom)
+        webView.pageZoom = zoom > 0 ? zoom : 1
     }
 
     func tearDown() {
@@ -90,27 +104,38 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
 extension BrowserTab: WKNavigationDelegate {
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
-                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+                 preferences: WKWebpagePreferences,
+                 decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
         // ⌘-click opens the link in a new background tab.
         if action.navigationType == .linkActivated, action.modifierFlags.contains(.command),
            let url = action.request.url {
             model?.newTab(url: url, select: false)
-            decisionHandler(.cancel)
+            decisionHandler(.cancel, preferences)
             return
         }
         // Hand non-web links (mailto:, facetime:, app links…) to macOS.
         if let url = action.request.url, let scheme = url.scheme?.lowercased(),
            !["http", "https", "about", "blob", "data", "file"].contains(scheme) {
             NSWorkspace.shared.open(url)
-            decisionHandler(.cancel)
+            decisionHandler(.cancel, preferences)
             return
         }
-        decisionHandler(action.shouldPerformDownload ? .download : .allow)
+        if action.targetFrame?.isMainFrame ?? true {
+            // Per-site shields must be in place before the page starts loading.
+            ContentBlocker.shared.update(webView.configuration.userContentController,
+                                         forHost: action.request.url?.host)
+        }
+        preferences.allowsContentJavaScript = Prefs.bool(Prefs.javaScript)
+        decisionHandler(action.shouldPerformDownload ? .download : .allow, preferences)
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse,
                  decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
         decisionHandler(response.canShowMIMEType ? .allow : .download)
+    }
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        blockedOnPage = 0
     }
 
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
@@ -119,6 +144,26 @@ extension BrowserTab: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
         download.delegate = Downloads.shared
+    }
+
+    /// WebKit reports each blocked request here. This is part of WebKit's
+    /// private navigation-delegate API (the one Safari uses for its counts);
+    /// if a future WebKit drops it, blocking still works and only the counter stops.
+    @objc(_webView:contentRuleListWithIdentifier:performedAction:forURL:)
+    func hush_webView(_ webView: WKWebView, contentRuleListWithIdentifier identifier: String,
+                      performedAction action: NSObject, forURL url: URL) {
+        guard action.responds(to: NSSelectorFromString("blockedLoad")),
+              (action.value(forKey: "blockedLoad") as? Bool) == true else { return }
+        let category = BuiltInRules.category(of: identifier)
+        guard category != .other else { return }
+        DispatchQueue.main.async {
+            self.blockedOnPage += 1
+            BlockStats.shared.record(identifier)
+            // Tell the page's ad-space collapser that ads really were blocked here.
+            if self.blockedOnPage == 1 && Prefs.bool(Prefs.collapseAdSpace) {
+                webView.evaluateJavaScript("window.__hushAdsBlocked = true; window.__hushSweep && window.__hushSweep();")
+            }
+        }
     }
 }
 
@@ -160,16 +205,74 @@ extension BrowserTab: WKUIDelegate {
         alert.addButton(withTitle: "Cancel")
         completionHandler(alert.runModal() == .alertFirstButtonReturn)
     }
+
+    // Camera and microphone (public WebKit API, macOS 12+).
+    func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+                 initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType,
+                 decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+        let kinds: [PermissionKind]
+        switch type {
+        case .camera: kinds = [.camera]
+        case .microphone: kinds = [.microphone]
+        default: kinds = [.camera, .microphone]
+        }
+        SitePermissions.shared.request(kinds, host: origin.host, window: webView.window) {
+            decisionHandler($0 ? .grant : .deny)
+        }
+    }
+
+    // Location. WebKit on macOS only offers this through its private UI-delegate
+    // API; without it, every site's location request is silently refused.
+    @objc(_webView:requestGeolocationPermissionForOrigin:initiatedByFrame:decisionHandler:)
+    func hush_requestLocation(_ webView: WKWebView, origin: WKSecurityOrigin, frame: WKFrameInfo,
+                              decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+        SitePermissions.shared.request([.location], host: origin.host, window: webView.window) {
+            decisionHandler($0 ? .grant : .deny)
+        }
+    }
+
+    @objc(_webView:requestGeolocationPermissionForFrame:decisionHandler:)
+    func hush_requestLocationLegacy(_ webView: WKWebView, frame: WKFrameInfo,
+                                    decisionHandler: @escaping (Bool) -> Void) {
+        SitePermissions.shared.request([.location], host: frame.securityOrigin.host, window: webView.window,
+                                       completion: decisionHandler)
+    }
 }
 
-/// Saves downloads to ~/Downloads and bounces the Downloads stack in the Dock.
+/// Saves downloads to the chosen folder (or asks where) and bounces the Downloads stack in the Dock.
 final class Downloads: NSObject, WKDownloadDelegate {
     static let shared = Downloads()
     private var destinations: [ObjectIdentifier: URL] = [:]
 
+    static var folder: URL {
+        let saved = Prefs.string(Prefs.downloadFolder)
+        if !saved.isEmpty { return URL(fileURLWithPath: saved, isDirectory: true) }
+        return FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+    }
+
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse,
                   suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
-        let folder = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+        if Prefs.bool(Prefs.askWhereToSave) {
+            let panel = NSSavePanel()
+            panel.nameFieldStringValue = suggestedFilename
+            panel.directoryURL = Self.folder
+            let finish: (NSApplication.ModalResponse) -> Void = { response in
+                let url = response == .OK ? panel.url : nil
+                if let url {
+                    try? FileManager.default.removeItem(at: url) // the panel already confirmed replacing it
+                    self.destinations[ObjectIdentifier(download)] = url
+                }
+                completionHandler(url)
+            }
+            if let window = download.webView?.window {
+                panel.beginSheetModal(for: window, completionHandler: finish)
+            } else {
+                finish(panel.runModal())
+            }
+            return
+        }
+
+        let folder = Self.folder
         let base = (suggestedFilename as NSString).deletingPathExtension
         let ext = (suggestedFilename as NSString).pathExtension
         var candidate = folder.appendingPathComponent(suggestedFilename)

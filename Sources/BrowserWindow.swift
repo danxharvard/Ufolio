@@ -6,6 +6,9 @@ struct BrowserWindow: View {
     @StateObject private var model = BrowserModel()
     @StateObject private var suggestions = SuggestionsModel()
     @AppStorage(Prefs.showBookmarkBar) private var showBookmarkBar = true
+    @AppStorage(Prefs.alwaysShowTabBar) private var alwaysShowTabBar = false
+
+    private var showTabStrip: Bool { model.tabs.count > 1 || alwaysShowTabBar }
     @State private var windowWidth: CGFloat = 1280
 
     private var addressWidth: CGFloat {
@@ -14,9 +17,9 @@ struct BrowserWindow: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if model.tabs.count > 1 || showBookmarkBar {
+            if showTabStrip || showBookmarkBar {
                 VStack(spacing: 0) {
-                    if model.tabs.count > 1 {
+                    if showTabStrip {
                         TabStrip(model: model)
                     }
                     if showBookmarkBar {
@@ -71,7 +74,9 @@ struct BrowserWindow: View {
             }
         }
         ToolbarItemGroup(placement: .primaryAction) {
-            AdBlockButton(model: model)
+            if let tab = model.selectedTab {
+                ShieldsButton(tab: tab)
+            }
             ToolbarIconButton(symbol: "plus", help: "New Tab (⌘T)") {
                 model.newTab(focus: true)
             }
@@ -165,22 +170,103 @@ struct ToolbarIconButton: View {
     }
 }
 
-private struct AdBlockButton: View {
-    @ObservedObject var model: BrowserModel
-    @AppStorage(Prefs.adBlockEnabled) private var enabled = true
+/// The shield in the toolbar: how much was blocked on this page, and per-site shields.
+private struct ShieldsButton: View {
+    @ObservedObject var tab: BrowserTab
+    @ObservedObject private var blocker = ContentBlocker.shared
+    @AppStorage(Prefs.adBlockEnabled) private var adsOn = true
+    @AppStorage(Prefs.trackerBlockEnabled) private var trackersOn = true
+    @State private var showing = false
+
+    private var shieldsUp: Bool {
+        guard adsOn || trackersOn else { return false }
+        guard let host = tab.host else { return true }
+        return !blocker.isShieldsDown(host)
+    }
 
     var body: some View {
         ToolbarIconButton(
-            symbol: enabled ? "shield.lefthalf.filled" : "shield.slash",
-            help: enabled ? "Ad blocker is on — click to turn off" : "Ad blocker is off — click to turn on",
-            tint: enabled ? .accentColor : nil
+            symbol: shieldsUp ? "shield.lefthalf.filled" : "shield.slash",
+            help: "Hush Shields",
+            tint: shieldsUp ? .accentColor : nil
         ) {
-            enabled.toggle()
+            showing.toggle()
         }
-        .onChange(of: enabled) { _ in
-            AdBlocker.shared.refresh()
-            model.selectedTab?.webView.reload()
+        .overlay(alignment: .topTrailing) {
+            if tab.blockedOnPage > 0 && shieldsUp {
+                Text(tab.blockedOnPage > 99 ? "99+" : "\(tab.blockedOnPage)")
+                    .font(.system(size: 8.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 3.5)
+                    .frame(minWidth: 13, minHeight: 13)
+                    .background(Capsule().fill(Color.accentColor))
+                    .offset(x: 3, y: -1)
+                    .allowsHitTesting(false)
+                    .transition(.scale.combined(with: .opacity))
+            }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: tab.blockedOnPage > 0)
+        .popover(isPresented: $showing, arrowEdge: .bottom) {
+            ShieldsPanel(tab: tab, shieldsUp: shieldsUp)
+        }
+    }
+}
+
+private struct ShieldsPanel: View {
+    @ObservedObject var tab: BrowserTab
+    let shieldsUp: Bool
+    @ObservedObject private var stats = BlockStats.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: shieldsUp ? "shield.lefthalf.filled" : "shield.slash")
+                    .font(.system(size: 22))
+                    .foregroundStyle(shieldsUp ? Color.accentColor : Color.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tab.host?.strippingWWW ?? "Hush Shields")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(shieldsUp ? "Shields are up" : "Shields are down for this site")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if let host = tab.host {
+                    Toggle("", isOn: Binding(
+                        get: { !ContentBlocker.shared.isShieldsDown(host) },
+                        set: { up in
+                            ContentBlocker.shared.setShields(up, for: host)
+                            tab.webView.reload()
+                        }))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .help("Turn shields off if this site doesn’t work properly")
+                }
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("\(tab.blockedOnPage)")
+                    .font(.system(size: 30, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                Text(tab.blockedOnPage == 1 ? "ad or tracker blocked on this page" : "ads and trackers blocked on this page")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+
+            Divider()
+
+            HStack {
+                Text("\(stats.total.formatted()) blocked in total")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Ad Blocker Settings…") { SettingsOpener.open(tab: .adBlocker) }
+                    .buttonStyle(.link)
+                    .font(.system(size: 11.5))
+            }
+        }
+        .padding(16)
+        .frame(width: 300)
     }
 }
 

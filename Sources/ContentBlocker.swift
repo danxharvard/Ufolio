@@ -1,0 +1,613 @@
+import WebKit
+import Combine
+
+/// A filter list the user added (from a file or a web address).
+struct FilterList: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var name: String
+    var sourceURL: URL?
+    var ruleCount: Int
+    var skippedCount: Int
+    var format: String
+    var enabled = true
+    var updatedAt = Date()
+
+    var identifier: String { "hush-list-\(id.uuidString)" }
+}
+
+/// Everything Hush blocks, built on WebKit's content blocker (the engine behind
+/// Safari's ad-block extensions). Rules are compiled once and cached by WebKit,
+/// so blocking costs almost nothing while you browse.
+final class ContentBlocker: ObservableObject {
+    static let shared = ContentBlocker()
+
+    @Published private(set) var lists: [FilterList] = []
+    /// Sites where the user switched shields off.
+    @Published private(set) var shieldsDown: [String] = []
+    @Published private(set) var isWorking = false
+    @Published var status: String?
+    @Published var statusIsError = false
+
+    private var compiled: [String: WKContentRuleList] = [:]
+    private let controllers = NSHashTable<WKUserContentController>.weakObjects()
+    private let hostOf = NSMapTable<WKUserContentController, NSString>.weakToStrongObjects()
+    private let folder: URL
+    private var settingsObserver: AnyCancellable?
+    private var store: WKContentRuleListStore { WKContentRuleListStore.default() }
+
+    private init() {
+        folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Hush Browser/Filters", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        if let data = try? Data(contentsOf: folder.appendingPathComponent("lists.json")),
+           let saved = try? JSONDecoder().decode([FilterList].self, from: data) {
+            lists = saved
+        }
+        shieldsDown = UserDefaults.standard.stringArray(forKey: "shieldsDown") ?? []
+
+        // Re-apply rules when (and only when) a blocking setting changes.
+        lastSignature = Self.settingsSignature()
+        settingsObserver = NotificationCenter.default
+            .publisher(for: UserDefaults.didChangeNotification)
+            .debounce(for: .milliseconds(150), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                let signature = Self.settingsSignature()
+                if signature != self.lastSignature {
+                    self.lastSignature = signature
+                    self.refresh()
+                }
+            }
+    }
+
+    private var lastSignature = ""
+
+    private static func settingsSignature() -> String {
+        [Prefs.adBlockEnabled, Prefs.trackerBlockEnabled, Prefs.hideCookieBanners, Prefs.collapseAdSpace,
+         Prefs.blockThirdPartyCookies, Prefs.httpsUpgrade, Prefs.globalPrivacyControl]
+            .map { Prefs.bool($0) ? "1" : "0" }.joined()
+    }
+
+    // MARK: Setup
+
+    func prepare() {
+        store.removeContentRuleList(forIdentifier: "hush-adblock-v1") { _ in } // from version 0.1.0
+        for builtIn in BuiltInRules.allCases {
+            loadCompiled(builtIn.identifier) { builtIn.json }
+        }
+        for list in lists {
+            let file = jsonFile(for: list)
+            loadCompiled(list.identifier) { try? String(contentsOf: file) }
+        }
+    }
+
+    /// Uses WebKit's cached compiled list, or compiles it again if the cache was cleared.
+    private func loadCompiled(_ identifier: String, source: @escaping () -> String?) {
+        store.lookUpContentRuleList(forIdentifier: identifier) { [weak self] list, _ in
+            if let list {
+                self?.install(list, as: identifier)
+                return
+            }
+            guard let json = source() else { return }
+            self?.store.compileContentRuleList(forIdentifier: identifier, encodedContentRuleList: json) { list, error in
+                if let list { self?.install(list, as: identifier) }
+                if let error { NSLog("Hush: couldn't compile \(identifier): \(error)") }
+            }
+        }
+    }
+
+    private func install(_ list: WKContentRuleList, as identifier: String) {
+        DispatchQueue.main.async {
+            self.compiled[identifier] = list
+            self.refresh()
+        }
+    }
+
+    // MARK: Applying to tabs
+
+    func attach(_ controller: WKUserContentController) {
+        controllers.add(controller)
+        configure(controller)
+    }
+
+    /// Called as a tab starts loading a page, so per-site shields apply to it.
+    func update(_ controller: WKUserContentController, forHost host: String?) {
+        let old = hostOf.object(forKey: controller) as String?
+        if let host { hostOf.setObject(host as NSString, forKey: controller) } else { hostOf.removeObject(forKey: controller) }
+        if old.map(isShieldsDown) != host.map(isShieldsDown) || old == nil {
+            configure(controller)
+        }
+    }
+
+    func refresh() {
+        for controller in controllers.allObjects { configure(controller) }
+    }
+
+    private var activeIdentifiers: [String] {
+        BuiltInRules.allCases.filter(\.isEnabled).map(\.identifier)
+            + lists.filter(\.enabled).map(\.identifier)
+    }
+
+    private func configure(_ controller: WKUserContentController) {
+        controller.removeAllContentRuleLists()
+        controller.removeAllUserScripts()
+        let host = hostOf.object(forKey: controller) as String?
+        let shieldsOn = !(host.map(isShieldsDown) ?? false)
+        if shieldsOn {
+            for id in activeIdentifiers {
+                if let list = compiled[id] { controller.add(list) }
+            }
+            if Prefs.bool(Prefs.hideCookieBanners) { controller.addUserScript(UserScripts.hideCookieBanners) }
+            if Prefs.bool(Prefs.collapseAdSpace) && (Prefs.bool(Prefs.adBlockEnabled) || lists.contains(where: \.enabled)) {
+                controller.addUserScript(UserScripts.collapseAdSpace)
+            }
+        }
+        if Prefs.bool(Prefs.globalPrivacyControl) { controller.addUserScript(UserScripts.globalPrivacyControl) }
+    }
+
+    // MARK: Per-site shields
+
+    static func normalize(_ host: String) -> String {
+        host.lowercased().strippingWWW
+    }
+
+    func isShieldsDown(_ host: String) -> Bool {
+        let h = Self.normalize(host)
+        return shieldsDown.contains { h == $0 || h.hasSuffix("." + $0) }
+    }
+
+    func setShields(_ up: Bool, for host: String) {
+        let h = Self.normalize(host)
+        if up {
+            shieldsDown.removeAll { h == $0 || h.hasSuffix("." + $0) }
+        } else if !isShieldsDown(h) {
+            shieldsDown.append(h)
+            shieldsDown.sort()
+        }
+        UserDefaults.standard.set(shieldsDown, forKey: "shieldsDown")
+        for controller in controllers.allObjects { configure(controller) }
+    }
+
+    // MARK: Filter lists
+
+    private func jsonFile(for list: FilterList) -> URL {
+        folder.appendingPathComponent("\(list.id.uuidString).json")
+    }
+
+    private func saveLists() {
+        if let data = try? JSONEncoder().encode(lists) {
+            try? data.write(to: folder.appendingPathComponent("lists.json"), options: .atomic)
+        }
+    }
+
+    func importFile(_ url: URL) {
+        let name = url.deletingPathExtension().lastPathComponent
+        Task {
+            do {
+                let data = try Data(contentsOf: url)
+                await importList(data: data, name: name, source: nil)
+            } catch {
+                await report("Couldn't read that file: \(error.localizedDescription)", error: true)
+            }
+        }
+    }
+
+    func importFromWeb(_ url: URL, name: String? = nil) {
+        Task {
+            await MainActor.run { self.isWorking = true; self.statusIsError = false; self.status = "Downloading…" }
+            do {
+                var request = URLRequest(url: url)
+                request.timeoutInterval = 60
+                let (data, response) = try await URLSession.shared.data(for: request)
+                if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                    throw NSError(domain: "Hush", code: http.statusCode, userInfo: [
+                        NSLocalizedDescriptionKey: "The server answered with error \(http.statusCode).",
+                    ])
+                }
+                await importList(data: data, name: name ?? url.host ?? "Filter list", source: url)
+            } catch {
+                await report("Couldn't download the list: \(error.localizedDescription)", error: true)
+            }
+        }
+    }
+
+    func update(_ list: FilterList) {
+        guard let source = list.sourceURL else { return }
+        importFromWeb(source, name: list.name)
+    }
+
+    private func importList(data: Data, name: String, source: URL?) async {
+        await MainActor.run { self.isWorking = true; self.statusIsError = false; self.status = "Converting rules…" }
+        guard let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
+            await report("That file isn't a text filter list.", error: true)
+            return
+        }
+        do {
+            let output = try await Task.detached(priority: .userInitiated) {
+                try FilterConverter.convert(text)
+            }.value
+
+            // Re-adding the same list (same web address, or a file with the same name)
+            // updates it in place instead of adding a duplicate.
+            let listName = output.title ?? name
+            let existing = await MainActor.run {
+                self.lists.first {
+                    source != nil ? $0.sourceURL == source : ($0.sourceURL == nil && $0.name == listName)
+                }
+            }
+            var list = existing ?? FilterList(name: name, ruleCount: 0, skippedCount: 0, format: output.format)
+            list.name = output.title ?? existing?.name ?? name
+            list.sourceURL = source
+            list.ruleCount = output.ruleCount
+            list.skippedCount = output.skipped
+            list.format = output.format
+            list.updatedAt = Date()
+
+            await MainActor.run { self.status = "Compiling \(output.ruleCount.formatted()) rules…" }
+            let compiledList = try await compile(list.identifier, json: output.json)
+            try output.json.write(to: jsonFile(for: list), atomically: true, encoding: .utf8)
+
+            let finished = list
+            await MainActor.run {
+                self.compiled[finished.identifier] = compiledList
+                if let i = self.lists.firstIndex(where: { $0.id == finished.id }) {
+                    self.lists[i] = finished
+                } else {
+                    self.lists.append(finished)
+                }
+                self.saveLists()
+                self.refresh()
+            }
+            var message = "\(existing == nil ? "Added" : "Updated") “\(finished.name)” — \(output.ruleCount.formatted()) rules"
+            if output.skipped > 0 { message += " (\(output.skipped.formatted()) advanced rules skipped)" }
+            await report(message, error: false)
+        } catch {
+            await report(error.localizedDescription, error: true)
+        }
+    }
+
+    private func compile(_ identifier: String, json: String) async throws -> WKContentRuleList {
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.main.async {
+                self.store.compileContentRuleList(forIdentifier: identifier, encodedContentRuleList: json) { list, error in
+                    if let list {
+                        continuation.resume(returning: list)
+                    } else {
+                        continuation.resume(throwing: error ?? NSError(domain: "Hush", code: 1, userInfo: [
+                            NSLocalizedDescriptionKey: "WebKit couldn't use this list.",
+                        ]))
+                    }
+                }
+            }
+        }
+    }
+
+    private func report(_ message: String, error: Bool) async {
+        await MainActor.run {
+            self.isWorking = false
+            self.status = message
+            self.statusIsError = error
+        }
+    }
+
+    func setEnabled(_ list: FilterList, _ enabled: Bool) {
+        guard let i = lists.firstIndex(where: { $0.id == list.id }) else { return }
+        lists[i].enabled = enabled
+        saveLists()
+        refresh()
+    }
+
+    func remove(_ list: FilterList) {
+        lists.removeAll { $0.id == list.id }
+        compiled[list.identifier] = nil
+        saveLists()
+        refresh()
+        try? FileManager.default.removeItem(at: jsonFile(for: list))
+        store.removeContentRuleList(forIdentifier: list.identifier) { _ in }
+    }
+}
+
+// MARK: - Built-in protection
+
+enum BuiltInRules: String, CaseIterable {
+    case ads, trackers, thirdPartyCookies, httpsUpgrade
+
+    var identifier: String { "hush-\(rawValue)-v2" }
+
+    var isEnabled: Bool {
+        switch self {
+        case .ads: return Prefs.bool(Prefs.adBlockEnabled)
+        case .trackers: return Prefs.bool(Prefs.trackerBlockEnabled)
+        case .thirdPartyCookies: return Prefs.bool(Prefs.blockThirdPartyCookies)
+        case .httpsUpgrade: return Prefs.bool(Prefs.httpsUpgrade)
+        }
+    }
+
+    var json: String {
+        let rules: [[String: Any]]
+        switch self {
+        case .ads:
+            rules = Self.adDomains.map(Self.blockThirdParty) + [[
+                "trigger": ["url-filter": ".*"],
+                "action": ["type": "css-display-none", "selector": Self.adSelectors.joined(separator: ", ")],
+            ]]
+        case .trackers:
+            rules = Self.trackerDomains.map(Self.blockThirdParty)
+        case .thirdPartyCookies:
+            rules = [[
+                "trigger": ["url-filter": ".*", "load-type": ["third-party"]] as [String: Any],
+                "action": ["type": "block-cookies"],
+            ]]
+        case .httpsUpgrade:
+            rules = [[
+                "trigger": ["url-filter": "^http://", "unless-domain": ["localhost", "*.local", "*.localhost", "*.test"]] as [String: Any],
+                "action": ["type": "make-https"],
+            ]]
+        }
+        let data = try! JSONSerialization.data(withJSONObject: rules)
+        return String(data: data, encoding: .utf8)!
+    }
+
+    static func blockThirdParty(_ domain: String) -> [String: Any] {
+        [
+            "trigger": [
+                "url-filter": FilterConverter.domainFilter(domain),
+                "load-type": ["third-party"],
+            ] as [String: Any],
+            "action": ["type": "block"],
+        ]
+    }
+
+    static let adDomains = [
+        "doubleclick.net", "googlesyndication.com", "googleadservices.com", "googletagservices.com",
+        "adservice.google.com", "imasdk.googleapis.com",
+        "adnxs.com", "adsrvr.org", "advertising.com", "amazon-adsystem.com", "adform.net", "adroll.com",
+        "criteo.com", "criteo.net", "casalemedia.com", "openx.net", "pubmatic.com", "rubiconproject.com",
+        "smartadserver.com", "taboola.com", "outbrain.com", "revcontent.com", "mgid.com", "media.net",
+        "teads.tv", "triplelift.com", "sharethrough.com", "33across.com", "indexww.com", "yieldmo.com",
+        "contextweb.com", "bidswitch.net", "sovrn.com", "lijit.com", "gumgum.com", "spotxchange.com",
+        "spotx.tv", "springserve.com", "zedo.com", "adition.com", "adtech.com", "yieldlab.net",
+        "adzerk.net", "carbonads.com", "buysellads.com", "propellerads.com", "popads.net", "popcash.net",
+        "exoclick.com", "juicyads.com", "trafficjunky.net", "adsterra.com", "hilltopads.net",
+        "admob.com", "applovin.com", "unityads.unity3d.com", "inmobi.com", "smaato.net", "mopub.com",
+        "serving-sys.com", "flashtalking.com", "innovid.com", "moatads.com", "doubleverify.com",
+        "adsafeprotected.com", "ads.yahoo.com", "advertising.yahoo.com", "ads.twitter.com",
+        "ads-api.twitter.com", "ads.linkedin.com", "ads.pinterest.com", "ads.tiktok.com", "an.facebook.com",
+        "zemanta.com",
+    ]
+
+    static let trackerDomains = [
+        "google-analytics.com", "googletagmanager.com", "analytics.tiktok.com",
+        "scorecardresearch.com", "quantserve.com", "quantcount.com", "chartbeat.com", "chartbeat.net",
+        "hotjar.com", "mouseflow.com", "crazyegg.com", "fullstory.com", "luckyorange.com",
+        "mixpanel.com", "segment.io", "segment.com", "amplitude.com", "heap.io", "heapanalytics.com",
+        "kissmetrics.com", "nr-data.net", "optimizely.com", "branch.io",
+        "bluekai.com", "krxd.net", "demdex.net", "omtrdc.net", "everesttech.net", "agkn.com",
+        "rlcdn.com", "exelator.com", "eyeota.net", "tapad.com", "mathtag.com", "adsymptotic.com",
+        "bounceexchange.com", "bouncex.net", "parsely.com", "statcounter.com", "clicky.com",
+        "addthis.com", "sharethis.com", "yieldify.com", "liadm.com", "id5-sync.com",
+        "connect.facebook.net", "pixel.facebook.com", "bat.bing.com", "clarity.ms",
+        "static.ads-twitter.com", "snap.licdn.com", "px.ads.linkedin.com", "ct.pinterest.com",
+        "sc-static.net", "tr.snapchat.com",
+    ]
+
+    static let adSelectors = [
+        "ins.adsbygoogle", ".adsbygoogle", "[id^='google_ads_iframe']", "[id^='div-gpt-ad']",
+        "[data-google-query-id]", ".ad-slot", ".ad-banner", ".ad-container", ".adsbox",
+        ".advertisement", "[aria-label='Advertisement']", ".taboola", "[id^='taboola-']",
+        ".OUTBRAIN", "[data-widget-id^='outbrain']", ".sponsored-content",
+    ]
+
+    /// What a blocked request counts as in the statistics.
+    enum Category { case ads, trackers, lists, other }
+
+    static func category(of identifier: String) -> Category {
+        if identifier.hasPrefix("hush-ads") { return .ads }
+        if identifier.hasPrefix("hush-trackers") { return .trackers }
+        if identifier.hasPrefix("hush-list-") { return .lists }
+        return .other
+    }
+}
+
+enum UserScripts {
+    /// Global Privacy Control: tells sites you don't want your data sold or shared.
+    static let globalPrivacyControl = WKUserScript(
+        source: "try{Object.defineProperty(Navigator.prototype,'globalPrivacyControl',{get:()=>true,configurable:true})}catch(e){}",
+        injectionTime: .atDocumentStart, forMainFrameOnly: false)
+
+    static let cookieBannerSelectors = [
+        "#onetrust-consent-sdk", "#onetrust-banner-sdk", "#CybotCookiebotDialog", "#CybotCookiebotDialogBodyUnderlay",
+        "#qc-cmp2-container", ".qc-cmp2-container", "#didomi-host", ".fc-consent-root", "[id^='sp_message_container']",
+        "#usercentrics-root", "#truste-consent-track", "#truste-consent-content", ".truste_overlay", ".truste_box_overlay",
+        "#cookie-law-info-bar", ".cc-window", ".cc-banner", "#cookiescript_injected", "#cmpbox", "#cmpbox2",
+        ".cmp-root", "#consent_blackbar", "#iubenda-cs-banner", ".osano-cm-window", "#termly-code-snippet-support",
+        "#hs-eu-cookie-confirmation", ".evidon-banner", "#gdpr-consent-tool-wrapper", "#cookie-banner", ".cookie-banner",
+    ]
+
+    /// Closes up the gaps blocked ads leave behind: empty ad slots that keep their
+    /// reserved height, and "Advertisement" / "Sponsored" captions left on their own.
+    /// Only touches elements that are clearly ads (by name) or that contain nothing but
+    /// an ad label — never anything with real content in it.
+    static let collapseAdSpace = WKUserScript(source: #"""
+    (function () {
+      if (window.__hushCollapse) return; window.__hushCollapse = true;
+      var AD_NAME = /(^|[\s_-])(ad|ads|advert|adverts|advertisement|advertising|adslot|adunit|adbox|adsbox|adcontainer|adwrapper|adholder|adspace|adzone|adblock-placeholder|banner-ad)([\s_-]|\d|$)/i;
+      var LABEL = /^\s*(advertisement|advertisements|advertising|ad|ads|sponsored|sponsored content|promoted|paid content|anzeige|werbung|publicit[ée]|publicidad|pubblicit[àa]|reclame|advertentie)\s*$/i;
+
+      function hide(el) {
+        if (!el || el === document.body || el === document.documentElement || el.dataset.hushCollapsed) return;
+        el.dataset.hushCollapsed = '1';
+        el.style.setProperty('display', 'none', 'important');
+      }
+      function ownText(el) {
+        return (el.innerText || '').replace(/\s+/g, ' ').trim();
+      }
+      // "Real content": visible text that isn't just an ad label, or a loaded image/video.
+      function hasRealContent(el) {
+        var text = ownText(el);
+        if (text && !LABEL.test(text) && text.length > 0) {
+          if (text.length > 160) return true;
+          var stripped = text.replace(/advertisement|advertising|sponsored|ads?\b|close|report( this)? ad|skip/gi, '').trim();
+          if (stripped.length > 2) return true;
+        }
+        var media = el.querySelectorAll('img, video, picture, canvas');
+        for (var i = 0; i < media.length; i++) {
+          var m = media[i], r = m.getBoundingClientRect();
+          if (r.width > 40 && r.height > 40 && !(m.tagName === 'IMG' && m.naturalWidth === 0)) return true;
+        }
+        return false;
+      }
+      function isAdNamed(el) {
+        var name = (typeof el.className === 'string' ? el.className : '') + ' ' + (el.id || '');
+        return AD_NAME.test(name) || el.hasAttribute('data-ad') || el.hasAttribute('data-ad-slot') ||
+               el.hasAttribute('data-adunit') || el.hasAttribute('data-google-query-id') ||
+               (el.id || '').indexOf('google_ads') === 0 || (el.id || '').indexOf('div-gpt-ad') === 0;
+      }
+
+      // Standard ad-slot heights (IAB sizes). An empty box reserving exactly one of these,
+      // on a page where Hush blocked ads, is almost certainly a dead ad slot.
+      var AD_HEIGHTS = [50, 60, 90, 100, 250, 280, 600];
+      function isDeadSlot(el) {
+        var cs = getComputedStyle(el);
+        var reserved = Math.round(parseFloat(cs.minHeight) || 0);
+        if (AD_HEIGHTS.indexOf(reserved) < 0) return false;
+        if (el.querySelector('a[href], button, input, select, textarea, video, canvas, svg')) return false;
+        return !hasRealContent(el);
+      }
+      function sweepDeadSlots() {
+        if (!window.__hushAdsBlocked) return;
+        var boxes = document.querySelectorAll('div, section, aside');
+        for (var i = 0; i < boxes.length; i++) {
+          var el = boxes[i];
+          if (!el.dataset.hushCollapsed && el.offsetParent !== null && isDeadSlot(el)) hide(el);
+        }
+      }
+      window.__hushSweep = function () { sweep(); sweepDeadSlots(); };
+
+      function sweep() {
+        // 1. Containers named as ads that now hold nothing real (blocked or never filled).
+        var candidates = document.querySelectorAll('[class*="ad" i], [id*="ad" i], [data-ad], [data-ad-slot], [data-adunit], [data-google-query-id]');
+        for (var i = 0; i < candidates.length; i++) {
+          var el = candidates[i];
+          if (el.dataset.hushCollapsed || !isAdNamed(el)) continue;
+          if (!hasRealContent(el)) hide(el);
+        }
+        // 2. Lone "Advertisement" captions, plus the empty wrapper around them.
+        var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+          acceptNode: function (n) { return LABEL.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP; }
+        });
+        var labels = [];
+        while (walker.nextNode()) labels.push(walker.currentNode.parentElement);
+        labels.forEach(function (label) {
+          if (!label || label.dataset.hushCollapsed) return;
+          // Climb to the largest ancestor (max 4 levels) that still holds nothing but the label.
+          var target = label, node = label;
+          for (var depth = 0; depth < 4 && node.parentElement && node.parentElement !== document.body; depth++) {
+            node = node.parentElement;
+            if (hasRealContent(node)) break;
+            target = node;
+          }
+          if (!hasRealContent(target)) hide(target);
+        });
+      }
+
+      var timer = null;
+      function schedule() { clearTimeout(timer); timer = setTimeout(sweep, 250); }
+      document.addEventListener('DOMContentLoaded', schedule);
+      window.addEventListener('load', function () {
+        schedule();
+        setTimeout(window.__hushSweep, 1500);
+        setTimeout(window.__hushSweep, 5000);
+      });
+      document.addEventListener('DOMContentLoaded', function () {
+        new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+      });
+    })();
+    """#, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+
+    /// Hides common cookie-consent pop-ups and un-freezes page scrolling they lock.
+    static let hideCookieBanners: WKUserScript = {
+        let selectors = cookieBannerSelectors.joined(separator: ",")
+        let source = """
+        (function(){
+          var sel = \(String(reflecting: selectors));
+          function inject(){
+            var root = document.head || document.documentElement; if (!root) return false;
+            var s = document.createElement('style'); s.id = 'hush-cookie-banners';
+            s.textContent = sel + '{display:none!important;visibility:hidden!important}';
+            root.appendChild(s); return true;
+          }
+          if (!inject()) document.addEventListener('readystatechange', inject, {once:true});
+          function unlock(){
+            if (!document.querySelector(sel)) return;
+            [document.documentElement, document.body].forEach(function(el){
+              if (el && getComputedStyle(el).overflow === 'hidden') el.style.setProperty('overflow','auto','important');
+            });
+          }
+          document.addEventListener('DOMContentLoaded', unlock);
+          setTimeout(unlock, 1500); setTimeout(unlock, 4000);
+        })();
+        """
+        return WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+    }()
+}
+
+// MARK: - Statistics
+
+/// Running totals of what Hush has blocked, kept across launches.
+final class BlockStats: ObservableObject {
+    static let shared = BlockStats()
+
+    @Published private(set) var ads: Int
+    @Published private(set) var trackers: Int
+    @Published private(set) var fromLists: Int
+    @Published private(set) var since: Date
+    private var saveScheduled = false
+
+    var total: Int { ads + trackers + fromLists }
+
+    private init() {
+        let d = UserDefaults.standard
+        ads = d.integer(forKey: "stats.ads")
+        trackers = d.integer(forKey: "stats.trackers")
+        fromLists = d.integer(forKey: "stats.lists")
+        if let date = d.object(forKey: "stats.since") as? Date {
+            since = date
+        } else {
+            since = Date()
+            d.set(since, forKey: "stats.since")
+        }
+    }
+
+    func record(_ identifier: String) {
+        switch BuiltInRules.category(of: identifier) {
+        case .ads: ads += 1
+        case .trackers: trackers += 1
+        case .lists: fromLists += 1
+        case .other: return
+        }
+        scheduleSave()
+    }
+
+    func reset() {
+        ads = 0; trackers = 0; fromLists = 0; since = Date()
+        save()
+    }
+
+    private func scheduleSave() {
+        guard !saveScheduled else { return }
+        saveScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            self?.saveScheduled = false
+            self?.save()
+        }
+    }
+
+    func save() {
+        let d = UserDefaults.standard
+        d.set(ads, forKey: "stats.ads")
+        d.set(trackers, forKey: "stats.trackers")
+        d.set(fromLists, forKey: "stats.lists")
+        d.set(since, forKey: "stats.since")
+    }
+}

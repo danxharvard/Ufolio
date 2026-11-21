@@ -251,23 +251,42 @@ actor FaviconCache {
 struct StartPage: View {
     @ObservedObject var model: BrowserModel
     @ObservedObject private var store = BookmarkStore.shared
+    @ObservedObject private var weather = LocalWeather.shared
     @Environment(\.colorScheme) private var scheme
+    @AppStorage(Prefs.startBackground) private var backgroundStyle = StartBackground.twilight.rawValue
+    @AppStorage(Prefs.startGreeting) private var showGreeting = true
+    @AppStorage(Prefs.startBookmarks) private var showBookmarks = true
+    @AppStorage(Prefs.startPageWeather) private var showWeather = false
 
     private let columns = [GridItem(.adaptive(minimum: 96, maximum: 110), spacing: 18)]
 
     var body: some View {
         ZStack {
-            background
+            StartBackgroundView(style: StartBackground(rawValue: backgroundStyle) ?? .twilight)
             VStack(spacing: 34) {
-                VStack(spacing: 6) {
+                VStack(spacing: 8) {
                     Text("Hush")
                         .font(.system(size: 54, weight: .thin, design: .rounded))
                         .tracking(2)
-                    Text(greeting)
+                    if showGreeting || (showWeather && weather.temperature != nil) {
+                        HStack(spacing: 8) {
+                            if showGreeting { Text(greeting) }
+                            if showWeather, let temperature = weather.temperature {
+                                if showGreeting { Text("·").foregroundStyle(.tertiary) }
+                                Image(systemName: weather.symbol)
+                                    .symbolRenderingMode(.multicolor)
+                                Text("\(temperature)°")
+                                if let city = weather.city {
+                                    Text(city)
+                                }
+                            }
+                        }
                         .font(.system(size: 14, weight: .regular, design: .rounded))
                         .foregroundStyle(.secondary)
+                        .transition(.opacity)
+                    }
                 }
-                if !store.items.isEmpty {
+                if showBookmarks && !store.items.isEmpty {
                     LazyVGrid(columns: columns, spacing: 18) {
                         ForEach(store.items) { bookmark in
                             StartTile(bookmark: bookmark) {
@@ -280,15 +299,10 @@ struct StartPage: View {
             }
             .padding(40)
             .offset(y: -30)
+            .animation(.easeOut(duration: 0.3), value: weather.temperature)
         }
-    }
-
-    private var background: some View {
-        LinearGradient(
-            colors: scheme == .dark
-                ? [Color(red: 0.09, green: 0.09, blue: 0.13), Color(red: 0.13, green: 0.11, blue: 0.19)]
-                : [Color(red: 0.98, green: 0.97, blue: 1.0), Color(red: 0.93, green: 0.93, blue: 0.98)],
-            startPoint: .top, endPoint: .bottom)
+        .onAppear { weather.refreshIfNeeded() }
+        .onChange(of: showWeather) { on in if on { weather.request() } }
     }
 
     private var greeting: String {
@@ -298,6 +312,53 @@ struct StartPage: View {
         case 12..<18: return "Good afternoon"
         default: return "Good evening"
         }
+    }
+}
+
+/// The start page's backdrop: a soft twilight gradient, slow-drifting aurora, or plain.
+struct StartBackgroundView: View {
+    let style: StartBackground
+    @Environment(\.colorScheme) private var scheme
+    @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
+    @State private var drift = false
+
+    var body: some View {
+        switch style {
+        case .plain:
+            Color(nsColor: .windowBackgroundColor)
+        case .twilight:
+            LinearGradient(
+                colors: scheme == .dark
+                    ? [Color(red: 0.09, green: 0.09, blue: 0.13), Color(red: 0.13, green: 0.11, blue: 0.19)]
+                    : [Color(red: 0.98, green: 0.97, blue: 1.0), Color(red: 0.93, green: 0.93, blue: 0.98)],
+                startPoint: .top, endPoint: .bottom)
+        case .aurora:
+            ZStack {
+                (scheme == .dark ? Color(red: 0.07, green: 0.07, blue: 0.11) : Color(red: 0.97, green: 0.97, blue: 0.99))
+                GeometryReader { geo in
+                    let w = geo.size.width, h = geo.size.height
+                    ZStack {
+                        blob(Color(red: 0.45, green: 0.35, blue: 0.95), size: w * 0.55)
+                            .offset(x: drift ? -w * 0.18 : -w * 0.25, y: drift ? -h * 0.20 : -h * 0.12)
+                        blob(Color(red: 0.15, green: 0.65, blue: 0.85), size: w * 0.45)
+                            .offset(x: drift ? w * 0.22 : w * 0.15, y: drift ? h * 0.05 : -h * 0.08)
+                        blob(Color(red: 0.95, green: 0.45, blue: 0.65), size: w * 0.40)
+                            .offset(x: drift ? -w * 0.02 : w * 0.06, y: drift ? h * 0.28 : h * 0.20)
+                    }
+                    .frame(width: w, height: h)
+                }
+                .blur(radius: 90)
+                .opacity(scheme == .dark ? 0.55 : 0.35)
+            }
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 14).repeatForever(autoreverses: true)) { drift = true }
+            }
+        }
+    }
+
+    private func blob(_ color: Color, size: CGFloat) -> some View {
+        Circle().fill(color).frame(width: size, height: size)
     }
 }
 

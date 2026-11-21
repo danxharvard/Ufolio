@@ -5,10 +5,18 @@ import AppKit
 struct HushApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @AppStorage(Prefs.appearance) private var appearance = AppearanceMode.system.rawValue
+    @AppStorage(Prefs.accent) private var accent = AccentChoice.system.rawValue
+    @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
+
+    init() {
+        Prefs.register()
+    }
 
     var body: some Scene {
         WindowGroup {
             BrowserWindow()
+                .accentColor(AccentChoice(rawValue: accent)?.color)
+                .transaction { if reduceMotion { $0.animation = nil } }
                 .onAppear { AppearanceMode.apply(appearance) }
                 .onChange(of: appearance) { AppearanceMode.apply($0) }
         }
@@ -16,6 +24,11 @@ struct HushApp: App {
         .windowToolbarStyle(.unified(showsTitle: false))
         .defaultSize(width: 1280, height: 820)
         .commands { HushCommands() }
+
+        Settings {
+            SettingsView()
+                .transaction { if reduceMotion { $0.animation = nil } }
+        }
     }
 }
 
@@ -25,35 +38,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSWindow.allowsAutomaticWindowTabbing = false
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        BlockStats.shared.save()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        AdBlocker.shared.prepare()
-    }
-}
-
-enum Prefs {
-    static let appearance = "appearance"
-    static let showBookmarkBar = "showBookmarkBar"
-    static let adBlockEnabled = "adBlockEnabled"
-}
-
-enum AppearanceMode: String, CaseIterable, Identifiable {
-    case system, light, dark
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .system: return "Match System"
-        case .light: return "Day"
-        case .dark: return "Night"
-        }
-    }
-
-    static func apply(_ raw: String) {
-        switch AppearanceMode(rawValue: raw) ?? .system {
-        case .system: NSApp.appearance = nil
-        case .light: NSApp.appearance = NSAppearance(named: .aqua)
-        case .dark: NSApp.appearance = NSAppearance(named: .darkAqua)
-        }
+        ContentBlocker.shared.prepare()
+        Updater.shared.start()
     }
 }
 
@@ -66,6 +57,13 @@ struct HushCommands: Commands {
     @AppStorage(Prefs.appearance) private var appearance = AppearanceMode.system.rawValue
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") {
+                SettingsOpener.open(tab: .updates)
+                Task { await Updater.shared.check(userInitiated: true) }
+            }
+        }
+
         CommandGroup(after: .newItem) {
             Button("New Tab") { browser?.newTab(focus: true) }
                 .keyboardShortcut("t")
@@ -93,7 +91,7 @@ struct HushCommands: Commands {
             Divider()
             Toggle("Show Bookmarks Bar", isOn: $showBookmarkBar)
                 .keyboardShortcut("b", modifiers: [.command, .shift])
-            Toggle("Block Ads and Trackers", isOn: $adBlockEnabled)
+            Toggle("Block Ads", isOn: $adBlockEnabled)
             Picker("Appearance", selection: $appearance) {
                 ForEach(AppearanceMode.allCases) { Text($0.label).tag($0.rawValue) }
             }

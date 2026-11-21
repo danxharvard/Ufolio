@@ -21,9 +21,37 @@ final class BrowserModel: ObservableObject {
         return models.first
     }
 
+    private static var didRestoreSession = false
+    private var sessionSave: DispatchWorkItem?
+
     init() {
         BrowserModel.all.add(self)
-        newTab(focus: true)
+        // The first window after launch can bring back last time's tabs.
+        if !Self.didRestoreSession,
+           LaunchBehavior(rawValue: Prefs.string(Prefs.launchBehavior)) == .restore,
+           let saved = UserDefaults.standard.stringArray(forKey: "lastSession"), !saved.isEmpty {
+            Self.didRestoreSession = true
+            for address in saved {
+                if let url = URL(string: address) { newTab(url: url) }
+            }
+            selectedID = tabs.first?.id
+        }
+        Self.didRestoreSession = true
+        if tabs.isEmpty { newTab(focus: true) }
+    }
+
+    /// Remembers this window's open pages (for "Tabs from last time").
+    func scheduleSessionSave() {
+        sessionSave?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            let urls = self.tabs.compactMap { $0.url?.absoluteString }
+            // Closing the last tab closes the window; keep that window's pages for next launch.
+            guard !urls.isEmpty else { return }
+            UserDefaults.standard.set(urls, forKey: "lastSession")
+        }
+        sessionSave = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
     }
 
     var selectedTab: BrowserTab? {
@@ -40,8 +68,10 @@ final class BrowserModel: ObservableObject {
             tabs.append(tab)
         }
         if select { selectedID = tab.id }
-        if let url { tab.load(url) }
-        if focus { focusAddressBar() }
+        // A plain new tab opens the homepage if one is set in Settings.
+        let page = url ?? (configuration == nil ? NewTabPage.url : nil)
+        if let page { tab.load(page) }
+        if focus && page == nil { focusAddressBar() }
         return tab
     }
 
@@ -50,6 +80,7 @@ final class BrowserModel: ObservableObject {
         let wasSelected = tab.id == selectedTab?.id
         tab.tearDown()
         tabs.remove(at: index)
+        scheduleSessionSave()
         if tabs.isEmpty {
             (window ?? NSApp.keyWindow)?.performClose(nil)
             return

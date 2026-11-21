@@ -61,7 +61,7 @@ final class SuggestionsModel: ObservableObject {
         task = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 90_000_000) // wait for a pause in typing
             guard !Task.isCancelled else { return }
-            let remote = await Self.fetchGoogle(q)
+            let remote = Prefs.bool(Prefs.searchSuggestions) ? await Self.fetchSuggestions(q) : []
             guard !Task.isCancelled else { return }
             guard let self, self.query == q, self.active else { return }
             let localTexts = Set(local.map { $0.text.lowercased() })
@@ -89,12 +89,9 @@ final class SuggestionsModel: ObservableObject {
         return result
     }
 
-    /// Google's public autocomplete endpoint (the one browsers use for suggestions).
-    private static func fetchGoogle(_ q: String) async -> [String] {
-        var components = URLComponents(string: "https://suggestqueries.google.com/complete/search")!
-        components.queryItems = [URLQueryItem(name: "client", value: "firefox"),
-                                 URLQueryItem(name: "q", value: q)]
-        guard let url = components.url else { return [] }
+    /// The chosen search engine's public suggestion endpoint.
+    private static func fetchSuggestions(_ q: String) async -> [String] {
+        guard let url = SearchEngine.current.suggestionURL(q) else { return [] }
         var request = URLRequest(url: url)
         request.timeoutInterval = 3
         guard let (data, _) = try? await URLSession.shared.data(for: request),

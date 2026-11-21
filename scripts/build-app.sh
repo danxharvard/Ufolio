@@ -1,7 +1,7 @@
 #!/bin/bash
 # Builds "Hush Browser.app" (Intel + Apple Silicon) and a drag-to-install DMG.
 #
-#   ./scripts/build-app.sh            → build/Hush Browser.app and build/HushBrowser-<version>.dmg
+#   ./scripts/build-app.sh            → build/Hush Browser.app, HushBrowser-<version>.zip (for updates) and .dmg
 #   ./scripts/build-app.sh --no-dmg   → just the app
 #
 # Works with Apple's Command Line Tools; Xcode is not required.
@@ -41,6 +41,12 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 # Free "ad-hoc" signature: needed for Apple Silicon Macs to open the app at all.
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep "$APP"
+
+# The zip is what installed copies download when they update themselves.
+ZIP="$BUILD/HushBrowser-$VERSION.zip"
+rm -f "$ZIP"
+ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
+echo "✓ $ZIP ($(du -h "$ZIP" | cut -f1))"
 
 if [ "${1:-}" != "--no-dmg" ]; then
   echo "  making installer disk image"

@@ -8,6 +8,8 @@ struct AddressBar: View {
     @ObservedObject var tab: BrowserTab
     @ObservedObject var suggestions: SuggestionsModel
     @ObservedObject private var bookmarks = BookmarkStore.shared
+    @AppStorage(Prefs.showFullAddress) private var showFullAddress = false
+    @AppStorage(Prefs.searchEngine) private var engine = SearchEngine.google.rawValue
     let onGo: (String) -> Void
 
     @State private var text = ""
@@ -16,6 +18,7 @@ struct AddressBar: View {
 
     private var displayText: String {
         guard let url = tab.url else { return "" }
+        if showFullAddress { return url.absoluteString }
         return url.host?.strippingWWW ?? url.absoluteString
     }
 
@@ -33,7 +36,7 @@ struct AddressBar: View {
             AddressTextField(
                 text: $text,
                 isEditing: $isEditing,
-                placeholder: "Search Google or enter a website",
+                placeholder: "Search \((SearchEngine(rawValue: engine) ?? .google).name) or enter a website",
                 centered: !isEditing && !displayText.isEmpty,
                 focusToken: model.addressFocusToken,
                 onBeginEditing: {
@@ -90,6 +93,7 @@ struct AddressBar: View {
         .animation(.easeOut(duration: 0.12), value: hovering)
         .onAppear { text = displayText }
         .onChange(of: tab.url) { _ in if !isEditing { text = displayText } }
+        .onChange(of: showFullAddress) { _ in if !isEditing { text = displayText } }
     }
 
     private var leadingSymbol: String {
@@ -226,9 +230,7 @@ enum URLResolver {
     }
 
     static func searchURL(for query: String) -> URL? {
-        var components = URLComponents(string: "https://www.google.com/search")
-        components?.queryItems = [URLQueryItem(name: "q", value: query)]
-        return components?.url
+        SearchEngine.current.searchURL(query)
     }
 
     static func looksLikeAddress(_ s: String) -> Bool {

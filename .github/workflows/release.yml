@@ -1,0 +1,42 @@
+# Publishes a Hush release whenever a version tag (e.g. v0.2.0) is pushed.
+# Installed copies of Hush find it within a few hours, or straight away via
+# Hush Browser › Check for Updates…
+#
+# To release: put the new version in the VERSION file, commit, then
+#   git tag v0.2.0 && git push origin main v0.2.0
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches VERSION
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          FILE="$(cat VERSION)"
+          if [ "$TAG" != "$FILE" ]; then
+            echo "Tag v$TAG doesn't match VERSION ($FILE)"; exit 1
+          fi
+
+      - name: Build app, update zip and installer
+        run: ./scripts/build-app.sh
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="$(cat VERSION)"
+          gh release create "v$V" \
+            "build/HushBrowser-$V.dmg" \
+            "build/HushBrowser-$V.zip" \
+            --title "Hush Browser $V" \
+            --generate-notes
