@@ -370,61 +370,127 @@ private extension View {
     }
 }
 
-/// The Hush Guard illustration: a twilight sky where the Hush moon quietly swallows tracker
-/// dots (one per thing blocked, up to six). When Hush Guard is off the moon is only an outline
-/// and the trackers roam free.
+/// The Hush Guard illustration: no background at all, just a lit, cut-out Hush moon with
+/// stars drifting past and tracker beads vanishing into its curve. When Hush Guard is off
+/// it turns silver-grey and the trackers roam free.
 struct GuardIllustration: View {
     let on: Bool
     let blocked: Int
     @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
 
-    private let starSpots: [(CGFloat, CGFloat, CGFloat)] = [
-        (0.08, 0.18, 2.2), (0.18, 0.62, 1.6), (0.30, 0.22, 1.4), (0.72, 0.16, 2.0), (0.86, 0.58, 1.8),
-        (0.93, 0.26, 1.3), (0.60, 0.78, 1.4), (0.12, 0.86, 1.2), (0.44, 0.10, 1.6), (0.80, 0.84, 1.5),
-    ]
-
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
             let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
             GeometryReader { geo in
-                let w = geo.size.width, h = geo.size.height
-                let moonCenter = CGPoint(x: w * 0.5, y: h * 0.52)
-                ZStack {
-                    LinearGradient(colors: on
-                                   ? [Color(red: 0.20, green: 0.15, blue: 0.45), Color(red: 0.36, green: 0.26, blue: 0.72), Color(red: 0.55, green: 0.42, blue: 0.92)]
-                                   : [Color(red: 0.22, green: 0.22, blue: 0.27), Color(red: 0.32, green: 0.32, blue: 0.38)],
-                                   startPoint: .bottom, endPoint: .top)
-                    // A soft glow behind the moon.
-                    RadialGradient(colors: [Color.white.opacity(on ? 0.28 : 0.10), .clear], center: .init(x: 0.5, y: 0.52),
-                                   startRadius: 0, endRadius: h * 0.75)
-                    // Twinkling stars.
-                    ForEach(Array(starSpots.enumerated()), id: \.offset) { i, star in
-                        let twinkle = 0.45 + 0.55 * (sin(t * (0.8 + Double(i) * 0.17) + Double(i)) + 1) / 2
-                        Circle().fill(Color.white.opacity(twinkle * (on ? 0.9 : 0.5)))
-                            .frame(width: star.2 * 2, height: star.2 * 2)
-                            .position(x: star.0 * w, y: star.1 * h)
-                    }
-                    // Trackers: drifting into the moon and fading (on), or roaming free (off).
-                    ForEach(0..<max(on ? min(blocked, 6) : 4, 0), id: \.self) { i in
-                        let phase = (t / (on ? 3.2 : 9) + Double(i) / 6).truncatingRemainder(dividingBy: 1)
-                        let angle = Double(i) * 1.05 + 0.6
-                        let reach = on ? (1 - phase) : 0.8 + 0.15 * sin(t * 0.6 + Double(i))
-                        let x = moonCenter.x + CGFloat(cos(angle + (on ? 0 : t * 0.25))) * w * 0.42 * CGFloat(reach)
-                        let y = moonCenter.y + CGFloat(sin(angle + (on ? 0 : t * 0.25))) * h * 0.40 * CGFloat(reach)
-                        Circle()
-                            .fill(on ? Color.white : Color(red: 1, green: 0.55, blue: 0.45))
-                            .frame(width: 7, height: 7)
-                            .opacity(on ? (phase < 0.85 ? 0.85 : (1 - phase) / 0.15 * 0.85) * (1 - phase * 0.4) : 0.8)
-                            .position(x: x, y: y)
-                    }
-                    HushMark(color: on ? .white : Color.white.opacity(0.6), eclipse: 1, showStars: false, outlined: !on)
-                        .frame(width: h * 0.62, height: h * 0.62)
-                        .position(moonCenter)
-                        .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
-                }
+                GuardScene(on: on, blocked: blocked, t: t, size: geo.size)
             }
         }
         .animation(.easeInOut(duration: 0.5), value: on)
+    }
+}
+
+private struct GuardScene: View {
+    let on: Bool
+    let blocked: Int
+    let t: Double
+    let size: CGSize
+
+    var body: some View {
+        let moonSize = size.height * 0.62
+        let center = CGPoint(x: size.width * 0.5, y: size.height * 0.52)
+        ZStack {
+            GuardStars(on: on, t: t, size: size)
+            GuardBeads(on: on, blocked: blocked, t: t, center: center, moonSize: moonSize)
+            HushMoon(colors: on
+                     ? [Color(red: 0.80, green: 0.72, blue: 1.0), Color(red: 0.40, green: 0.28, blue: 0.85)]
+                     : [Color(white: 0.88), Color(white: 0.52)])
+                .frame(width: moonSize, height: moonSize)
+                .shadow(color: (on ? Color(red: 0.25, green: 0.15, blue: 0.65) : .black).opacity(0.35), radius: 12, y: 7)
+                .position(center)
+        }
+    }
+}
+
+/// Stars that slowly drift across and twinkle.
+private struct GuardStars: View {
+    let on: Bool
+    let t: Double
+    let size: CGSize
+    private let seeds: [(x: Double, y: Double, r: Double, speed: Double)] = (0..<14).map { i in
+        let d = Double(i)
+        return (x: (d * 0.137).truncatingRemainder(dividingBy: 1), y: (d * 0.311 + 0.07).truncatingRemainder(dividingBy: 1),
+                r: 0.8 + (d * 0.53).truncatingRemainder(dividingBy: 1.4), speed: 0.006 + (d * 0.0017).truncatingRemainder(dividingBy: 0.01))
+    }
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<seeds.count, id: \.self) { i in
+                star(i)
+            }
+        }
+    }
+
+    private func star(_ i: Int) -> some View {
+        let seed = seeds[i]
+        let x = (seed.x + t * seed.speed).truncatingRemainder(dividingBy: 1)
+        let twinkle = 0.4 + 0.6 * (sin(t * (0.9 + Double(i) * 0.19) + Double(i)) + 1) / 2
+        // Stars fade near the edges so they melt into the panel too.
+        let edge = min(x, 1 - x, seed.y, 1 - seed.y) * 4
+        return Circle()
+            .fill(on ? Color(red: 0.62, green: 0.52, blue: 1.0) : Color.secondary)
+            .frame(width: seed.r * 2, height: seed.r * 2)
+            .opacity(twinkle * min(1, edge) * (on ? 0.95 : 0.5))
+            .position(x: CGFloat(x) * size.width, y: CGFloat(seed.y) * size.height)
+    }
+}
+
+/// Tracker beads drifting into the moon's curve and fading (on), or roaming free (off).
+private struct GuardBeads: View {
+    let on: Bool
+    let blocked: Int
+    let t: Double
+    let center: CGPoint
+    let moonSize: CGFloat
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<count, id: \.self) { i in
+                bead(i)
+            }
+        }
+    }
+
+    private var count: Int { on ? min(max(blocked, 1), 6) : 4 }
+
+    private func bead(_ i: Int) -> some View {
+        let index = Double(i)
+        let period: Double = on ? 3.4 : 10
+        let phase = (t / period + index / 6).truncatingRemainder(dividingBy: 1)
+        let angle = index * 1.1 - 0.4 + (on ? 0 : t * 0.22)
+        let reach: Double = on ? (1 - phase) : 0.85 + 0.12 * sin(t * 0.7 + index)
+        let target = CGPoint(x: center.x + moonSize * 0.18, y: center.y - moonSize * 0.14)
+        let x = target.x + CGFloat(cos(angle) * reach) * moonSize * 0.95
+        let y = target.y + CGFloat(sin(angle) * reach) * moonSize * 0.62
+        let diameter: CGFloat = on ? 9 - CGFloat(phase) * 3 : 9
+        let opacity: Double = on ? min(1, (1 - phase) * 2.2) : 0.95
+        return TrackerBead(color: on ? Color(red: 0.72, green: 0.64, blue: 1.0) : Color(red: 1.0, green: 0.55, blue: 0.40),
+                           size: diameter)
+            .opacity(opacity)
+            .position(x: x, y: y)
+    }
+}
+
+/// A small glossy sphere.
+private struct TrackerBead: View {
+    let color: Color
+    let size: CGFloat
+
+    var body: some View {
+        Circle()
+            .fill(RadialGradient(colors: [.white.opacity(0.95), color, color.opacity(0.8)],
+                                 center: .init(x: 0.35, y: 0.3), startRadius: 0, endRadius: size * 0.7))
+            .frame(width: size, height: size)
+            .shadow(color: color.opacity(0.5), radius: 3)
     }
 }
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.2
+
+**Improved**
+- The Hush Guard illustration is now free-standing with no background: a softly lit Hush moon,
+  stars drifting past and tracker beads sinking into its curve, with only the browser behind it.
+- The Hush moon is drawn as one clean shape everywhere (no faint seams).
+
 ## 0.7.1
 
 **Fixed**
