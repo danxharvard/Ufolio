@@ -21,7 +21,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general: return "gearshape.fill"
         case .appearance: return "paintbrush.fill"
-        case .adBlocker: return "shield.lefthalf.filled"
+        case .adBlocker: return "hush"
         case .privacy: return "hand.raised.fill"
         case .passwords: return "key.fill"
         case .location: return "location.fill"
@@ -108,9 +108,16 @@ struct IconTile: View {
     var size: CGFloat = 22
 
     var body: some View {
-        Image(systemName: symbol)
-            .font(.system(size: size * 0.52, weight: .semibold))
-            .foregroundStyle(.white)
+        Group {
+            if symbol == "hush" {
+                // Hush Guard uses the Hush mark itself.
+                HushMark(showStars: false).padding(size * 0.16)
+            } else {
+                Image(systemName: symbol)
+                    .font(.system(size: size * 0.52, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+        }
             .frame(width: size, height: size)
             .background(
                 RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
@@ -769,17 +776,7 @@ private struct StatsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .center, spacing: 14) {
-                Image(systemName: "shield.lefthalf.filled")
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: 50, height: 50)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(LinearGradient(colors: [Color(red: 0.42, green: 0.32, blue: 0.95),
-                                                          Color(red: 0.25, green: 0.55, blue: 1)],
-                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
-                    )
-                    .shadow(color: Color(red: 0.3, green: 0.4, blue: 1).opacity(0.35), radius: 6, y: 3)
+                HushLogoTile(size: 50)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(stats.total.formatted())
                         .font(.system(size: 30, weight: .semibold, design: .rounded))

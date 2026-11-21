@@ -49,10 +49,7 @@ struct WelcomeView: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 14) {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
-                    .frame(width: 96, height: 96)
-                    .shadow(color: Color(red: 0.4, green: 0.3, blue: 0.9).opacity(0.35), radius: 18, y: 8)
+                AnimatedHushLogo(size: 96)
                     .scaleEffect(appeared ? 1 : 0.85)
                     .opacity(appeared ? 1 : 0)
                 Text("Welcome to Hush")

@@ -24,32 +24,18 @@ struct StartPage: View {
             StartBackdrop(style: StartBackground(rawValue: backgroundStyle) ?? .twilight, translucent: translucent)
             ScrollView {
                 VStack(alignment: .leading, spacing: 46) {
-                    header
+                    header.riseIn(0)
                     if showClosed && !closed.tabs.isEmpty {
-                        RecentlyClosedSection(model: model, tabs: Array(closed.tabs.prefix(9)))
+                        RecentlyClosedSection(model: model, tabs: Array(closed.tabs.prefix(9))).riseIn(1)
                     }
                     if showFavourites && !bookmarks.items.isEmpty {
-                        StartSection(title: "Favourites") {
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92, maximum: 104), spacing: 14)],
-                                      alignment: .leading, spacing: 20) {
-                                ForEach(bookmarks.items) { bookmark in
-                                    FavouriteTile(bookmark: bookmark, model: model)
-                                }
-                            }
-                        }
+                        favourites.riseIn(2)
                     }
                     if !suggestions.isEmpty {
-                        StartSection(title: "Suggestions") {
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 158, maximum: 190), spacing: 16)],
-                                      alignment: .leading, spacing: 16) {
-                                ForEach(suggestions) { site in
-                                    SuggestionCard(site: site, model: model)
-                                }
-                            }
-                        }
+                        suggestionSection(suggestions).riseIn(3)
                     }
                     if showPrivacy {
-                        PrivacyReportSection()
+                        PrivacyReportSection().riseIn(4)
                     }
                 }
                 .frame(maxWidth: 940, alignment: .leading)
@@ -66,6 +52,8 @@ struct StartPage: View {
 
     private var header: some View {
         VStack(spacing: 8) {
+            AnimatedHushLogo(size: 54)
+                .padding(.bottom, 4)
             Text("Hush")
                 .font(.system(size: 50, weight: .thin, design: .rounded))
                 .tracking(2)
@@ -84,6 +72,28 @@ struct StartPage: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var favourites: some View {
+        StartSection(title: "Favourites") {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92, maximum: 104), spacing: 14)],
+                      alignment: .leading, spacing: 20) {
+                ForEach(bookmarks.items) { bookmark in
+                    FavouriteTile(bookmark: bookmark, model: model)
+                }
+            }
+        }
+    }
+
+    private func suggestionSection(_ suggestions: [FrequentSite]) -> some View {
+        StartSection(title: "Suggestions") {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 158, maximum: 190), spacing: 16)],
+                      alignment: .leading, spacing: 16) {
+                ForEach(suggestions) { site in
+                    SuggestionCard(site: site, model: model)
+                }
+            }
+        }
     }
 
     private var greeting: String {
@@ -322,11 +332,7 @@ private struct PrivacyReportSection: View {
         StartSection(title: "Privacy Report") {
             HStack(alignment: .top, spacing: 24) {
                 VStack(alignment: .leading, spacing: 18) {
-                    Image(systemName: "shield.lefthalf.filled")
-                        .font(.system(size: 44, weight: .medium))
-                        .foregroundStyle(LinearGradient(colors: [Color(red: 0.55, green: 0.45, blue: 1.0),
-                                                                 Color(red: 0.30, green: 0.55, blue: 1.0)],
-                                                        startPoint: .top, endPoint: .bottom))
+                    HushLogoTile(size: 52)
                     Text("Hush stops trackers from following you around the web.")
                         .font(.system(size: 17))
                         .fixedSize(horizontal: false, vertical: true)
@@ -512,4 +518,25 @@ private struct AuroraView: View {
             }
         }
     }
+}
+
+/// Sections float gently into place when a new tab opens (skipped with Reduce Motion).
+private struct RiseIn: ViewModifier {
+    let order: Int
+    @State private var shown = false
+    @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown || reduceMotion ? 1 : 0)
+            .offset(y: shown || reduceMotion ? 0 : 14)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.spring(response: 0.55, dampingFraction: 0.85).delay(0.05 + Double(order) * 0.06)) { shown = true }
+            }
+    }
+}
+
+private extension View {
+    func riseIn(_ order: Int) -> some View { modifier(RiseIn(order: order)) }
 }

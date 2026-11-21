@@ -49,9 +49,14 @@ func render(size: CGFloat) -> NSBitmapImageRep {
     moon.fill()
     NSGraphicsContext.restoreGraphicsState()
 
-    // A few small stars.
-    for (x, y, r) in [(690.0, 640.0, 16.0), (760.0, 540.0, 10.0), (640.0, 740.0, 8.0)] {
-        NSColor(white: 1, alpha: 0.9).setFill()
+    // The tracker the moon is swallowing: a dot fading into the crescent's curve ("Eclipse").
+    let tracker = NSRect(x: (648 - 38) * s, y: (612 - 38) * s, width: 76 * s, height: 76 * s)
+    NSGradient(colors: [NSColor(white: 1, alpha: 0.85), NSColor(white: 1, alpha: 0.12)])!
+        .draw(in: NSBezierPath(ovalIn: tracker), angle: 215)
+
+    // Two small stars.
+    for (x, y, r, a) in [(742.0, 742.0, 15.0, 0.9), (806.0, 650.0, 9.0, 0.7)] {
+        NSColor(white: 1, alpha: a).setFill()
         NSBezierPath(ovalIn: NSRect(x: (x - r) * s, y: (y - r) * s, width: 2 * r * s, height: 2 * r * s)).fill()
     }
 

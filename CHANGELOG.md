@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.0
+
+**New look**
+- The Hush logo, "Eclipse": a crescent moon quietly swallowing a tracker. New app icon, and the
+  logo now appears on the start page, the Privacy Report, the welcome screen, Settings and as the
+  Hush Guard button in the toolbar (dimmed when Hush Guard is off for a site).
+- The Hush Guard panel opens with an illustration: tracker dots drifting into the moon and
+  vanishing, one for each thing blocked; when Hush Guard is off, the trackers roam free.
+
+**Subtle animations**
+- The logo plays its eclipse on the welcome screen and start page.
+- The Hush Guard button gives a small pulse when something is blocked.
+- Start page sections float gently into place. All of this respects Reduce Motion.
+
+**Improved**
+- Hush remembers its window size and position between launches.
+
 ## 0.6.1
 
 **Fixed**

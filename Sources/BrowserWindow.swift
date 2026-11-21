@@ -58,7 +58,14 @@ struct BrowserWindow: View {
                     .onChange(of: geo.size.width) { model.windowWidth = $0 }
             }
         )
-        .background(WindowReader { model.window = $0 })
+        .background(WindowReader { window in
+            // Remember the window's size and position between launches.
+            if let window, model.window !== window {
+                window.setFrameUsingName("HushBrowserWindow")
+                window.setFrameAutosaveName("HushBrowserWindow")
+            }
+            model.window = window
+        })
         // The welcome screen and default-browser question are drawn inside the window,
         // over a dimmed backdrop (SwiftUI sheets could end up off-screen and lock the window).
         .overlay {
@@ -245,13 +252,33 @@ private struct ShieldsButton: View {
         return !blocker.isShieldsDown(host)
     }
 
+    @State private var hovering = false
+    @State private var pulse = false
+    @State private var lastPulse = Date.distantPast
+    @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
+
     var body: some View {
-        ToolbarIconButton(
-            symbol: shieldsUp ? "shield.lefthalf.filled" : "shield.slash",
-            help: "Hush Guard",
-            tint: shieldsUp ? .accentColor : nil
-        ) {
-            showing.toggle()
+        Button { showing.toggle() } label: {
+            HushMark(color: shieldsUp ? .accentColor : Color.primary.opacity(0.5), showStars: false, outlined: !shieldsUp)
+                .frame(width: 17, height: 17)
+                .scaleEffect(pulse ? 1.18 : 1)
+                .frame(width: 28, height: 26)
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.primary.opacity(hovering ? 0.08 : 0)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(shieldsUp ? "Hush Guard is on" : "Hush Guard is off for this site")
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
+        // A tiny "hush" pulse when something is blocked (at most once a second).
+        .onChange(of: tab.blockedOnPage) { count in
+            guard count > 0, !reduceMotion, Date().timeIntervalSince(lastPulse) > 1 else { return }
+            lastPulse = Date()
+            withAnimation(.spring(response: 0.18, dampingFraction: 0.5)) { pulse = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { pulse = false }
+            }
         }
         .overlay(alignment: .topTrailing) {
             if tab.blockedOnPage > 0 && shieldsUp {
@@ -279,55 +306,125 @@ private struct ShieldsPanel: View {
     @ObservedObject private var stats = BlockStats.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                Image(systemName: shieldsUp ? "shield.lefthalf.filled" : "shield.slash")
-                    .font(.system(size: 22))
-                    .foregroundStyle(shieldsUp ? Color.accentColor : Color.secondary)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(tab.host?.strippingWWW ?? "Hush Guard")
-                        .font(.system(size: 13, weight: .semibold))
-                    Text(shieldsUp ? "Hush Guard is on" : "Hush Guard is off for this site")
-                        .font(.system(size: 11))
+        VStack(spacing: 0) {
+            GuardIllustration(on: shieldsUp, blocked: tab.blockedOnPage)
+                .frame(height: 150)
+
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 10) {
+                    Favicon(url: tab.url, size: 22)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(tab.host?.strippingWWW ?? "Hush Guard")
+                            .font(.system(size: 13.5, weight: .semibold))
+                            .lineLimit(1)
+                        Text(shieldsUp ? "Hush Guard is on" : "Hush Guard is off for this site")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(shieldsUp ? Color.accentColor : Color.secondary)
+                    }
+                    Spacer()
+                    if let host = tab.host {
+                        Toggle("", isOn: Binding(
+                            get: { !ContentBlocker.shared.isShieldsDown(host) },
+                            set: { up in
+                                ContentBlocker.shared.setShields(up, for: host)
+                                tab.webView.reload()
+                            }))
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .help("Turn Hush Guard off if this site doesn’t work properly")
+                    }
+                }
+
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Text("\(tab.blockedOnPage)")
+                        .font(.system(size: 32, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .contentTransitionIfAvailable()
+                    Text(tab.blockedOnPage == 1 ? "ad or tracker hushed on this page" : "ads and trackers hushed on this page")
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
-                Spacer()
-                if let host = tab.host {
-                    Toggle("", isOn: Binding(
-                        get: { !ContentBlocker.shared.isShieldsDown(host) },
-                        set: { up in
-                            ContentBlocker.shared.setShields(up, for: host)
-                            tab.webView.reload()
-                        }))
-                    .toggleStyle(.switch)
-                    .labelsHidden()
-                    .help("Turn Hush Guard off if this site doesn’t work properly")
+
+                Divider()
+
+                HStack {
+                    Text("\(stats.total.formatted()) hushed in total")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Hush Guard Settings…") { SettingsOpener.open(tab: .adBlocker) }
+                        .buttonStyle(.link)
+                        .font(.system(size: 11.5))
                 }
             }
+            .padding(16)
+        }
+        .frame(width: 320)
+    }
+}
 
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("\(tab.blockedOnPage)")
-                    .font(.system(size: 30, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                Text(tab.blockedOnPage == 1 ? "ad or tracker blocked on this page" : "ads and trackers blocked on this page")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
+private extension View {
+    /// Rolling-number animation where macOS supports it.
+    @ViewBuilder func contentTransitionIfAvailable() -> some View {
+        if #available(macOS 14.0, *) { self.contentTransition(.numericText()) } else { self }
+    }
+}
 
-            Divider()
+/// The Hush Guard illustration: a twilight sky where the Hush moon quietly swallows tracker
+/// dots (one per thing blocked, up to six). When Hush Guard is off the moon is only an outline
+/// and the trackers roam free.
+struct GuardIllustration: View {
+    let on: Bool
+    let blocked: Int
+    @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
 
-            HStack {
-                Text("\(stats.total.formatted()) blocked in total")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Hush Guard Settings…") { SettingsOpener.open(tab: .adBlocker) }
-                    .buttonStyle(.link)
-                    .font(.system(size: 11.5))
+    private let starSpots: [(CGFloat, CGFloat, CGFloat)] = [
+        (0.08, 0.18, 2.2), (0.18, 0.62, 1.6), (0.30, 0.22, 1.4), (0.72, 0.16, 2.0), (0.86, 0.58, 1.8),
+        (0.93, 0.26, 1.3), (0.60, 0.78, 1.4), (0.12, 0.86, 1.2), (0.44, 0.10, 1.6), (0.80, 0.84, 1.5),
+    ]
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
+            let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
+            GeometryReader { geo in
+                let w = geo.size.width, h = geo.size.height
+                let moonCenter = CGPoint(x: w * 0.5, y: h * 0.52)
+                ZStack {
+                    LinearGradient(colors: on
+                                   ? [Color(red: 0.20, green: 0.15, blue: 0.45), Color(red: 0.36, green: 0.26, blue: 0.72), Color(red: 0.55, green: 0.42, blue: 0.92)]
+                                   : [Color(red: 0.22, green: 0.22, blue: 0.27), Color(red: 0.32, green: 0.32, blue: 0.38)],
+                                   startPoint: .bottom, endPoint: .top)
+                    // A soft glow behind the moon.
+                    RadialGradient(colors: [Color.white.opacity(on ? 0.28 : 0.10), .clear], center: .init(x: 0.5, y: 0.52),
+                                   startRadius: 0, endRadius: h * 0.75)
+                    // Twinkling stars.
+                    ForEach(Array(starSpots.enumerated()), id: \.offset) { i, star in
+                        let twinkle = 0.45 + 0.55 * (sin(t * (0.8 + Double(i) * 0.17) + Double(i)) + 1) / 2
+                        Circle().fill(Color.white.opacity(twinkle * (on ? 0.9 : 0.5)))
+                            .frame(width: star.2 * 2, height: star.2 * 2)
+                            .position(x: star.0 * w, y: star.1 * h)
+                    }
+                    // Trackers: drifting into the moon and fading (on), or roaming free (off).
+                    ForEach(0..<max(on ? min(blocked, 6) : 4, 0), id: \.self) { i in
+                        let phase = (t / (on ? 3.2 : 9) + Double(i) / 6).truncatingRemainder(dividingBy: 1)
+                        let angle = Double(i) * 1.05 + 0.6
+                        let reach = on ? (1 - phase) : 0.8 + 0.15 * sin(t * 0.6 + Double(i))
+                        let x = moonCenter.x + CGFloat(cos(angle + (on ? 0 : t * 0.25))) * w * 0.42 * CGFloat(reach)
+                        let y = moonCenter.y + CGFloat(sin(angle + (on ? 0 : t * 0.25))) * h * 0.40 * CGFloat(reach)
+                        Circle()
+                            .fill(on ? Color.white : Color(red: 1, green: 0.55, blue: 0.45))
+                            .frame(width: 7, height: 7)
+                            .opacity(on ? (phase < 0.85 ? 0.85 : (1 - phase) / 0.15 * 0.85) * (1 - phase * 0.4) : 0.8)
+                            .position(x: x, y: y)
+                    }
+                    HushMark(color: on ? .white : Color.white.opacity(0.6), eclipse: 1, showStars: false, outlined: !on)
+                        .frame(width: h * 0.62, height: h * 0.62)
+                        .position(moonCenter)
+                        .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+                }
             }
         }
-        .padding(16)
-        .frame(width: 300)
+        .animation(.easeInOut(duration: 0.5), value: on)
     }
 }
 
