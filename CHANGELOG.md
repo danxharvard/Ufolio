@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.16.0
+
+**New: Settings › Performance**
+- Five modes:
+  - **Automatic** (the default): Balanced when plugged in, Battery Saver on battery or in
+    Low Power Mode.
+  - **Performance:** up to 120 Hz scrolling and animation on ProMotion displays, and links
+    looked up before you click them.
+  - **Balanced:** fast and efficient, for every day.
+  - **Battery Saver:** background tabs slow down and sleep after 5 minutes, 3D graphics use
+    the energy-saving chip, and the start page stops animating.
+  - **Eco:** everything in Battery Saver, plus no autoplaying video and nothing playing in
+    background tabs, for the smallest energy use and carbon footprint.
+- **Memory:** see how much memory Hush and each tab use, live, and put heavy tabs to sleep with
+  one click.
+- **Free up memory automatically:** when your Mac runs low, background tabs go to sleep
+  straight away.
+- **Pause sound and video in background tabs**, if you'd like that in any mode.
+- **Your footprint:** a rough estimate of the data Hush Guard saved you this month.
+- Tab Sleep moved here from General.
+
 ## 0.15.0
 
 **New: Favourites suggestions**

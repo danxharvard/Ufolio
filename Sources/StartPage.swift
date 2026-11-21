@@ -461,6 +461,7 @@ struct StartBackgroundView: View {
     var translucent = false
     @Environment(\.colorScheme) private var scheme
     @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
+    @ObservedObject private var performance = PerformanceCenter.shared
 
     var body: some View {
         Group {
@@ -475,7 +476,7 @@ struct StartBackgroundView: View {
                     startPoint: .top, endPoint: .bottom)
                 .opacity(translucent ? 0.55 : 1)
             case .aurora:
-                AuroraView(dark: scheme == .dark, animate: !reduceMotion, translucent: translucent)
+                AuroraView(dark: scheme == .dark, animate: !reduceMotion && !performance.isPowerSaving, translucent: translucent)
             }
         }
         // A backdrop must never catch clicks or spill outside the page.

@@ -68,6 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         ContentBlocker.shared.prepare()
         ExtensionEvents.launch()
+        PerformanceCenter.shared.start()
         Updater.shared.start()
     }
 }

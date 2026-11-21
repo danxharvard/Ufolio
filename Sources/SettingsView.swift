@@ -2,13 +2,14 @@ import SwiftUI
 import WebKit
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, appearance, adBlocker, extensions, privacy, passwords, location, updates
+    case general, appearance, performance, adBlocker, extensions, privacy, passwords, location, updates
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .general: return "General"
         case .appearance: return "Appearance"
+        case .performance: return "Performance"
         case .adBlocker: return "Hush Guard"
         case .extensions: return "Extensions"
         case .privacy: return "Privacy & Security"
@@ -21,8 +22,9 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     /// Words that find this section in the Settings search.
     var keywords: String {
         switch self {
-        case .general: return "default browser homepage startup new tab window search engine suggestions history import downloads safe files tab sleep performance memory"
+        case .general: return "default browser homepage startup new tab window search engine suggestions history import downloads safe files favourites"
         case .appearance: return "theme dark light night day accent colour color start page background aurora twilight translucent motion animation zoom bookmarks bar tab bar address"
+        case .performance: return "performance speed fast power battery saver eco carbon energy green memory ram tab sleep graphics 120hz smooth frame rate video pause"
         case .adBlocker: return "ads ad blocker trackers block filter list easylist cookie banners collapse zapper hidden elements counter statistics"
         case .extensions: return "chrome extension extensions web store add-on plugin dark reader"
         case .privacy: return "cookies https tracking gpc fraud phishing look-alike clean links camera microphone pop-ups autoplay javascript website data clear"
@@ -36,6 +38,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general: return "gearshape.fill"
         case .appearance: return "paintbrush.fill"
+        case .performance: return "speedometer"
         case .adBlocker: return "hush"
         case .extensions: return "puzzlepiece.extension.fill"
         case .privacy: return "hand.raised.fill"
@@ -50,6 +53,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general: return [Color(white: 0.62), Color(white: 0.45)]
         case .appearance: return [Color(red: 0.30, green: 0.55, blue: 1.0), Color(red: 0.42, green: 0.32, blue: 0.95)]
+        case .performance: return [Color(red: 1.0, green: 0.45, blue: 0.35), Color(red: 0.90, green: 0.25, blue: 0.30)]
         case .adBlocker: return [Color(red: 0.55, green: 0.40, blue: 1.0), Color(red: 0.36, green: 0.26, blue: 0.86)]
         case .extensions: return [Color(red: 1.0, green: 0.62, blue: 0.25), Color(red: 0.95, green: 0.42, blue: 0.18)]
         case .privacy: return [Color(red: 0.25, green: 0.60, blue: 1.0), Color(red: 0.10, green: 0.42, blue: 0.95)]
@@ -127,6 +131,7 @@ struct SettingsView: View {
                     case .extensions: ExtensionSettings()
                     case .privacy: PrivacySettings()
                     case .passwords: PasswordSettings()
+                    case .performance: PerformanceSettings()
                     case .location: LocationSettings()
                     case .updates: UpdateSettings()
                     }
@@ -221,7 +226,7 @@ struct SafariLabeledStyle: LabeledContentStyle {
 }
 
 /// A section title with space above it, so sections breathe.
-private struct SectionTitle: View {
+struct SectionTitle: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
@@ -261,7 +266,7 @@ struct IconTile: View {
 }
 
 /// The large tile, title and description at the top of a settings section.
-private struct SettingsHeader: View {
+struct SettingsHeader: View {
     let tab: SettingsTab
     let subtitle: String
 
@@ -303,6 +308,8 @@ private struct DescribedToggle: View {
     private static let icons: [String: (String, [Color])] = [
         "Show search suggestions": ("magnifyingglass", blue),
         "Suggest favourites": ("star.fill", orange),
+        "Pause sound and video in background tabs": ("pause.circle.fill", green),
+        "Free up memory automatically": ("memorychip.fill", blue),
         "Open “safe” files after downloading": ("arrow.down.doc.fill", teal),
         "Translucent background": ("square.on.square.squareshape.controlhandles", purple),
         "Reduce motion": ("figure.walk.motion", grey),
@@ -336,7 +343,7 @@ private struct DescribedToggle: View {
 }
 
 /// Grey explanatory text under a section.
-private struct Footnote: View {
+struct Footnote: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
@@ -400,7 +407,6 @@ private struct GeneralSettings: View {
     @AppStorage(Prefs.askWhereToSave) private var askWhereToSave = false
     @AppStorage(Prefs.openSafeFiles) private var openSafeFiles = false
     @AppStorage(Prefs.askDefaultBrowser) private var askDefault = true
-    @AppStorage(Prefs.tabSleepMinutes) private var tabSleep = 15.0
     @State private var isDefaultBrowser = DefaultBrowser.isDefault
     @State private var confirmClearHistory = false
     @State private var importStatus: String?
@@ -504,17 +510,6 @@ private struct GeneralSettings: View {
                                 isOn: $openSafeFiles)
             } header: { SectionTitle("Downloads") }
 
-            Section {
-                LabeledContent("Sleep inactive tabs") { Picker("", selection: $tabSleep) {
-                    Text("Never").tag(0.0)
-                    Text("After 5 minutes").tag(5.0)
-                    Text("After 15 minutes").tag(15.0)
-                    Text("After 30 minutes").tag(30.0)
-                    Text("After 1 hour").tag(60.0)
-                }.labelsHidden().fixedSize() }
-            } header: { SectionTitle("Performance") } footer: {
-                Footnote("Sleeping tabs free their memory and wake instantly with the page as you left it. Tabs playing sound or video never sleep.")
-            }
         }
         .formStyle(SafariFormStyle())
         .onAppear { isDefaultBrowser = DefaultBrowser.isDefault }

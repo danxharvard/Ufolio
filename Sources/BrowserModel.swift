@@ -10,6 +10,11 @@ final class BrowserModel: NSObject, ObservableObject {
             let old = tabs.first(where: { $0.id == oldValue })
             old?.lastActive = Date()
             selectedTab?.wakeIfNeeded()
+            // Pause sound and video in the tab you leave (Eco, or Settings › Performance).
+            if let old, old !== selectedTab, !old.isAsleep, PerformanceCenter.shared.pausesBackgroundMedia {
+                old.webView.setAllMediaPlaybackSuspended(true)
+            }
+            if let tab = selectedTab, !tab.isAsleep { tab.webView.setAllMediaPlaybackSuspended(false) }
             if let tab = selectedTab, tab !== old { ExtensionEvents.activated(tab, previous: old) }
         }
     }
@@ -22,7 +27,7 @@ final class BrowserModel: NSObject, ObservableObject {
     /// The window showing this model (set by the view once it's on screen).
     weak var window: NSWindow?
 
-    private static let all = NSHashTable<BrowserModel>.weakObjects()
+    static let all = NSHashTable<BrowserModel>.weakObjects()
 
     /// The browser in the frontmost Hush window, for menu commands.
     static var frontmost: BrowserModel? {
@@ -44,10 +49,16 @@ final class BrowserModel: NSObject, ObservableObject {
     /// Tab Sleep: background tabs idle for longer than the chosen time are put to sleep,
     /// unless they're playing sound or video or using the camera or microphone.
     private func sleepIdleTabs() {
-        let minutes = Prefs.double(Prefs.tabSleepMinutes)
+        let minutes = PerformanceCenter.shared.sleepMinutes   // shorter in Power Saver
         guard minutes > 0 else { return }
+        sleepBackgroundTabs(idleFor: minutes * 60)
+    }
+
+    /// Sleeps background tabs idle for at least `seconds`, unless they're playing media
+    /// or using the camera or microphone.
+    func sleepBackgroundTabs(idleFor seconds: TimeInterval) {
         for tab in tabs where tab !== selectedTab && !tab.isAsleep && !tab.isLoading
-            && Date().timeIntervalSince(tab.lastActive) > minutes * 60
+            && Date().timeIntervalSince(tab.lastActive) >= seconds
             && tab.webView.cameraCaptureState == .none && tab.webView.microphoneCaptureState == .none {
             tab.webView.requestMediaPlaybackState { state in
                 if state == .none || state == .paused { tab.sleep() }

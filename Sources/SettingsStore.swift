@@ -61,6 +61,9 @@ enum Prefs {
     // Location
     static let locationPolicy = "locationPolicy"
     static let offerBookmarks = "offerBookmarks"
+    static let powerMode = "powerMode"
+    static let pauseBackgroundMedia = "pauseBackgroundMedia"
+    static let freeMemoryAutomatically = "freeMemoryAutomatically"
 
     static let defaults: [String: Any] = [
         appearance: AppearanceMode.system.rawValue,
@@ -113,6 +116,9 @@ enum Prefs {
         cameraPolicy: PermissionPolicy.ask.rawValue,
         locationPolicy: PermissionPolicy.ask.rawValue,
         offerBookmarks: true,
+        powerMode: PowerMode.automatic.rawValue,
+        pauseBackgroundMedia: false,
+        freeMemoryAutomatically: true,
     ]
 
     static func register() {

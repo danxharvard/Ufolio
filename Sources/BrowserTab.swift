@@ -36,7 +36,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         config.preferences.isFraudulentWebsiteWarningEnabled = Prefs.bool(Prefs.fraudWarning)
         config.preferences.javaScriptCanOpenWindowsAutomatically = !Prefs.bool(Prefs.blockPopups)
         config.defaultWebpagePreferences.preferredContentMode = .desktop
-        config.mediaTypesRequiringUserActionForPlayback = AutoplayPolicy.current.mediaTypes
+        config.mediaTypesRequiringUserActionForPlayback = PerformanceCenter.shared.autoplayMediaTypes
+        PerformanceCenter.shared.configure(config.preferences)   // Performance / Balanced / Power Saver
         ExtensionEvents.attach(config)
         return config
     }
