@@ -13,7 +13,8 @@ struct HushApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        // ONE WINDOW: Hush has a single browser window with unlimited tabs.
+        Window("Hush Browser", id: "browser") {
             BrowserWindow()
                 .accentColor(AccentChoice(rawValue: accent)?.color)
                 .transaction { if reduceMotion { $0.animation = nil } }
@@ -34,6 +35,15 @@ struct HushApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // Only one Hush at a time: if another copy is already running, bring it forward and quit.
+        if let id = Bundle.main.bundleIdentifier {
+            let others = NSRunningApplication.runningApplications(withBundleIdentifier: id)
+                .filter { $0 != NSRunningApplication.current }
+            if let running = others.first {
+                running.activate(options: [.activateAllWindows])
+                exit(0)
+            }
+        }
         // Hush has its own tabs; switch off macOS's window tabbing.
         NSWindow.allowsAutomaticWindowTabbing = false
     }
@@ -50,9 +60,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // macOS restores the windows Hush had when it quit; if that was none,
-        // open a fresh one so Hush never starts as just a menu bar.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { WindowOpener.ensureWindow() }
+        // If Hush last quit with its window closed, show it again. With a single-window
+        // scene this can only ever show the one window, never a second.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            if !BrowserModel.hasVisibleWindow { WindowOpener.ensureWindow() }
+        }
         ContentBlocker.shared.prepare()
         Updater.shared.start()
     }
@@ -80,9 +92,12 @@ struct HushCommands: Commands {
             }
         }
 
-        CommandGroup(after: .newItem) {
-            Button("New Tab") { browser?.newTab(focus: true) }
-                .keyboardShortcut("t")
+        CommandGroup(replacing: .newItem) {
+            Button("New Tab") {
+                WindowOpener.ensureWindow()
+                browser?.newTab(focus: true)
+            }
+            .keyboardShortcut("t")
             Button("Open Location…") { browser?.focusAddressBar() }
                 .keyboardShortcut("l")
         }
@@ -166,16 +181,15 @@ enum QuitHelper {
 }
 
 enum WindowOpener {
-    /// Shows a browser window, opening a new one if none is visible.
+    /// Shows the browser window, bringing it back if it was closed. There is only ever one.
     static func ensureWindow() {
         if BrowserModel.hasVisibleWindow {
             BrowserModel.frontmost?.window?.makeKeyAndOrderFront(nil)
             return
         }
-        // Use SwiftUI's own File › New Window command, which creates a proper browser window.
+        // SwiftUI lists the single window in the Window menu; choosing it reopens that window.
         let items = NSApp.mainMenu?.items.flatMap { $0.submenu?.items ?? [] } ?? []
-        if let item = items.first(where: { $0.keyEquivalent == "n" && $0.keyEquivalentModifierMask == .command }),
-           let menu = item.menu {
+        if let item = items.first(where: { $0.title == "Hush Browser" && $0.action != nil }), let menu = item.menu {
             menu.performActionForItem(at: menu.index(of: item))
         }
         NSApp.activate(ignoringOtherApps: true)

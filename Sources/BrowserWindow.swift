@@ -231,7 +231,7 @@ struct ToolbarIconButton: View {
     }
 }
 
-/// The shield in the toolbar: how much was blocked on this page, and per-site shields.
+/// Hush Guard in the toolbar: how much was blocked on this page, and per-site on/off.
 private struct ShieldsButton: View {
     @ObservedObject var tab: BrowserTab
     @ObservedObject private var blocker = ContentBlocker.shared
@@ -248,7 +248,7 @@ private struct ShieldsButton: View {
     var body: some View {
         ToolbarIconButton(
             symbol: shieldsUp ? "shield.lefthalf.filled" : "shield.slash",
-            help: "Hush Shields",
+            help: "Hush Guard",
             tint: shieldsUp ? .accentColor : nil
         ) {
             showing.toggle()
@@ -285,9 +285,9 @@ private struct ShieldsPanel: View {
                     .font(.system(size: 22))
                     .foregroundStyle(shieldsUp ? Color.accentColor : Color.secondary)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(tab.host?.strippingWWW ?? "Hush Shields")
+                    Text(tab.host?.strippingWWW ?? "Hush Guard")
                         .font(.system(size: 13, weight: .semibold))
-                    Text(shieldsUp ? "Shields are up" : "Shields are down for this site")
+                    Text(shieldsUp ? "Hush Guard is on" : "Hush Guard is off for this site")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
@@ -301,7 +301,7 @@ private struct ShieldsPanel: View {
                         }))
                     .toggleStyle(.switch)
                     .labelsHidden()
-                    .help("Turn shields off if this site doesn’t work properly")
+                    .help("Turn Hush Guard off if this site doesn’t work properly")
                 }
             }
 
@@ -321,7 +321,7 @@ private struct ShieldsPanel: View {
                     .font(.system(size: 11.5))
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("Ad Blocker Settings…") { SettingsOpener.open(tab: .adBlocker) }
+                Button("Hush Guard Settings…") { SettingsOpener.open(tab: .adBlocker) }
                     .buttonStyle(.link)
                     .font(.system(size: 11.5))
             }

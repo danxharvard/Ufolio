@@ -9,7 +9,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general: return "General"
         case .appearance: return "Appearance"
-        case .adBlocker: return "Hush Shields"
+        case .adBlocker: return "Hush Guard"
         case .privacy: return "Privacy & Security"
         case .passwords: return "Passwords & AutoFill"
         case .location: return "Location"
@@ -710,7 +710,7 @@ private struct AdBlockerSettings: View {
 
             Section {
                 if blocker.shieldsDown.isEmpty {
-                    Text("None. Use the shield in the toolbar to turn protection off for a site that doesn’t work properly.")
+                    Text("None. Use the shield in the toolbar to turn Hush Guard off for a site that doesn’t work properly.")
                         .foregroundStyle(.secondary)
                 }
                 ForEach(blocker.shieldsDown, id: \.self) { host in
@@ -718,11 +718,11 @@ private struct AdBlockerSettings: View {
                         Favicon(url: URL(string: "https://\(host)"), size: 16)
                         Text(host)
                         Spacer()
-                        Button("Turn Shields Back On") { blocker.setShields(true, for: host) }
+                        Button("Turn Hush Guard Back On") { blocker.setShields(true, for: host) }
                             .controlSize(.small)
                     }
                 }
-            } header: { Text("Sites with shields down") }
+            } header: { Text("Sites with Hush Guard off") }
 
             Section {
                 if zapper.hidden.isEmpty {

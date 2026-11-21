@@ -1,11 +1,20 @@
 # Changelog
 
+## 0.6.1
+
+**Fixed**
+- Hush could open two windows at launch. Hush now has exactly one browser window (with unlimited
+  tabs), and only one copy of Hush can run at a time: opening it again brings the running one forward.
+
+**Changed**
+- "Hush Shields" is now **Hush Guard**.
+
 ## 0.6.0
 
 **New**
 - Element Zapper: right-click a page › Hide Elements on This Page…, then click anything to hide it.
   Hidden elements stay hidden on that site (applied by WebKit before the page draws). Review or
-  bring them back in Settings › Hush Shields › Hidden elements.
+  bring them back in Settings › Hush Guard › Hidden elements.
 - Tab Sleep: background tabs you haven't used for a while (15 minutes by default) free their
   memory and wake instantly, with their page and back/forward history intact. Tabs playing sound or
   video, or using the camera or microphone, never sleep. Settings › General › Performance.
@@ -21,7 +30,7 @@
 - Look-alike site warning: fake copies of sites you use (paypa1.com, аpple.com with a Cyrillic
   "а", g00gle.com) are stopped before they load, with a button to go to the real site.
 - Cookie banners are rejected automatically ("Reject all") on the major consent tools.
-- Switches for all three in Settings (Privacy & Security, Hush Shields).
+- Switches for all three in Settings (Privacy & Security, Hush Guard).
 
 ## 0.4.0
 

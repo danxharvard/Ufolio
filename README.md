@@ -5,7 +5,7 @@ A lightweight, native macOS web browser built on WebKit (the engine behind Safar
 - Calm, minimal, native interface with Day/Night themes, accent colours and start-page styles
 - Address bar with live search suggestions (Google, DuckDuckGo, Bing, Brave Search or Ecosia)
 - Bookmarks and a bookmarks bar (⌘D to bookmark, ⇧⌘B to show/hide, right-click to rename/move/remove)
-- **Hush Shields**: built-in ad and tracker blocking, a blocked counter, per-site on/off,
+- **Hush Guard**: built-in ad and tracker blocking, a blocked counter, per-site on/off,
   collapsing of empty ad spaces, cookie-banner hiding, and import of your own filter lists
   (EasyList, uBlock/Adblock Plus lists, hosts files, Safari content-blocker JSON)
 - Privacy: third-party cookie blocking, HTTPS upgrade, Global Privacy Control, fraud warnings,
@@ -68,7 +68,7 @@ quit — or straight away from Settings › Updates.
 | `Sources/Bookmarks.swift` | Bookmark storage, bookmarks bar, site icons, start page |
 | `Sources/SettingsStore.swift` | Every setting's key and default, plus search engines and other options |
 | `Sources/SettingsView.swift` | The Settings window |
-| `Sources/ContentBlocker.swift` | Ad/tracker blocking, per-site shields, page scripts, blocked counter |
+| `Sources/ContentBlocker.swift` | Ad/tracker blocking, per-site on/off, page scripts, blocked counter |
 | `Sources/FilterConverter.swift` | Turns imported filter lists into WebKit rules |
 | `Sources/Location.swift` | Site permissions and local weather for the start page |
 | `Sources/Updater.swift` | Checks for, downloads and installs updates |
