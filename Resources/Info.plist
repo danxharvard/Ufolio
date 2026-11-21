@@ -27,7 +27,7 @@
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>Hush Browser</string>
+	<string>© 2026 danxharvard. Free software under the GNU GPL v3.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

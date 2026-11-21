@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/danxharvard/hushbrowser/releases/latest"><b>Download Hush for Mac</b></a>
-  &nbsp;·&nbsp; macOS 15 Sequoia or later &nbsp;·&nbsp; Apple Silicon &amp; Intel &nbsp;·&nbsp; Free
+  &nbsp;·&nbsp; macOS 15 Sequoia or later &nbsp;·&nbsp; Apple Silicon &amp; Intel &nbsp;·&nbsp; Free and open source
 </p>
 
 ---
@@ -97,7 +97,7 @@ All settings live in **Hush Browser › Settings…** (⌘,).
 
 - **No tracking.** Hush doesn't collect analytics about you, at all.
 - **Your data stays on your Mac.** Bookmarks, history and passwords never go to our servers, because we don't have any.
-- **Out in the open.** Every line of Hush is right here for anyone to read.
+- **Open source.** Every line of Hush is right here for anyone to read, and it stays that way: Hush is GPL-3.0, so any version someone shares must be open too.
 - **Light forever.** New features have to earn their place.
 
 <details>
@@ -191,6 +191,19 @@ Settings › Software Update.
 | `scripts/make-icon.swift` | Draws the app icon |
 
 </details>
+
+---
+
+## License
+
+Copyright © 2026 danxharvard.
+
+Hush Browser is free software: you can redistribute it and/or modify it under the terms of the
+[GNU General Public License](LICENSE) as published by the Free Software Foundation, either
+version 3 of the License, or (at your option) any later version. It comes with no warranty.
+
+The Hush Browser name and moon logo identify this project. If you share your own version,
+please give it a different name and icon.
 
 ---
 
