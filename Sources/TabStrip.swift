@@ -48,6 +48,7 @@ struct WindowTabBar: View {
     var toolbarColor: Color = Chrome.toolbar
     var leadingInset: CGFloat = 80
     @State private var hoveredID: UUID?
+    static let pinnedWidth: CGFloat = 46
     /// Drag to reorder: the tab being dragged and how far it is from its slot.
     @State private var draggingID: UUID?
     @State private var dragOffset: CGFloat = 0
@@ -57,8 +58,10 @@ struct WindowTabBar: View {
         GeometryReader { geo in
             let tabs = model.tabs
             let selectedID = model.selectedTab?.id
-            let room = geo.size.width - leadingInset - 44 - 24
-            let width = max(48, min(240, room / CGFloat(max(tabs.count, 1))))
+            // Pinned tabs are small fixed icons; the rest share what's left.
+            let pinnedCount = tabs.filter(\.isPinned).count
+            let room = geo.size.width - leadingInset - 44 - 24 - CGFloat(pinnedCount) * Self.pinnedWidth
+            let width = max(48, min(240, room / CGFloat(max(tabs.count - pinnedCount, 1))))
             HStack(spacing: 0) {
                 Color.clear.frame(width: leadingInset, height: 1)
                 ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
@@ -66,7 +69,7 @@ struct WindowTabBar: View {
                     let divider = next != nil && tab.id != selectedID && next?.id != selectedID
                         && hoveredID != tab.id && hoveredID != next?.id
                     let dragging = draggingID == tab.id
-                    ChromeTab(model: model, tab: tab, isSelected: tab.id == selectedID, width: width,
+                    ChromeTab(model: model, tab: tab, isSelected: tab.id == selectedID, width: tab.isPinned ? Self.pinnedWidth : width,
                               showsDivider: divider && draggingID == nil, fill: toolbarColor, hoveredID: $hoveredID)
                         .offset(x: dragging ? dragOffset : 0)
                         // The dragged tab follows the pointer exactly; the others slide out of its way.
@@ -135,7 +138,8 @@ private struct ChromeTab: View {
     @Binding var hoveredID: UUID?
 
     private var hovering: Bool { hoveredID == tab.id }
-    private var showsClose: Bool { (isSelected || hovering) && width > 72 }
+    private var showsClose: Bool { (isSelected || hovering) && width > 72 && !tab.isPinned }
+    private var showsTitle: Bool { width > 64 && !tab.isPinned }
 
     var body: some View {
         HStack(spacing: 7) {
@@ -151,7 +155,13 @@ private struct ChromeTab: View {
                 }
             }
             .frame(width: 16, height: 16)
-            if width > 64 {
+            .overlay(alignment: .bottomTrailing) {
+                // Pinned tabs show sound as a small dot on their icon.
+                if tab.isPinned && (tab.isPlayingAudio || tab.isMuted) {
+                    Circle().fill(tab.isMuted ? Color.secondary : Color.accentColor).frame(width: 6, height: 6).offset(x: 3, y: 3)
+                }
+            }
+            if showsTitle {
                 Text(tab.displayTitle)
                     .font(.system(size: 12.5, weight: isSelected ? .medium : .regular))
                     .lineLimit(1)
@@ -159,6 +169,17 @@ private struct ChromeTab: View {
                     .foregroundStyle(isSelected ? .primary : .secondary)
                     .opacity(tab.isAsleep ? 0.55 : 1)
                 Spacer(minLength: 0)
+            }
+            if (tab.isPlayingAudio || tab.isMuted) && showsTitle {
+                Button { tab.toggleMute() } label: {
+                    Image(systemName: tab.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(tab.isMuted ? Color.secondary : Color.accentColor)
+                        .frame(width: 18, height: 16)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(tab.isMuted ? "Unmute this tab" : "Mute this tab")
             }
             if showsClose {
                 Button { model.close(tab) } label: {
@@ -173,7 +194,7 @@ private struct ChromeTab: View {
                 .help("Close Tab (⌘W)")
             }
         }
-        .padding(.horizontal, width > 64 ? 12 : 0)
+        .padding(.horizontal, showsTitle ? 12 : 0)
         .frame(width: width, height: 31)
         .background {
             if isSelected {
@@ -204,6 +225,13 @@ private struct ChromeTab: View {
         .help(tab.url?.host?.strippingWWW ?? tab.displayTitle)
         .contextMenu {
             Button("New Tab") { model.newTab(focus: true) }
+            Divider()
+            Button(tab.isPinned ? "Unpin Tab" : "Pin Tab") { model.togglePin(tab) }
+            Button(tab.isMuted ? "Unmute Tab" : "Mute Tab") { tab.toggleMute() }
+            if tab.url != nil {
+                Divider()
+                Button("Forget This Site…") { SiteForgetter.confirmAndForget(tab) }
+            }
             Divider()
             Button("Close Tab") { model.close(tab) }
             Button("Close Other Tabs") {

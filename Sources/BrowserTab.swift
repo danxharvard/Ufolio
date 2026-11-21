@@ -22,6 +22,38 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     /// Quick translation: the page's language when it isn't yours, and where translation is up to.
     @Published private(set) var translation: TranslationState = .none
     @Published private(set) var pageLanguage: Locale.Language?
+    /// Sound: whether the page is playing any, and whether you muted the tab.
+    @Published fileprivate(set) var isPlayingAudio = false
+    @Published private(set) var isMuted = false
+    /// Pinned tabs sit at the left as small icons and come back next launch.
+    @Published var isPinned = false
+
+    var isPrivate: Bool { model?.isPrivate ?? false }
+
+    /// Reader: whether the page has an article, and the article while Reader is showing.
+    @Published private(set) var readerAvailable = false
+    @Published private(set) var reader: ReaderArticle?
+    /// Whether the page has a video that can float in Picture in Picture.
+    @Published private(set) var canPictureInPicture = false
+
+    func setReaderAvailable(_ available: Bool) { if readerAvailable != available { readerAvailable = available } }
+    func showReader(_ article: ReaderArticle) { reader = article }
+    func toggleReader() {
+        if reader != nil { reader = nil } else if url != nil { ReaderMode.open(self) }
+    }
+
+    func toggleMute() {
+        isMuted.toggle()
+        WebKitExtras.setMuted(isMuted, webView)
+    }
+
+    func checkAudio() {
+        guard !isAsleep else { if isPlayingAudio { isPlayingAudio = false }; return }
+        let playing = WebKitExtras.isPlayingAudio(webView)
+        if playing != isPlayingAudio { isPlayingAudio = playing }
+        let pip = WebKitExtras.canPictureInPicture(webView)
+        if pip != canPictureInPicture { canPictureInPicture = pip }
+    }
 
     /// The website's colour, for Magic Theme (nil on the start page or while asleep).
     @Published private(set) var siteColor: NSColor?
@@ -46,9 +78,10 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     private var observers: Set<AnyCancellable> = []
 
-    static func makeConfiguration() -> WKWebViewConfiguration {
+    static func makeConfiguration(privately: Bool = false, store: WKWebsiteDataStore? = nil) -> WKWebViewConfiguration {
         let config = WKWebViewConfiguration()
-        config.websiteDataStore = .default()
+        // Private windows keep cookies and site data in memory only, apart from everything else.
+        config.websiteDataStore = store ?? .default()
         config.userContentController = WKUserContentController()
         config.applicationNameForUserAgent = "Version/18.0 Safari/605.1.15"
         config.preferences.isElementFullscreenEnabled = true
@@ -57,13 +90,14 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         config.defaultWebpagePreferences.preferredContentMode = .desktop
         config.mediaTypesRequiringUserActionForPlayback = PerformanceCenter.shared.autoplayMediaTypes
         PerformanceCenter.shared.configure(config.preferences)   // Performance / Balanced / Power Saver
-        ExtensionEvents.attach(config)
+        if !privately { ExtensionEvents.attach(config) }   // extensions don't run in private windows
         return config
     }
 
     init(model: BrowserModel, configuration: WKWebViewConfiguration? = nil) {
         self.model = model
-        webView = HushWebView(frame: .zero, configuration: configuration ?? BrowserTab.makeConfiguration())
+        webView = HushWebView(frame: .zero, configuration: configuration
+            ?? BrowserTab.makeConfiguration(privately: model.isPrivate, store: model.dataStore))
         super.init()
         setUp(webView)
     }
@@ -138,7 +172,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             old.uiDelegate = nil
             old.removeFromSuperview()
             // An empty web view starts no web process until it loads something.
-            self.webView = HushWebView(frame: .zero, configuration: BrowserTab.makeConfiguration())
+            self.webView = HushWebView(frame: .zero, configuration: BrowserTab.makeConfiguration(
+                privately: self.isPrivate, store: self.model?.dataStore))
             self.isAsleep = true
         }
     }
@@ -202,6 +237,32 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     func resetZoom() {
         let zoom = Prefs.double(Prefs.defaultZoom)
         webView.pageZoom = zoom > 0 ? zoom : 1
+    }
+
+    /// Print (⌘P): the page as you see it, fitted to the paper's width.
+    func printPage() {
+        guard let window = webView.window, url != nil else { return }
+        let info = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo.shared
+        info.horizontalPagination = .fit
+        info.isVerticallyCentered = false
+        let operation = webView.printOperation(with: info)
+        operation.view?.frame = webView.bounds
+        operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+    }
+
+    /// Save Page As (⌘S): the whole page, images included, as a web archive.
+    func savePage() {
+        guard let window = webView.window, url != nil else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.webArchive]
+        panel.nameFieldStringValue = Downloads.safeFilename(displayTitle) + ".webarchive"
+        panel.directoryURL = Downloads.folder
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let destination = panel.url, let self else { return }
+            self.webView.createWebArchiveData { result in
+                if case .success(let data) = result { try? data.write(to: destination, options: .atomic) }
+            }
+        }
     }
 
     func tearDown() {
@@ -270,6 +331,8 @@ extension BrowserTab: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         blockedOnPage = 0
         if translation != .none { setTranslation(.none, language: nil) }
+        if reader != nil { reader = nil }
+        if readerAvailable { readerAvailable = false }
         dialogsShown = 0
         dialogsSilenced = false
     }
@@ -294,9 +357,13 @@ extension BrowserTab: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         if let url = webView.url {
+            PageTranslator.shared.detect(in: self)
+            ReaderMode.detect(in: self)
+            if isMuted { WebKitExtras.setMuted(true, webView) }
+            // Private windows leave no trace: no history, suggestions or report entries.
+            guard !isPrivate else { return }
             HistoryStore.shared.record(url, title: webView.title ?? "")
             BookmarkOffer.shared.record(url, previousHost: lastFinishedHost)
-            PageTranslator.shared.detect(in: self)
             lastFinishedHost = url.host
             if let host = url.host, url.scheme?.hasPrefix("http") == true { PrivacyReport.shared.recordVisit(site: host) }
         }
@@ -323,7 +390,7 @@ extension BrowserTab: WKNavigationDelegate {
         DispatchQueue.main.async {
             self.blockedOnPage += 1
             BlockStats.shared.record(identifier)
-            if category == .trackers || category == .ads || category == .lists {
+            if !self.isPrivate, category == .trackers || category == .ads || category == .lists {
                 PrivacyReport.shared.recordBlocked(tracker: url, on: self.host)
             }
             // Tell the page's ad-space collapser that ads really were blocked here.
@@ -428,6 +495,12 @@ final class HushWebView: WKWebView {
         super.willOpenMenu(menu, with: event)
         guard onHideElements != nil, url != nil else { return }
         menu.addItem(.separator())
+        if WebKitExtras.canPictureInPicture(self) {
+            let pip = NSMenuItem(title: "Picture in Picture", action: #selector(pictureInPicture), keyEquivalent: "")
+            pip.target = self
+            pip.image = NSImage(systemSymbolName: "pip.enter", accessibilityDescription: nil)
+            menu.addItem(pip)
+        }
         let item = NSMenuItem(title: "Hide Elements on This Page…", action: #selector(hideElements), keyEquivalent: "")
         item.target = self
         item.image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: nil)
@@ -435,6 +508,7 @@ final class HushWebView: WKWebView {
     }
 
     @objc private func hideElements() { onHideElements?() }
+    @objc private func pictureInPicture() { WebKitExtras.togglePictureInPicture(self) }
 }
 
 extension String {

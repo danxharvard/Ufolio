@@ -71,6 +71,14 @@ final class BookmarkOffer: ObservableObject {
         finish(site, until: .distantFuture)
     }
 
+    /// Forgets one site's counts (Forget This Site).
+    func forget(site: String) {
+        counts = counts.filter { Domains.site($0.key) != site }
+        lastCounted = lastCounted.filter { Domains.site($0.key) != site }
+        if let current = self.site, Domains.site(current) == site { self.site = nil }
+        UserDefaults.standard.set(counts, forKey: Self.countsKey)
+    }
+
     /// Forgets the counts (when history is cleared).
     func reset() {
         counts = [:]

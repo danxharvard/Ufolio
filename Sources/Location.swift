@@ -50,6 +50,13 @@ final class SitePermissions: ObservableObject {
         save()
     }
 
+    /// Forgets every answer for a site and its subdomains (Forget This Site).
+    func forget(site: String) {
+        decisions = decisions.filter { Domains.site($0.key) != site }
+        sessionAllowed = sessionAllowed.filter { Domains.site(String($0.split(separator: "|").first ?? "")) != site }
+        save()
+    }
+
     func forgetAll() {
         decisions = [:]
         save()

@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.19.0
+
+**New: Private Browsing**
+- Click the glasses button beside Hush Guard, or press ⇧⌘N, for a Private window. Its deep purple
+  look tells you at a glance where you are.
+- Nothing you do there is saved: no history, suggestions or recently closed tabs. Cookies and
+  site data live in memory only and vanish when you close the window. Hush Guard keeps
+  protecting you, and extensions are switched off.
+
+**New: Forget This Site**
+- Right-click a tab and choose Forget This Site to delete that site's cookies and website data
+  (signing you out), its history and its permissions, and close its tabs. Bookmarks and
+  saved passwords are kept.
+
+**New: Reader**
+- On articles, a Reader button appears in the address bar (or press ⇧⌘R). The story is shown
+  on its own in calm, comfortable type, with no ads, menus or pop-ups.
+- Choose Light, Sepia or Dark, serif or sans-serif, and the text size. Reader shows only the
+  article's text and pictures, so none of the page's own code runs inside it.
+
+**New: Picture in Picture**
+- Float a video in its own window above everything else: the button in the address bar,
+  right-click on the page, or ⌥⌘P.
+
+**New: strong passwords**
+- On sign-up and change-password forms, Hush suggests a strong password like
+  "kipzot-4hamwe-Rybfud", fills it in and offers to save it.
+
+**New: the basics**
+- **Find on Page** (⌘F), with the number of matches and next/previous (⌘G, ⇧⌘G).
+- **Print** (⌘P) and **Save Page As** (⌘S), which saves the whole page with its pictures.
+- **Mute tabs:** tabs playing sound show a speaker. Click it to mute (or press ⌃⌘M).
+- **Pin tabs:** right-click a tab and choose Pin Tab. Pinned tabs sit at the left as small icons
+  and come back every time you open Hush.
+- **History window** (⌘Y): everything you've visited, grouped by day, with search. Remove single
+  pages or clear it all.
+
+**Fixed**
+- Opening a link from another app into a new window no longer leaves an empty address bar.
+
 ## 0.18.0
 
 A full security, bug and speed review of every part of Hush.

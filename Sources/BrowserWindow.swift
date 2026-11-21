@@ -3,14 +3,22 @@ import WebKit
 
 /// The whole window: toolbar, tab strip, bookmarks bar and page.
 struct BrowserWindow: View {
-    @StateObject private var model = BrowserModel()
+    @StateObject private var model: BrowserModel
+
+    init(isPrivate: Bool = false) {
+        _model = StateObject(wrappedValue: BrowserModel(isPrivate: isPrivate))
+    }
+
     @StateObject private var suggestions = SuggestionsModel()
     @Environment(\.colorScheme) private var systemScheme
     @AppStorage(Prefs.showBookmarkBar) private var showBookmarkBar = true
     @State private var isFullScreen = false
     @AppStorage(Prefs.magicTheme) private var magicTheme = false
     @State private var siteColor: NSColor?
-    private var tint: Chrome.Tint? { magicTheme ? Chrome.tint(for: siteColor) : nil }
+    private var tint: Chrome.Tint? {
+        if model.isPrivate { return PrivateChrome.tint }
+        return magicTheme ? Chrome.tint(for: siteColor) : nil
+    }
     /// Where the address bar is, so its suggestions line up underneath it.
     @State private var addressFrame: CGRect = .zero
     @State private var showWelcome = false
@@ -36,6 +44,7 @@ struct BrowserWindow: View {
                         }
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
+                    FindBarHost(model: model)
                 }
             .background(tint?.toolbar ?? Chrome.toolbar)
             .overlay(alignment: .bottom) { Hairline() }
@@ -87,7 +96,7 @@ struct BrowserWindow: View {
         )
         .background(WindowReader { window in
             // Remember the window's size and position between launches.
-            if let window, model.window !== window {
+            if let window, model.window !== window, !model.isPrivate {
                 window.setFrameUsingName("HushBrowserWindow")
                 window.setFrameAutosaveName("HushBrowserWindow")
             }
@@ -140,6 +149,8 @@ struct BrowserWindow: View {
             } else {
                 model.newTab(url: url)
             }
+            // Give the page focus, not the (empty) address bar.
+            if let tab = model.selectedTab { DispatchQueue.main.async { tab.webView.window?.makeFirstResponder(tab.webView) } }
             NSApp.activate(ignoringOtherApps: true)
         }
         .onReceive(NotificationCenter.default.publisher(for: QuitHelper.closeSheets)) { _ in
@@ -148,6 +159,7 @@ struct BrowserWindow: View {
             whatsNew = nil
         }
         .onAppear {
+            guard !model.isPrivate else { return }
             switch LaunchPrompts.next() {
             case .welcome:
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showWelcome = true }
@@ -180,8 +192,9 @@ struct BrowserWindow: View {
             .padding(.horizontal, 4)
             HStack(spacing: 2) {
                 DownloadsButton()
-                ExtensionButtons()       // up to three, right beside Hush Guard
+                if !model.isPrivate { ExtensionButtons() }   // up to three, right beside Hush Guard
                 SelectedTab(model: model) { ShieldsButton(tab: $0) }
+                PrivateWindowButton(isPrivate: model.isPrivate)
             }
         }
         .padding(.horizontal, 10)
@@ -220,13 +233,17 @@ private struct TabPage: View {
             // A blank tab shows only the start page, so its translucent backdrop
             // isn't drawn over an empty white web view.
             if tab.isBlank {
-                StartPage(model: model)
+                if model.isPrivate { PrivateStartPage() } else { StartPage(model: model) }
             } else if tab.isAsleep, let snapshot = tab.snapshot {
                 Image(nsImage: snapshot).resizable().aspectRatio(contentMode: .fill)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).clipped()
             } else {
                 // A woken tab has a new web view, so key the host on it.
                 WebViewHost(webView: tab.webView).id(ObjectIdentifier(tab.webView))
+            }
+            if let article = tab.reader {
+                ReaderView(article: article) { tab.toggleReader() }
+                    .transition(.opacity)
             }
             if let block = tab.lookalike {
                 LookalikeWarning(match: block.match) {
@@ -596,6 +613,27 @@ struct VisualEffect: NSViewRepresentable {
 }
 
 /// Hands the view's NSWindow to SwiftUI code once it's on screen.
+/// Shows the Find bar for the window's selected tab.
+private struct FindBarHost: View {
+    @ObservedObject var model: BrowserModel
+    @ObservedObject private var find: FindModel
+
+    init(model: BrowserModel) {
+        self.model = model
+        find = model.find
+    }
+
+    var body: some View {
+        if find.isVisible {
+            VStack(spacing: 0) {
+                Hairline()
+                FindBar(find: find, webView: model.selectedTab?.webView)
+            }
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+}
+
 private struct AddressFrameKey: PreferenceKey {
     static let defaultValue: CGRect = .zero
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {

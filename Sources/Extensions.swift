@@ -319,24 +319,24 @@ enum ExtensionEvents {
         MainActor.assumeIsolated { config.webExtensionController = ExtensionManager.shared.controller }
     }
     static func opened(_ tab: BrowserTab) {
-        guard active, #available(macOS 15.4, *) else { return }
+        guard active, !tab.isPrivate, #available(macOS 15.4, *) else { return }
         MainActor.assumeIsolated { ExtensionManager.shared.tabOpened(tab) }
     }
     static func closed(_ tab: BrowserTab) {
-        guard active, #available(macOS 15.4, *) else { return }
+        guard active, !tab.isPrivate, #available(macOS 15.4, *) else { return }
         MainActor.assumeIsolated { ExtensionManager.shared.tabClosed(tab) }
     }
     static func activated(_ tab: BrowserTab, previous: BrowserTab?) {
-        guard active, #available(macOS 15.4, *) else { return }
+        guard active, !tab.isPrivate, #available(macOS 15.4, *) else { return }
         MainActor.assumeIsolated { ExtensionManager.shared.tabActivated(tab, previous: previous) }
     }
     static func moved(_ tab: BrowserTab, from index: Int, in model: BrowserModel) {
-        guard active, #available(macOS 15.4, *) else { return }
+        guard active, !tab.isPrivate, #available(macOS 15.4, *) else { return }
         MainActor.assumeIsolated { ExtensionManager.shared.tabMoved(tab, from: index, in: model) }
     }
 
     static func changed(_ tab: BrowserTab) {
-        guard active, #available(macOS 15.4, *) else { return }
+        guard active, !tab.isPrivate, #available(macOS 15.4, *) else { return }
         MainActor.assumeIsolated { ExtensionManager.shared.tabChanged(tab) }
     }
     static func launch() {
@@ -387,7 +387,7 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
             for pattern in ext.allRequestedMatchPatterns { context.setPermissionStatus(.grantedExplicitly, for: pattern) }
             try controller.load(context)
             contexts[record.id] = context
-            if let model = BrowserModel.frontmost {
+            if let model = BrowserModel.frontmostNormal {
                 controller.didOpenWindow(model)
                 for tab in model.tabs { controller.didOpenTab(tab) }
                 if let selected = model.selectedTab { controller.didActivateTab(selected) }
@@ -439,7 +439,7 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
 
     func performAction(_ id: String) {
         guard let context = contexts[id] else { return }
-        context.performAction(for: BrowserModel.frontmost?.selectedTab)
+        context.performAction(for: BrowserModel.frontmostNormal?.selectedTab)
     }
 
     // MARK: Telling extensions what the browser is doing
@@ -455,24 +455,24 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
     // MARK: WKWebExtensionControllerDelegate
 
     func webExtensionController(_ controller: WKWebExtensionController, openWindowsFor extensionContext: WKWebExtensionContext) -> [any WKWebExtensionWindow] {
-        BrowserModel.frontmost.map { [$0] } ?? []
+        BrowserModel.frontmostNormal.map { [$0] } ?? []
     }
 
     func webExtensionController(_ controller: WKWebExtensionController, focusedWindowFor extensionContext: WKWebExtensionContext) -> (any WKWebExtensionWindow)? {
-        BrowserModel.frontmost
+        BrowserModel.frontmostNormal
     }
 
     func webExtensionController(_ controller: WKWebExtensionController, openNewTabUsing configuration: WKWebExtension.TabConfiguration,
                                 for extensionContext: WKWebExtensionContext,
                                 completionHandler: @escaping ((any WKWebExtensionTab)?, (any Error)?) -> Void) {
-        guard let model = BrowserModel.frontmost else { completionHandler(nil, nil); return }
+        guard let model = BrowserModel.frontmostNormal else { completionHandler(nil, nil); return }
         let tab = model.newTab(url: configuration.url, select: configuration.shouldBeActive)
         completionHandler(tab, nil)
     }
 
     func webExtensionController(_ controller: WKWebExtensionController, openOptionsPageFor extensionContext: WKWebExtensionContext,
                                 completionHandler: @escaping ((any Error)?) -> Void) {
-        if let url = extensionContext.optionsPageURL { BrowserModel.frontmost?.newTab(url: url) }
+        if let url = extensionContext.optionsPageURL { BrowserModel.frontmostNormal?.newTab(url: url) }
         completionHandler(nil)
     }
 

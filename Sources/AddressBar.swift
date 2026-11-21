@@ -67,6 +67,7 @@ struct AddressBar: View {
             )
 
             if tab.url != nil && !isEditing {
+                ReaderButton(tab: tab)
                 TranslateButton(tab: tab)
                 Button { model.toggleBookmarkForSelectedTab() } label: {
                     Image(systemName: isBookmarked ? "star.fill" : "star")
@@ -101,7 +102,10 @@ struct AddressBar: View {
         .onAppear { text = displayText }
         // onChange actions can still see the previous values, so always use the new value
         // or read the selected tab from the model, never the captured `tab`.
-        .onChange(of: tab.url) { newURL in if !isEditing { text = display(newURL) } }
+        .onChange(of: tab.url) { newURL in
+            // A page arriving while the bar is focused but untouched (e.g. a link from another app).
+            if !isEditing || text.isEmpty { text = display(newURL) }
+        }
         // Switching tabs must show the new tab's address (or nothing, for a new tab).
         .onChange(of: tab.id) { _ in
             if !isEditing { text = display(model.selectedTab?.url) }

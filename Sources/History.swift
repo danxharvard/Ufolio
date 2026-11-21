@@ -120,6 +120,19 @@ final class HistoryStore: ObservableObject {
             .map { $0 }
     }
 
+    /// Removes one page from history.
+    func remove(_ entry: HistoryEntry) {
+        entries[entry.id] = nil
+        scheduleSave()
+    }
+
+    /// Removes every page from a site (Forget This Site).
+    func remove(site: String) {
+        let site = Domains.site(site)
+        entries = entries.filter { Domains.site($0.value.url.host ?? "") != site }
+        scheduleSave()
+    }
+
     func hideFromStartPage(_ host: String) {
         hiddenHosts.insert(host)
         UserDefaults.standard.set(Array(hiddenHosts), forKey: "hiddenFrequentHosts")

@@ -46,6 +46,12 @@ final class RecentlyClosed: ObservableObject {
         save()
     }
 
+    /// Drops a site's closed tabs (Forget This Site).
+    func remove(site: String) {
+        tabs.removeAll { Domains.site($0.url.host ?? "") == site }
+        save()
+    }
+
     private static let saveQueue = DispatchQueue(label: "hush.recently-closed.save", qos: .utility)
 
     private func save() {

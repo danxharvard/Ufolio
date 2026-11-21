@@ -25,6 +25,20 @@ struct HushApp: App {
         .defaultSize(width: 1280, height: 820)
         .commands { HushCommands() }
 
+        // Private Browsing windows (⇧⌘N): as many as you like, each forgetting everything when closed.
+        WindowGroup("Private Browsing", id: "private") {
+            BrowserWindow(isPrivate: true)
+                .accentColor(Color(red: 0.70, green: 0.60, blue: 1.0))
+                .transaction { if reduceMotion { $0.animation = nil } }
+        }
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1180, height: 780)
+
+        Window("History", id: "history") {
+            HistoryWindowView()
+        }
+        .defaultSize(width: 640, height: 640)
+
         Settings {
             SettingsView()
                 .transaction { if reduceMotion { $0.animation = nil } }
@@ -75,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 struct HushCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
     @FocusedObject private var focusedBrowser: BrowserModel?
     private var browser: BrowserModel? { focusedBrowser ?? BrowserModel.frontmost }
     @ObservedObject private var bookmarks = BookmarkStore.shared
@@ -102,8 +117,26 @@ struct HushCommands: Commands {
                 browser?.newTab(focus: true)
             }
             .keyboardShortcut("t")
+            Button("New Private Window") { openWindow(id: "private") }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
             Button("Open Location…") { browser?.focusAddressBar() }
                 .keyboardShortcut("l")
+        }
+
+        Group {
+        CommandGroup(after: .textEditing) {
+            Divider()
+            Button("Find on Page…") { browser?.find.show() }
+                .keyboardShortcut("f")
+            Button("Find Next") { browser?.find.search(in: browser?.selectedTab?.webView) }
+                .keyboardShortcut("g")
+            Button("Find Previous") { browser?.find.search(in: browser?.selectedTab?.webView, backwards: true) }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+        }
+
+        CommandGroup(replacing: .printItem) {
+            Button("Print…") { browser?.selectedTab?.printPage() }
+                .keyboardShortcut("p")
         }
 
         CommandGroup(after: .pasteboard) {
@@ -120,6 +153,9 @@ struct HushCommands: Commands {
                 .keyboardShortcut("w")
             Button("Close Window") { NSApp.keyWindow?.performClose(nil) }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
+            Divider()
+            Button("Save Page As…") { browser?.selectedTab?.savePage() }
+                .keyboardShortcut("s")
         }
 
         CommandGroup(before: .toolbar) {
@@ -133,6 +169,12 @@ struct HushCommands: Commands {
             Button("Actual Size") { browser?.selectedTab?.resetZoom() }
                 .keyboardShortcut("0")
             Divider()
+            Button(browser?.selectedTab?.reader != nil ? "Leave Reader" : "Show Reader") { browser?.selectedTab?.toggleReader() }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+            Button("Picture in Picture") {
+                if let view = browser?.selectedTab?.webView { WebKitExtras.togglePictureInPicture(view) }
+            }
+            .keyboardShortcut("p", modifiers: [.command, .option])
             Button("Translate Page") {
                 guard let tab = browser?.selectedTab else { return }
                 if tab.translation == .translated { PageTranslator.shared.showOriginal(tab) } else { PageTranslator.shared.translate(tab) }
@@ -148,7 +190,19 @@ struct HushCommands: Commands {
             Divider()
         }
 
+        CommandMenu("Tab") {
+            Button(browser?.selectedTab?.isMuted == true ? "Unmute Tab" : "Mute Tab") { browser?.selectedTab?.toggleMute() }
+                .keyboardShortcut("m", modifiers: [.command, .control])
+            Button(browser?.selectedTab?.isPinned == true ? "Unpin Tab" : "Pin Tab") {
+                if let model = browser, let tab = model.selectedTab { model.togglePin(tab) }
+            }
+        }
+        }
+
         CommandMenu("History") {
+            Button("Show All History") { openWindow(id: "history") }
+                .keyboardShortcut("y")
+            Divider()
             Button("Reopen Closed Tab") { browser?.reopenClosedTab() }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
             Divider()

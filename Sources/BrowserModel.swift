@@ -41,6 +41,14 @@ final class BrowserModel: NSObject, ObservableObject {
     private static var didRestoreSession = false
     private var sessionSave: DispatchWorkItem?
 
+    /// The frontmost window that isn't private (extensions never see private windows).
+    static var frontmostNormal: BrowserModel? {
+        for window in NSApp.orderedWindows {
+            if let model = all.allObjects.first(where: { $0.window === window && !$0.isPrivate }) { return model }
+        }
+        return all.allObjects.first { !$0.isPrivate }
+    }
+
     /// True when a Hush browser window is showing.
     static var hasVisibleWindow: Bool {
         all.allObjects.contains { $0.window?.isVisible == true }
@@ -66,13 +74,27 @@ final class BrowserModel: NSObject, ObservableObject {
         }
     }
 
-    override init() {
+    /// Private windows: nothing is saved, and sites get a separate, in-memory set of cookies.
+    let isPrivate: Bool
+    let dataStore: WKWebsiteDataStore
+    /// Find on Page (⌘F) for this window.
+    let find = FindModel()
+    private var audioTimer: Timer?
+
+    init(isPrivate: Bool = false) {
+        self.isPrivate = isPrivate
+        dataStore = isPrivate ? .nonPersistent() : .default()
         super.init()
         BrowserModel.all.add(self)
+        // Which tabs are playing sound (for the speaker button on tabs).
+        audioTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+            self?.tabs.forEach { $0.checkAudio() }
+        }
+        audioTimer?.tolerance = 0.5
         sleepTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.sleepIdleTabs() }
         sleepTimer?.tolerance = 15
         // The first window after launch can bring back last time's tabs.
-        if !Self.didRestoreSession,
+        if !isPrivate, !Self.didRestoreSession,
            LaunchBehavior(rawValue: Prefs.string(Prefs.launchBehavior)) == .restore,
            let saved = UserDefaults.standard.stringArray(forKey: "lastSession"), !saved.isEmpty {
             Self.didRestoreSession = true
@@ -89,8 +111,26 @@ final class BrowserModel: NSObject, ObservableObject {
             }
             selectedID = tabs.first?.id
         }
-        Self.didRestoreSession = true
-        if tabs.isEmpty {
+        // Pinned tabs always come back, at the left, loading when you click them.
+        if !isPrivate, !Self.didRestoreSession || tabs.count > 0 {
+            let pinned = (UserDefaults.standard.stringArray(forKey: "pinnedTabs") ?? []).prefix(30)
+                .compactMap(URL.init(string:)).filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") }
+            var placed: [BrowserTab] = []
+            for url in pinned {
+                if let existing = tabs.first(where: { $0.url == url && !$0.isPinned }) {
+                    existing.isPinned = true
+                    placed.append(existing)
+                } else {
+                    let tab = newTab(select: false, usePreferredPage: false, atEnd: true)
+                    tab.restoreLazily(url)
+                    tab.isPinned = true
+                    placed.append(tab)
+                }
+            }
+            if !placed.isEmpty { tabs = placed + tabs.filter { !$0.isPinned } }
+        }
+        if !isPrivate { Self.didRestoreSession = true }
+        if tabs.allSatisfy(\.isPinned) {
             // A new window opens the homepage if Settings › General says so.
             if let home = NewTabPage.windowURL { newTab(url: home) } else { newTab(focus: true, usePreferredPage: false) }
         }
@@ -98,10 +138,12 @@ final class BrowserModel: NSObject, ObservableObject {
 
     /// Remembers this window's open pages (for "Tabs from last time").
     func scheduleSessionSave() {
+        guard !isPrivate else { return }
         sessionSave?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             let urls = self.tabs.compactMap { $0.url?.absoluteString }
+            UserDefaults.standard.set(self.tabs.filter(\.isPinned).compactMap { $0.url?.absoluteString }, forKey: "pinnedTabs")
             // Closing the last tab closes the window; keep that window's pages for next launch.
             guard !urls.isEmpty else { return }
             UserDefaults.standard.set(urls, forKey: "lastSession")
@@ -120,7 +162,8 @@ final class BrowserModel: NSObject, ObservableObject {
         let tab = BrowserTab(model: self, configuration: configuration)
         defer { ExtensionEvents.opened(tab) }
         if !atEnd, let current = selectedTab, let index = tabs.firstIndex(where: { $0 === current }) {
-            tabs.insert(tab, at: index + 1)
+            // New tabs go after the current one, but never in among the pinned tabs.
+            tabs.insert(tab, at: max(index + 1, tabs.filter(\.isPinned).count))
         } else {
             tabs.append(tab)
         }
@@ -132,10 +175,10 @@ final class BrowserModel: NSObject, ObservableObject {
         return tab
     }
 
-    func close(_ tab: BrowserTab) {
+    func close(_ tab: BrowserTab, remember: Bool = true) {
         guard let index = tabs.firstIndex(where: { $0 === tab }) else { return }
         let wasSelected = tab.id == selectedTab?.id
-        if let url = tab.url { RecentlyClosed.shared.add(title: tab.title, url: url) }
+        if remember, !isPrivate, let url = tab.url { RecentlyClosed.shared.add(title: tab.title, url: url) }
         ExtensionEvents.closed(tab)
         tab.tearDown()
         tabs.remove(at: index)
@@ -165,10 +208,21 @@ final class BrowserModel: NSObject, ObservableObject {
 
     /// Moves a tab to a new position in the tab bar (drag to reorder).
     func moveTab(from source: Int, to destination: Int) {
-        guard tabs.indices.contains(source), tabs.indices.contains(destination), source != destination else { return }
+        guard tabs.indices.contains(source), tabs.indices.contains(destination), source != destination,
+              tabs[source].isPinned == tabs[destination].isPinned else { return }   // pinned tabs stay together
         let tab = tabs.remove(at: source)
         tabs.insert(tab, at: destination)
         ExtensionEvents.moved(tab, from: source, in: self)
+        scheduleSessionSave()
+    }
+
+    /// Pins a tab (moving it to the left with the other pinned tabs) or unpins it.
+    func togglePin(_ tab: BrowserTab) {
+        guard let index = tabs.firstIndex(where: { $0 === tab }) else { return }
+        tab.isPinned.toggle()
+        tabs.remove(at: index)
+        let pinnedCount = tabs.filter(\.isPinned).count
+        tabs.insert(tab, at: tab.isPinned ? pinnedCount : pinnedCount)
         scheduleSessionSave()
     }
 

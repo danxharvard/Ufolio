@@ -103,6 +103,35 @@ enum PasswordVault {
     }
 }
 
+// MARK: - Strong passwords
+
+/// Makes Safari-style strong passwords: three groups of six, like "kipzot-4hamwe-Rybfud".
+/// 20 characters from a secure random source, with a digit and a capital for picky sites.
+enum PasswordGenerator {
+    static func make() -> String {
+        let letters = Array("abcdefghijkmnopqrstuvwxyz")   // no "l", easily confused with "1"
+        let digits = Array("23456789")
+        var groups: [[Character]] = (0..<3).map { _ in (0..<6).map { _ in letters[random(letters.count)] } }
+        let g = random(3)
+        groups[g][random(6)] = digits[random(digits.count)]
+        var other = random(3)
+        if other == g { other = (g + 1) % 3 }
+        let i = random(6)
+        groups[other][i] = Character(groups[other][i].uppercased())
+        return groups.map { String($0) }.joined(separator: "-")
+    }
+
+    /// A uniformly random number below `bound` from the system's secure random generator.
+    private static func random(_ bound: Int) -> Int {
+        var value: UInt32 = 0
+        let limit = UInt32.max - UInt32.max % UInt32(bound)
+        repeat {
+            _ = withUnsafeMutableBytes(of: &value) { SecRandomCopyBytes(kSecRandomDefault, 4, $0.baseAddress!) }
+        } while value >= limit
+        return Int(value % UInt32(bound))
+    }
+}
+
 // MARK: - Credit cards (macOS Keychain)
 
 struct SavedCard: Codable, Identifiable, Hashable {
@@ -287,12 +316,14 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
     // MARK: Offering to fill
 
     private enum Option: Identifiable {
+        case generate(String)
         case login(SavedLogin)
         case card(CardVault.Summary)
         case contact(String?)
 
         var id: String {
             switch self {
+            case .generate: return "generate"
             case .login(let l): return "l" + l.id
             case .card(let c): return "c" + c.id.uuidString
             case .contact: return "me"
@@ -306,6 +337,9 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
         case "login":
             guard secure, Prefs.bool(Prefs.autofillPasswords) else { return }
             options = PasswordVault.logins(for: host).map(Option.login)
+        case "newpassword":
+            guard secure, Prefs.bool(Prefs.autofillPasswords) else { return }
+            options = [.generate(PasswordGenerator.make())]
         case "card":
             guard secure, Prefs.bool(Prefs.autofillCards) else { return }
             options = CardVault.list().map(Option.card)
@@ -335,6 +369,9 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
         pop.contentViewController = NSHostingController(rootView: AutofillMenu(
             rows: options.map { option in
                 switch option {
+                case .generate(let password):
+                    return AutofillMenu.Row(id: option.id, symbol: "wand.and.stars", title: "Use Strong Password",
+                                            subtitle: password)
                 case .login(let login):
                     return AutofillMenu.Row(id: option.id, symbol: "key.fill", title: login.account.isEmpty ? "(no username)" : login.account,
                                             subtitle: "Password for \(login.host)")
@@ -361,6 +398,9 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
 
     private func fill(_ option: Option, host: String, tab: BrowserTab) {
         switch option {
+        case .generate(let password):
+            // Filled into every new-password box; Hush offers to save it when the form is sent.
+            send(kind: "newpassword", data: ["password": password], host: host, tab: tab)
         case .login(let login):
             UserAuth.confirm("fill your password for \(host)") { [weak self] ok in
                 guard ok, let password = PasswordVault.password(for: login) else { return }
@@ -453,7 +493,12 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
         if (el instanceof HTMLSelectElement) { var s = ac(el); return s.indexOf('cc-') === 0 ? 'card' : (CONTACT[s] ? 'contact' : null); }
         if (!(el instanceof HTMLInputElement)) return null;
         var t = (el.type || 'text').toLowerCase(), a = ac(el), w = words(el);
-        if (t === 'password') return a === 'new-password' ? null : 'login';
+        if (t === 'password') {
+          // Sign-up and change-password forms: offer a strong new password instead.
+          var pwCount = scopeOf(el).querySelectorAll('input[type=password]').length;
+          if (a === 'new-password' || pwCount >= 2 || /new|create|confirm|repeat|sign.?up|register/.test(w)) return 'newpassword';
+          return 'login';
+        }
         if (a.indexOf('cc-') === 0 || /card.?num|cc.?num|cardnumber|ccnumber|credit.?card/.test(w)) return 'card';
         if (!isTextInput(el)) return null;
         if ((a === 'username' || a === 'email' || t === 'email' || /user|login|e.?mail|account/.test(w)) &&
@@ -546,6 +591,11 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
       window.__hushFill = function (kind, data) {
         var active = document.activeElement;
         var list = fields((active && active.form) || document);
+        if (kind === 'newpassword') {
+          var boxes = list.filter(function (el) { return el.type === 'password' && ac(el) !== 'current-password' && !el.value; });
+          boxes.forEach(function (el) { put(el, data.password); });
+          return boxes.length > 0;
+        }
         if (kind === 'login') {
           var pw = list.filter(function (el) { return el.type === 'password'; })[0];
           var user = list.filter(function (el) { return el.type !== 'password' && kindOf(el) === 'login'; })[0];
