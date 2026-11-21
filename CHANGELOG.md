@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.17.0
+
+**New: redesigned tab bar**
+- Tabs now sit in the title bar, right beside the window buttons. The selected tab curves down
+  into the toolbar, and the other tabs are calm titles with thin dividers between them.
+- The address bar now stretches across the whole toolbar.
+- Tabs show a spinner while loading. Right-click a tab for Close Other Tabs and Close Tabs to
+  the Right.
+
+**New: Magic Theme**
+- Turn it on in Settings › Appearance and the toolbar and tabs take on the colours of the
+  website you're on, with light or dark text to suit.
+
+**New: quick translation**
+- When a page is in another language, a translate button appears in the address bar. Click it,
+  or press ⇧⌘Y, to translate the page in place. Click again for the original.
+- Translation happens on your Mac using Apple's Translation, so the page never leaves your
+  Mac. The first time, macOS may ask to download the language.
+
 ## 0.16.0
 
 **New: Settings › Performance**

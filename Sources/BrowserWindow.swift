@@ -5,10 +5,14 @@ import WebKit
 struct BrowserWindow: View {
     @StateObject private var model = BrowserModel()
     @StateObject private var suggestions = SuggestionsModel()
+    @Environment(\.colorScheme) private var systemScheme
     @AppStorage(Prefs.showBookmarkBar) private var showBookmarkBar = true
-    @AppStorage(Prefs.alwaysShowTabBar) private var alwaysShowTabBar = false
-
-    private var showTabStrip: Bool { model.tabs.count > 1 || alwaysShowTabBar }
+    @State private var isFullScreen = false
+    @AppStorage(Prefs.magicTheme) private var magicTheme = false
+    @State private var siteColor: NSColor?
+    private var tint: Chrome.Tint? { magicTheme ? Chrome.tint(for: siteColor) : nil }
+    /// Where the address bar is, so its suggestions line up underneath it.
+    @State private var addressFrame: CGRect = .zero
     @State private var showWelcome = false
     @State private var showDefaultBanner = false
     @State private var whatsNew: ReleaseNotes.Version?
@@ -16,11 +20,12 @@ struct BrowserWindow: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if showTabStrip || showBookmarkBar || showDefaultBanner {
-                VStack(spacing: 0) {
-                    if showTabStrip {
-                        TabStrip(model: model)
-                    }
+            // Tabs in the title bar, beside the window buttons.
+            VStack(spacing: 0) {
+            WindowTabBar(model: model, toolbarColor: tint?.toolbar ?? Chrome.toolbar, leadingInset: isFullScreen ? 10 : 80)
+                .background(tint?.frame ?? .clear)
+            VStack(spacing: 0) {
+                    toolbarRow
                     if showBookmarkBar {
                         BookmarkBar(model: model)
                     }
@@ -32,10 +37,17 @@ struct BrowserWindow: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
-                .background(VisualEffect(material: .titlebar))
-                .overlay(alignment: .bottom) { Hairline() }
+            .background(tint?.toolbar ?? Chrome.toolbar)
+            .overlay(alignment: .bottom) { Hairline() }
             }
+            .environment(\.colorScheme, tint?.scheme ?? systemScheme)
+            .animation(.easeInOut(duration: 0.35), value: siteColor)
+            .background(SelectedTab(model: model) { tab in
+                SiteColorReader(tab: tab) { color in if color != siteColor { siteColor = color } }
+                    .id(tab.id)
+            })
 
+            TranslationHost()
             // "Add to Hush" on Chrome Web Store pages (takes no space anywhere else).
             SelectedTab(model: model) { tab in
                 WebStoreBar(tab: tab).background(VisualEffect(material: .titlebar))
@@ -45,7 +57,7 @@ struct BrowserWindow: View {
                 BookmarkOfferBar(tab: tab).background(VisualEffect(material: .titlebar))
             }
 
-            ZStack(alignment: .top) {
+            ZStack(alignment: .topLeading) {
                 PageArea(model: model)
                 if let tab = model.selectedTab {
                     ProgressLine(tab: tab)
@@ -54,13 +66,18 @@ struct BrowserWindow: View {
                     SuggestionList(suggestions: suggestions) { choice in
                         go(choice.text)
                     }
-                    .frame(width: model.addressWidth)
+                    .frame(width: max(260, addressFrame.width))
+                    .offset(x: addressFrame.minX)
                     .padding(.top, 6)
                     .transition(.opacity.combined(with: .offset(y: -4)))
                 }
             }
             .animation(.easeOut(duration: 0.12), value: suggestions.isVisible)
         }
+        .ignoresSafeArea(.container, edges: .top)
+        .background(VisualEffect(material: .titlebar, blending: .behindWindow).ignoresSafeArea())
+        .coordinateSpace(name: "window")
+        .onPreferenceChange(AddressFrameKey.self) { addressFrame = $0 }
         .background(
             GeometryReader { geo in
                 Color.clear
@@ -75,7 +92,23 @@ struct BrowserWindow: View {
                 window.setFrameAutosaveName("HushBrowserWindow")
             }
             model.window = window
+            TrafficLights.align(in: window)
         })
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResizeNotification)) { note in
+            if (note.object as? NSWindow) === model.window { TrafficLights.align(in: model.window) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { note in
+            if (note.object as? NSWindow) === model.window { isFullScreen = true }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { note in
+            if (note.object as? NSWindow) === model.window {
+                isFullScreen = false
+                TrafficLights.align(in: model.window)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
+            if (note.object as? NSWindow) === model.window { TrafficLights.align(in: model.window) }
+        }
         // The welcome screen and default-browser question are drawn inside the window,
         // over a dimmed backdrop (SwiftUI sheets could end up off-screen and lock the window).
         .overlay {
@@ -128,33 +161,31 @@ struct BrowserWindow: View {
                 break
             }
         }
-        .toolbar { toolbarContent }
         .focusedSceneObject(model)
         .navigationTitle(model.selectedTab?.displayTitle ?? "Hush")
         .frame(minWidth: 640, minHeight: 420)
     }
 
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        // Each toolbar item watches the selected tab itself: SwiftUI doesn't reliably
-        // refresh toolbar items when the window's own state changes.
-        ToolbarItemGroup(placement: .navigation) {
+    /// Back, forward and reload; the address bar across the middle; then the tools.
+    private var toolbarRow: some View {
+        HStack(spacing: 6) {
             SelectedTab(model: model) { NavButtons(tab: $0) }
-        }
-        ToolbarItem(placement: .principal) {
             SelectedTab(model: model) { tab in
                 AddressBar(model: model, tab: tab, suggestions: suggestions, onGo: go)
-                    .frame(width: model.addressWidth)
+                    .frame(maxWidth: .infinity)
+                    .background(GeometryReader { geo in
+                        Color.clear.preference(key: AddressFrameKey.self, value: geo.frame(in: .named("window")))
+                    })
+            }
+            .padding(.horizontal, 4)
+            HStack(spacing: 2) {
+                DownloadsButton()
+                ExtensionButtons()       // up to three, right beside Hush Guard
+                SelectedTab(model: model) { ShieldsButton(tab: $0) }
             }
         }
-        ToolbarItemGroup(placement: .primaryAction) {
-            DownloadsButton()
-            ExtensionButtons()       // up to three, right beside Hush Guard
-            SelectedTab(model: model) { ShieldsButton(tab: $0) }
-            ToolbarIconButton(symbol: "plus", help: "New Tab (⌘T)") {
-                model.newTab(focus: true)
-            }
-        }
+        .padding(.horizontal, 10)
+        .frame(height: 44)
     }
 
     private func go(_ text: String) {
@@ -565,6 +596,14 @@ struct VisualEffect: NSViewRepresentable {
 }
 
 /// Hands the view's NSWindow to SwiftUI code once it's on screen.
+private struct AddressFrameKey: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        if next != .zero { value = next }
+    }
+}
+
 struct WindowReader: NSViewRepresentable {
     let onWindow: (NSWindow?) -> Void
     func makeNSView(context: Context) -> NSView {

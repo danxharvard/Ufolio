@@ -19,6 +19,25 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     @Published private(set) var blockedOnPage = 0
     /// Set when a page was stopped because it looks like a fake copy of a site you use.
     @Published var lookalike: (match: Lookalike.Match, url: URL)?
+    /// Quick translation: the page's language when it isn't yours, and where translation is up to.
+    @Published private(set) var translation: TranslationState = .none
+    @Published private(set) var pageLanguage: Locale.Language?
+
+    /// The website's colour, for Magic Theme (nil on the start page or while asleep).
+    @Published private(set) var siteColor: NSColor?
+
+    fileprivate func updateSiteColor() {
+        guard url != nil, !isAsleep else { siteColor = nil; return }
+        let color = (webView.themeColor ?? webView.underPageBackgroundColor)?.usingColorSpace(.sRGB)
+        // Ignore see-through colours: they'd show the frame, not the site.
+        let usable = (color?.alphaComponent ?? 0) > 0.9 ? color : nil
+        if usable != siteColor { siteColor = usable }
+    }
+
+    func setTranslation(_ state: TranslationState, language: Locale.Language?) {
+        translation = state
+        pageLanguage = language
+    }
     /// The last address loaded by the user (typed, bookmark…), as opposed to by a page.
     private var userLoadedURL: URL?
     /// JavaScript dialogs shown on this page, and whether the user silenced them.
@@ -82,6 +101,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             if tab.waking && url == nil { return }
             if url != nil { tab.waking = false }
             tab.url = url
+            tab.updateSiteColor()
             tab.model?.scheduleSessionSave()
             ExtensionEvents.changed(tab)
         }
@@ -90,6 +110,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         bind(\.canGoBack) { tab, value in if !tab.waking { tab.canGoBack = value } }
         bind(\.canGoForward) { tab, value in if !tab.waking { tab.canGoForward = value } }
         bind(\.hasOnlySecureContent) { $0.isSecure = $1 }
+        // Magic Theme: the site's own colour (its theme-color, or else its page background).
+        bind(\.themeColor) { tab, _ in tab.updateSiteColor() }
+        bind(\.underPageBackgroundColor) { tab, _ in tab.updateSiteColor() }
     }
 
     // MARK: Tab Sleep
@@ -235,6 +258,7 @@ extension BrowserTab: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         blockedOnPage = 0
+        if translation != .none { setTranslation(.none, language: nil) }
         dialogsShown = 0
         dialogsSilenced = false
     }
@@ -258,6 +282,7 @@ extension BrowserTab: WKNavigationDelegate {
         if let url = webView.url {
             HistoryStore.shared.record(url, title: webView.title ?? "")
             BookmarkOffer.shared.record(url, previousHost: lastFinishedHost)
+            PageTranslator.shared.detect(in: self)
             lastFinishedHost = url.host
             if let host = url.host, url.scheme?.hasPrefix("http") == true { PrivacyReport.shared.recordVisit(site: host) }
         }

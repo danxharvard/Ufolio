@@ -23,7 +23,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var keywords: String {
         switch self {
         case .general: return "default browser homepage startup new tab window search engine suggestions history import downloads safe files favourites"
-        case .appearance: return "theme dark light night day accent colour color start page background aurora twilight translucent motion animation zoom bookmarks bar tab bar address"
+        case .appearance: return "theme dark light night day accent colour color start page background aurora twilight translucent motion animation zoom bookmarks bar tab bar address magic theme colours site colour"
         case .performance: return "performance speed fast power battery saver eco carbon energy green memory ram tab sleep graphics 120hz smooth frame rate video pause"
         case .adBlocker: return "ads ad blocker trackers block filter list easylist cookie banners collapse zapper hidden elements counter statistics"
         case .extensions: return "chrome extension extensions web store add-on plugin dark reader"
@@ -308,6 +308,7 @@ private struct DescribedToggle: View {
     private static let icons: [String: (String, [Color])] = [
         "Show search suggestions": ("magnifyingglass", blue),
         "Suggest favourites": ("star.fill", orange),
+        "Magic Theme": ("wand.and.stars", pink),
         "Pause sound and video in background tabs": ("pause.circle.fill", green),
         "Free up memory automatically": ("memorychip.fill", blue),
         "Open “safe” files after downloading": ("arrow.down.doc.fill", teal),
@@ -559,12 +560,12 @@ private struct AppearanceSettings: View {
     @AppStorage(Prefs.startBackground) private var background = StartBackground.twilight.rawValue
     @AppStorage(Prefs.startGreeting) private var greeting = true
     @AppStorage(Prefs.startBookmarks) private var startBookmarks = true
+    @AppStorage(Prefs.magicTheme) private var magicTheme = false
     @AppStorage(Prefs.startFrequent) private var startFrequent = true
     @AppStorage(Prefs.startRecentlyClosed) private var startClosed = true
     @AppStorage(Prefs.startPrivacyReport) private var startPrivacy = true
     @AppStorage(Prefs.startTranslucent) private var startTranslucent = true
     @AppStorage(Prefs.showBookmarkBar) private var bookmarkBar = true
-    @AppStorage(Prefs.alwaysShowTabBar) private var alwaysTabBar = false
     @AppStorage(Prefs.showFullAddress) private var fullAddress = false
     @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
     @AppStorage(Prefs.defaultZoom) private var zoom = 1.0
@@ -609,8 +610,10 @@ private struct AppearanceSettings: View {
             } header: { SectionTitle("Start page") }
 
             Section {
+                DescribedToggle(title: "Magic Theme",
+                                detail: "The toolbar and tabs take on the colours of the website you’re on.",
+                                isOn: $magicTheme)
                 Toggle("Show bookmarks bar", isOn: $bookmarkBar)
-                Toggle("Always show the tab bar", isOn: $alwaysTabBar)
                 Toggle("Show full website address", isOn: $fullAddress)
             } header: { SectionTitle("Toolbar and tabs") }
 

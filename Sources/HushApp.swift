@@ -22,7 +22,6 @@ struct HushApp: App {
                 .onChange(of: appearance) { AppearanceMode.apply($0) }
         }
         .windowStyle(.hiddenTitleBar)
-        .windowToolbarStyle(.unified(showsTitle: false))
         .defaultSize(width: 1280, height: 820)
         .commands { HushCommands() }
 
@@ -131,6 +130,12 @@ struct HushCommands: Commands {
                 .keyboardShortcut("-")
             Button("Actual Size") { browser?.selectedTab?.resetZoom() }
                 .keyboardShortcut("0")
+            Divider()
+            Button("Translate Page") {
+                guard let tab = browser?.selectedTab else { return }
+                if tab.translation == .translated { PageTranslator.shared.showOriginal(tab) } else { PageTranslator.shared.translate(tab) }
+            }
+            .keyboardShortcut("y", modifiers: [.command, .shift])
             Divider()
             Toggle("Show Bookmarks Bar", isOn: $showBookmarkBar)
                 .keyboardShortcut("b", modifiers: [.command, .shift])

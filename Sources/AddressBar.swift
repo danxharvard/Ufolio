@@ -40,7 +40,7 @@ struct AddressBar: View {
                 text: $text,
                 isEditing: $isEditing,
                 placeholder: "Search \((SearchEngine(rawValue: engine) ?? .google).name) or enter a website",
-                centered: !isEditing && !displayText.isEmpty,
+                centered: false,
                 focusToken: model.addressFocusToken,
                 onBeginEditing: {
                     text = tab.url?.absoluteString ?? ""
@@ -67,6 +67,7 @@ struct AddressBar: View {
             )
 
             if tab.url != nil && !isEditing {
+                TranslateButton(tab: tab)
                 Button { model.toggleBookmarkForSelectedTab() } label: {
                     Image(systemName: isBookmarked ? "star.fill" : "star")
                         .font(.system(size: 11, weight: .semibold))
@@ -152,6 +153,9 @@ struct AddressTextField: NSViewRepresentable {
 
     func updateNSView(_ field: FocusTextField, context: Context) {
         context.coordinator.parent = self
+        // Follow the toolbar's light or dark look (Magic Theme can differ from the system's).
+        let look = NSAppearance(named: context.environment.colorScheme == .dark ? .darkAqua : .aqua)
+        if field.appearance?.name != look?.name { field.appearance = look }
         if field.stringValue != text { field.stringValue = text }
         field.alignment = centered ? .center : .left
         if context.coordinator.lastFocusToken != focusToken {

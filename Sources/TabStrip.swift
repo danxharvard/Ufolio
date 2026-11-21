@@ -1,73 +1,240 @@
 import SwiftUI
+import AppKit
 
-/// Compact, equal-width tabs. Only shown when more than one tab is open.
-struct TabStrip: View {
-    @ObservedObject var model: BrowserModel
+/// The window's two shades: the frame the tabs sit on, and the toolbar the selected tab
+/// flows into. Magic Theme can tint the toolbar with the website's own colour.
+enum Chrome {
+    static let toolbar = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(white: 0.19, alpha: 1) : NSColor(white: 1, alpha: 1)
+    })
+    static let tabBarHeight: CGFloat = 38
 
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(model.tabs) { tab in
-                TabPill(model: model, tab: tab, isSelected: tab.id == model.selectedTab?.id)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .animation(.spring(response: 0.25, dampingFraction: 0.9), value: model.tabs.map(\.id))
+    /// Magic Theme colours for a website's colour: the toolbar in the site's colour, the tab
+    /// row a shade deeper, and light or dark text to suit.
+    struct Tint {
+        let toolbar: Color
+        let frame: Color
+        let scheme: ColorScheme
+    }
+
+    static func tint(for site: NSColor?) -> Tint? {
+        guard let c = site?.usingColorSpace(.sRGB) else { return nil }
+        func linear(_ v: CGFloat) -> CGFloat { v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+        let luminance = 0.2126 * linear(c.redComponent) + 0.7152 * linear(c.greenComponent) + 0.0722 * linear(c.blueComponent)
+        let light = luminance > 0.42
+        let frame = c.blended(withFraction: light ? 0.10 : 0.18, of: light ? .black : .white) ?? c
+        return Tint(toolbar: Color(nsColor: c), frame: Color(nsColor: frame), scheme: light ? .light : .dark)
     }
 }
 
-private struct TabPill: View {
+/// Reports the selected tab's website colour to the window (for Magic Theme).
+struct SiteColorReader: View {
+    @ObservedObject var tab: BrowserTab
+    let report: (NSColor?) -> Void
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .onAppear { report(tab.siteColor) }
+            .onChange(of: tab.siteColor) { report($0) }
+    }
+}
+
+/// The tab row in the title bar, beside the window buttons: the selected tab is a raised
+/// "folder tab" joined to the toolbar below; the others are quiet titles with thin dividers.
+struct WindowTabBar: View {
+    @ObservedObject var model: BrowserModel
+    var toolbarColor: Color = Chrome.toolbar
+    var leadingInset: CGFloat = 80
+    @State private var hoveredID: UUID?
+
+    var body: some View {
+        GeometryReader { geo in
+            let tabs = model.tabs
+            let selectedID = model.selectedTab?.id
+            let room = geo.size.width - leadingInset - 44 - 24
+            let width = max(48, min(240, room / CGFloat(max(tabs.count, 1))))
+            HStack(spacing: 0) {
+                Color.clear.frame(width: leadingInset, height: 1)
+                ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
+                    let next = index + 1 < tabs.count ? tabs[index + 1] : nil
+                    let divider = next != nil && tab.id != selectedID && next?.id != selectedID
+                        && hoveredID != tab.id && hoveredID != next?.id
+                    ChromeTab(model: model, tab: tab, isSelected: tab.id == selectedID, width: width,
+                              showsDivider: divider, fill: toolbarColor, hoveredID: $hoveredID)
+                        .zIndex(tab.id == selectedID ? 1 : 0)
+                }
+                NewTabButton { model.newTab(focus: true) }
+                    .padding(.leading, 6)
+                    .padding(.bottom, 3)
+                Spacer(minLength: 0)
+            }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .bottomLeading)
+        }
+        .frame(height: Chrome.tabBarHeight)
+        .background(
+            // Empty space in the tab row moves the window, and a double-click zooms it.
+            Color.clear
+                .contentShape(Rectangle())
+                .gesture(WindowDragGesture())
+                .simultaneousGesture(TapGesture(count: 2).onEnded { model.window?.performZoom(nil) })
+        )
+        .animation(.spring(response: 0.28, dampingFraction: 0.88), value: model.tabs.map(\.id))
+    }
+}
+
+private struct ChromeTab: View {
     @ObservedObject var model: BrowserModel
     @ObservedObject var tab: BrowserTab
     let isSelected: Bool
-    @State private var hovering = false
+    let width: CGFloat
+    let showsDivider: Bool
+    let fill: Color
+    @Binding var hoveredID: UUID?
+
+    private var hovering: Bool { hoveredID == tab.id }
+    private var showsClose: Bool { (isSelected || hovering) && width > 72 }
 
     var body: some View {
-        HStack(spacing: 6) {
-            if tab.url == nil {
-                Image(systemName: "moon.stars")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 14, height: 14)
-            } else {
-                Favicon(url: tab.url, size: 14)
+        HStack(spacing: 7) {
+            Group {
+                if tab.isLoading && tab.url != nil {
+                    ProgressView().controlSize(.mini)
+                } else if tab.url == nil {
+                    Image(systemName: "moon.stars")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                } else {
+                    Favicon(url: tab.url, size: 15)
+                }
             }
-            Text(tab.displayTitle)
-                .font(.system(size: 12, weight: isSelected ? .medium : .regular))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .foregroundStyle(isSelected ? .primary : .secondary)
-                .opacity(tab.isAsleep ? 0.55 : 1)
-            Spacer(minLength: 0)
-            Button { model.close(tab) } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 16, height: 16)
-                    .background(Circle().fill(Color.primary.opacity(0.08)))
+            .frame(width: 16, height: 16)
+            if width > 64 {
+                Text(tab.displayTitle)
+                    .font(.system(size: 12.5, weight: isSelected ? .medium : .regular))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .foregroundStyle(isSelected ? .primary : .secondary)
+                    .opacity(tab.isAsleep ? 0.55 : 1)
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.plain)
-            .opacity(hovering || isSelected ? 1 : 0)
-            .help("Close Tab (⌘W)")
+            if showsClose {
+                Button { model.close(tab) } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8.5, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 16, height: 16)
+                        .background(Circle().fill(Color.primary.opacity(0.08)))
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Close Tab (⌘W)")
+            }
         }
-        .padding(.horizontal, 9)
-        .frame(height: 28)
-        .frame(maxWidth: 240)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(isSelected ? Color(nsColor: .controlBackgroundColor).opacity(0.9)
-                      : Color.primary.opacity(hovering ? 0.05 : 0))
-                .shadow(color: .black.opacity(isSelected ? 0.08 : 0), radius: 2, y: 1)
-        )
+        .padding(.horizontal, width > 64 ? 12 : 0)
+        .frame(width: width, height: 31)
+        .background {
+            if isSelected {
+                TabShape(foot: 8, radius: 10)
+                    .fill(fill)
+                    .shadow(color: .black.opacity(0.14), radius: 1.2, y: -0.3)
+                    .padding(.horizontal, -8)
+            } else if hovering {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.primary.opacity(0.07))
+                    .padding(.horizontal, 3)
+                    .padding(.top, 2)
+                    .padding(.bottom, 4)
+            }
+        }
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(Color.primary.opacity(0.16))
+                .frame(width: 1, height: 16)
+                .padding(.bottom, 2)
+                .opacity(showsDivider ? 1 : 0)
+        }
         .contentShape(Rectangle())
         .onTapGesture { model.selectedID = tab.id }
-        .onHover { hovering = $0 }
+        .onHover { inside in
+            if inside { hoveredID = tab.id } else if hoveredID == tab.id { hoveredID = nil }
+        }
+        .help(tab.url?.host?.strippingWWW ?? tab.displayTitle)
         .contextMenu {
+            Button("New Tab") { model.newTab(focus: true) }
+            Divider()
             Button("Close Tab") { model.close(tab) }
             Button("Close Other Tabs") {
                 for other in model.tabs where other !== tab { model.close(other) }
             }
+            Button("Close Tabs to the Right") {
+                if let i = model.tabs.firstIndex(where: { $0 === tab }) {
+                    for other in model.tabs.suffix(from: i + 1) { model.close(other) }
+                }
+            }
         }
         .animation(.easeOut(duration: 0.12), value: hovering)
+    }
+}
+
+private struct NewTabButton: View {
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "plus")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 26)
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.primary.opacity(hovering ? 0.08 : 0)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("New Tab (⌘T)")
+    }
+}
+
+/// A folder tab: rounded top corners and outward-curving feet that melt into the toolbar.
+struct TabShape: Shape {
+    var foot: CGFloat
+    var radius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let f = foot, r = radius
+        p.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        p.addQuadCurve(to: CGPoint(x: rect.minX + f, y: rect.maxY - f), control: CGPoint(x: rect.minX + f, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX + f, y: rect.minY + r))
+        p.addQuadCurve(to: CGPoint(x: rect.minX + f + r, y: rect.minY), control: CGPoint(x: rect.minX + f, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX - f - r, y: rect.minY))
+        p.addQuadCurve(to: CGPoint(x: rect.maxX - f, y: rect.minY + r), control: CGPoint(x: rect.maxX - f, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX - f, y: rect.maxY - f))
+        p.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.maxY), control: CGPoint(x: rect.maxX - f, y: rect.maxY))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Lines the red, yellow and green window buttons up with the tabs.
+enum TrafficLights {
+    static func align(in window: NSWindow?, rowHeight: CGFloat = Chrome.tabBarHeight) {
+        guard let window, !window.styleMask.contains(.fullScreen),
+              let close = window.standardWindowButton(.closeButton),
+              let titlebar = close.superview else { return }
+        let buttons: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+        // Centre of the tabs, measured from the top of the window.
+        let centre = rowHeight - 31 / 2 - 1
+        for (i, type) in buttons.enumerated() {
+            guard let button = window.standardWindowButton(type) else { continue }
+            let size = button.frame.size
+            let y = titlebar.isFlipped ? centre - size.height / 2
+                                       : titlebar.bounds.height - centre - size.height / 2
+            let x = 13 + CGFloat(i) * 20
+            button.setFrameOrigin(NSPoint(x: x, y: y))
+        }
     }
 }

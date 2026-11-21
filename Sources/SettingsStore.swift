@@ -62,6 +62,7 @@ enum Prefs {
     static let locationPolicy = "locationPolicy"
     static let offerBookmarks = "offerBookmarks"
     static let powerMode = "powerMode"
+    static let magicTheme = "magicTheme"
     static let pauseBackgroundMedia = "pauseBackgroundMedia"
     static let freeMemoryAutomatically = "freeMemoryAutomatically"
 
@@ -117,6 +118,7 @@ enum Prefs {
         locationPolicy: PermissionPolicy.ask.rawValue,
         offerBookmarks: true,
         powerMode: PowerMode.automatic.rawValue,
+        magicTheme: false,
         pauseBackgroundMedia: false,
         freeMemoryAutomatically: true,
     ]
