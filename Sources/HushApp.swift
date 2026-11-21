@@ -30,6 +30,7 @@ struct HushApp: App {
             SettingsView()
                 .transaction { if reduceMotion { $0.animation = nil } }
         }
+
     }
 }
 

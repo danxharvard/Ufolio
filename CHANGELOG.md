@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.0
+
+**New look for Settings**
+- A clean, Safari-style layout: no boxes or divider lines, settings on the left and their
+  controls on the right, with room to breathe between sections.
+- Each section opens with its icon on the left and a short description beside it.
+- A slim title bar instead of the tall one.
+- Checkboxes, like Safari's Settings, with the coloured icons kept for the main options.
+
 ## 0.10.0
 
 **New: Safari extensions** (macOS 15.4 or later)

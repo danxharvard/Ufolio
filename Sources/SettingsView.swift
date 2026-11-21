@@ -137,6 +137,11 @@ struct SettingsView: View {
             .animation(.easeOut(duration: 0.18), value: tab)
             .navigationTitle(tab.title)
         }
+        // A slim, compact title bar (keeps the window's close/minimise/zoom buttons).
+        .background(WindowReader { window in
+            window?.toolbarStyle = .unifiedCompact
+            window?.titlebarSeparatorStyle = .none
+        })
         .frame(width: 900, height: 680)
         .accentColor(AccentChoice(rawValue: accent)?.color)
         .onChange(of: query) { q in
@@ -185,6 +190,49 @@ private struct SidebarCard: View {
 
 // MARK: - Shared pieces
 
+/// Hush's settings layout: one centred column, labels on the left, controls on the right,
+/// no boxes or divider lines.
+struct SafariFormStyle: FormStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 11) {
+                configuration.content
+            }
+            .toggleStyle(.checkbox)
+            .labeledContentStyle(SafariLabeledStyle())
+            .padding(.horizontal, 40)
+            .padding(.top, 8)
+            .padding(.bottom, 36)
+            .frame(maxWidth: 660, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+    }
+}
+
+/// The label on the left, the control on the right of the row.
+struct SafariLabeledStyle: LabeledContentStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            configuration.label
+            Spacer(minLength: 16)
+            configuration.content
+        }
+    }
+}
+
+/// A section title with space above it, so sections breathe.
+private struct SectionTitle: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View {
+        Text(text)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .padding(.top, 18)
+            .padding(.bottom, 2)
+    }
+}
+
 
 /// A System Settings–style rounded icon tile.
 struct IconTile: View {
@@ -218,24 +266,22 @@ private struct SettingsHeader: View {
     let subtitle: String
 
     var body: some View {
-        VStack(spacing: 10) {
-            ZStack {
-                IconTile(symbol: tab.symbol, colors: tab.colors, size: 58)
-                    // A tight, soft halo close to the icon (no wide glow muddying the grey).
-                    .shadow(color: (tab.colors.first ?? .clear).opacity(0.45), radius: 6)
-                    .shadow(color: .black.opacity(0.18), radius: 3, y: 2)
+        HStack(alignment: .center, spacing: 16) {
+            IconTile(symbol: tab.symbol, colors: tab.colors, size: 54)
+                // A tight, soft halo close to the icon.
+                .shadow(color: (tab.colors.first ?? .clear).opacity(0.4), radius: 5)
+                .shadow(color: .black.opacity(0.18), radius: 3, y: 2)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(tab.title).font(.system(size: 20, weight: .bold))
+                Text(subtitle)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(height: 74)
-            Text(tab.title).font(.system(size: 20, weight: .bold))
-            Text(subtitle)
-                .font(.system(size: 12.5))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 440)
-                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
+        .padding(.top, 14)
+        .padding(.bottom, 4)
     }
 }
 
@@ -380,18 +426,18 @@ private struct GeneralSettings: View {
                 if !isDefaultBrowser {
                     Toggle("Ask when Hush opens", isOn: $askDefault)
                 }
-            } header: { Text("Default browser") }
+            } header: { SectionTitle("Default browser") }
 
             Section {
-                Picker("Hush opens with", selection: $launch) {
+                LabeledContent("Hush opens with") { Picker("", selection: $launch) {
                     ForEach(LaunchBehavior.allCases) { Text($0.label).tag($0.rawValue) }
-                }
-                Picker("New windows open with", selection: $newWindowPage) {
+                }.labelsHidden().fixedSize() }
+                LabeledContent("New windows open with") { Picker("", selection: $newWindowPage) {
                     ForEach(NewTabPage.allCases) { Text($0.label).tag($0.rawValue) }
-                }
-                Picker("New tabs open with", selection: $newTabPage) {
+                }.labelsHidden().fixedSize() }
+                LabeledContent("New tabs open with") { Picker("", selection: $newTabPage) {
                     ForEach(NewTabPage.allCases) { Text($0.label).tag($0.rawValue) }
-                }
+                }.labelsHidden().fixedSize() }
                 LabeledContent("Homepage") {
                     HStack {
                         TextField("", text: $homepage, prompt: Text("example.com"))
@@ -403,21 +449,21 @@ private struct GeneralSettings: View {
                         .disabled(BrowserModel.frontmost?.selectedTab?.url == nil)
                     }
                 }
-            } header: { Text("Startup") }
+            } header: { SectionTitle("Startup") }
 
             Section {
-                Picker("Search engine", selection: $engine) {
+                LabeledContent("Search engine") { Picker("", selection: $engine) {
                     ForEach(SearchEngine.allCases) { Text($0.name).tag($0.rawValue) }
-                }
+                }.labelsHidden().fixedSize() }
                 DescribedToggle(title: "Show search suggestions",
                                 detail: "What you type in the address bar is sent to \(engineName) to suggest searches.",
                                 isOn: $suggestions)
-            } header: { Text("Search") }
+            } header: { SectionTitle("Search") }
 
             Section {
-                Picker("Remove history items", selection: $historyRetention) {
+                LabeledContent("Remove history items") { Picker("", selection: $historyRetention) {
                     ForEach(HistoryRetention.allCases) { Text($0.label).tag($0.rawValue) }
-                }
+                }.labelsHidden().fixedSize() }
                 HStack {
                     Menu("Import from Another Browser") {
                         ForEach(BrowserImporter.available()) { source in
@@ -431,7 +477,7 @@ private struct GeneralSettings: View {
                     Spacer()
                     Button("Clear History…") { confirmClearHistory = true }
                 }
-            } header: { Text("History") } footer: {
+            } header: { SectionTitle("History") } footer: {
                 Footnote("History stays on this Mac. It powers Frequently Visited and address-bar suggestions.")
             }
 
@@ -444,28 +490,28 @@ private struct GeneralSettings: View {
                         Button("Change…", action: chooseFolder)
                     }
                 }
-                Picker("Remove download list items", selection: $downloadRetention) {
+                LabeledContent("Remove download list items") { Picker("", selection: $downloadRetention) {
                     ForEach(DownloadRetention.allCases) { Text($0.label).tag($0.rawValue) }
-                }
+                }.labelsHidden().fixedSize() }
                 Toggle("Ask where to save each download", isOn: $askWhereToSave)
                 DescribedToggle(title: "Open “safe” files after downloading",
                                 detail: "“Safe” files include movies, pictures, sounds, PDFs, text documents and archives.",
                                 isOn: $openSafeFiles)
-            } header: { Text("Downloads") }
+            } header: { SectionTitle("Downloads") }
 
             Section {
-                Picker("Sleep inactive tabs", selection: $tabSleep) {
+                LabeledContent("Sleep inactive tabs") { Picker("", selection: $tabSleep) {
                     Text("Never").tag(0.0)
                     Text("After 5 minutes").tag(5.0)
                     Text("After 15 minutes").tag(15.0)
                     Text("After 30 minutes").tag(30.0)
                     Text("After 1 hour").tag(60.0)
-                }
-            } header: { Text("Performance") } footer: {
+                }.labelsHidden().fixedSize() }
+            } header: { SectionTitle("Performance") } footer: {
                 Footnote("Sleeping tabs free their memory and wake instantly with the page as you left it. Tabs playing sound or video never sleep.")
             }
         }
-        .formStyle(.grouped)
+        .formStyle(SafariFormStyle())
         .onAppear { isDefaultBrowser = DefaultBrowser.isDefault }
         .alert("Clear all history?", isPresented: $confirmClearHistory) {
             Button("Clear History", role: .destructive) {
@@ -545,12 +591,12 @@ private struct AppearanceSettings: View {
                         }
                     }
                 }
-            } header: { Text("Theme") }
+            } header: { SectionTitle("Theme") }
 
             Section {
-                Picker("Background", selection: $background) {
+                LabeledContent("Background") { Picker("", selection: $background) {
                     ForEach(StartBackground.allCases) { Text($0.label).tag($0.rawValue) }
-                }
+                }.labelsHidden().fixedSize() }
                 .pickerStyle(.segmented)
                 DescribedToggle(title: "Translucent background",
                                 detail: "Lets your desktop show softly through the start page, like frosted glass.",
@@ -560,24 +606,24 @@ private struct AppearanceSettings: View {
                 Toggle("Show Favourites", isOn: $startBookmarks)
                 Toggle("Show Suggestions", isOn: $startFrequent)
                 Toggle("Show Privacy Report", isOn: $startPrivacy)
-            } header: { Text("Start page") }
+            } header: { SectionTitle("Start page") }
 
             Section {
                 Toggle("Show bookmarks bar", isOn: $bookmarkBar)
                 Toggle("Always show the tab bar", isOn: $alwaysTabBar)
                 Toggle("Show full website address", isOn: $fullAddress)
-            } header: { Text("Toolbar and tabs") }
+            } header: { SectionTitle("Toolbar and tabs") }
 
             Section {
                 DescribedToggle(title: "Reduce motion",
                                 detail: "Turns off Hush’s animations, for a calmer, snappier feel.",
                                 isOn: $reduceMotion)
-                Picker("Default page zoom", selection: $zoom) {
+                LabeledContent("Default page zoom") { Picker("", selection: $zoom) {
                     ForEach(zoomLevels, id: \.self) { Text("\(Int(($0 * 100).rounded()))%").tag($0) }
-                }
-            } header: { Text("Motion and zoom") }
+                }.labelsHidden().fixedSize() }
+            } header: { SectionTitle("Motion and zoom") }
         }
-        .formStyle(.grouped)
+        .formStyle(SafariFormStyle())
     }
 }
 
@@ -720,18 +766,18 @@ private struct PrivacySettings: View {
                 DescribedToggle(title: "Warn when visiting a fraudulent website",
                                 detail: "Uses the same Safe Browsing check as Safari.",
                                 isOn: $fraud)
-            } header: { Text("Tracking protection") }
+            } header: { SectionTitle("Tracking protection") }
 
             Section {
-                Picker("Camera and microphone", selection: $camera) {
+                LabeledContent("Camera and microphone") { Picker("", selection: $camera) {
                     ForEach(PermissionPolicy.allCases) { Text($0.label).tag($0.rawValue) }
-                }
-                Picker("Auto-play", selection: $autoplay) {
+                }.labelsHidden().fixedSize() }
+                LabeledContent("Auto-play") { Picker("", selection: $autoplay) {
                     ForEach(AutoplayPolicy.allCases) { Text($0.label).tag($0.rawValue) }
-                }
+                }.labelsHidden().fixedSize() }
                 Toggle("Block pop-up windows", isOn: $popups)
                 Toggle("Allow JavaScript", isOn: $javaScript)
-            } header: { Text("Websites") } footer: {
+            } header: { SectionTitle("Websites") } footer: {
                 Text("Auto-play, pop-up and fraud-warning changes apply to tabs you open afterwards.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -739,7 +785,7 @@ private struct PrivacySettings: View {
 
             Section {
                 RememberedPermissions(kinds: [.camera, .microphone])
-            } header: { Text("Camera and microphone decisions") }
+            } header: { SectionTitle("Camera and microphone decisions") }
 
             Section {
                 HStack {
@@ -752,9 +798,9 @@ private struct PrivacySettings: View {
                     Button("Clear All…") { confirmClear = true }
                         .disabled(siteCount == 0)
                 }
-            } header: { Text("Website data") }
+            } header: { SectionTitle("Website data") }
         }
-        .formStyle(.grouped)
+        .formStyle(SafariFormStyle())
         .onAppear(perform: countSites)
         .alert("Clear all website data?", isPresented: $confirmClear) {
             Button("Clear", role: .destructive, action: clearData)
@@ -810,7 +856,7 @@ private struct AdBlockerSettings: View {
                 DescribedToggle(title: "Hide cookie banners",
                                 detail: "Hides common “accept cookies” pop-ups without accepting anything.",
                                 isOn: $cookieBanners)
-            } header: { Text("Built-in protection") }
+            } header: { SectionTitle("Built-in protection") }
 
             Section {
                 if blocker.lists.isEmpty {
@@ -833,7 +879,7 @@ private struct AdBlockerSettings: View {
                         .font(.system(size: 11.5))
                         .foregroundStyle(blocker.statusIsError ? Color.orange : Color.secondary)
                 }
-            } header: { Text("Your filter lists") } footer: {
+            } header: { SectionTitle("Your filter lists") } footer: {
                 Text("Works with Adblock Plus and uBlock Origin lists, hosts files and Safari content-blocker JSON. Advanced rules WebKit can’t run are skipped.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -853,7 +899,7 @@ private struct AdBlockerSettings: View {
                             .controlSize(.small)
                     }
                 }
-            } header: { Text("Sites with Hush Guard off") }
+            } header: { SectionTitle("Sites with Hush Guard off") }
 
             Section {
                 if zapper.hidden.isEmpty {
@@ -869,9 +915,9 @@ private struct AdBlockerSettings: View {
                         Button("Show Again") { zapper.showAgain(site) }.controlSize(.small)
                     }
                 }
-            } header: { Text("Hidden elements") }
+            } header: { SectionTitle("Hidden elements") }
         }
-        .formStyle(.grouped)
+        .formStyle(SafariFormStyle())
         .sheet(isPresented: $showWebSheet) { AddListSheet() }
         .alert("Reset the counter?", isPresented: $confirmReset) {
             Button("Reset", role: .destructive) { stats.reset() }
@@ -1096,17 +1142,17 @@ private struct LocationSettings: View {
                         }
                     }
                 }
-            } header: { Text("Hush") } footer: {
+            } header: { SectionTitle("Hush") } footer: {
                 Text("Your position is rounded to about 1 km before it leaves your Mac. It goes to Open-Meteo for the weather and to Apple to find your town’s name.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             Section {
-                Picker("When a website asks for your location", selection: $policy) {
+                LabeledContent("When a website asks for your location") { Picker("", selection: $policy) {
                     ForEach(PermissionPolicy.allCases) { Text($0.label).tag($0.rawValue) }
-                }
-            } header: { Text("Websites") } footer: {
+                }.labelsHidden().fixedSize() }
+            } header: { SectionTitle("Websites") } footer: {
                 Text("Maps, delivery and weather sites can use your location to show nearby results. Hush asks you first and remembers your answer.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1114,9 +1160,9 @@ private struct LocationSettings: View {
 
             Section {
                 RememberedPermissions(kinds: [.location])
-            } header: { Text("Your answers") }
+            } header: { SectionTitle("Your answers") }
         }
-        .formStyle(.grouped)
+        .formStyle(SafariFormStyle())
         .onChange(of: weatherOn) { on in
             if on { weather.request() } else { weather.clear() }
         }
@@ -1162,7 +1208,7 @@ private struct UpdateSettings: View {
                 Section {
                     ReleaseNotesView(notes: installed)
                         .padding(.vertical, 6)
-                } header: { Text("What’s in Hush \(installed.version)") }
+                } header: { SectionTitle("What’s in Hush \(installed.version)") }
             }
 
             if let notes = updater.releaseNotes, isShowingRelease {
@@ -1178,7 +1224,7 @@ private struct UpdateSettings: View {
                         Link("View on GitHub", destination: page)
                             .font(.system(size: 12))
                     }
-                } header: { Text("What’s new") }
+                } header: { SectionTitle("What’s new") }
             }
 
             Section {
@@ -1187,7 +1233,7 @@ private struct UpdateSettings: View {
                                 detail: "New versions download in the background and install the next time you quit Hush.",
                                 isOn: $autoInstall)
                     .disabled(!autoCheck)
-            } header: { Text("Automatic updates") } footer: {
+            } header: { SectionTitle("Automatic updates") } footer: {
                 Text("Updates come from github.com/\(Updater.repo). Each download is checked against GitHub’s fingerprint before it’s installed.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1206,10 +1252,10 @@ private struct UpdateSettings: View {
                         }
                         .buttonStyle(.link)
                     }
-                } header: { Text("Earlier versions") }
+                } header: { SectionTitle("Earlier versions") }
             }
         }
-        .formStyle(.grouped)
+        .formStyle(SafariFormStyle())
     }
 
     private var isShowingRelease: Bool {
@@ -1310,7 +1356,7 @@ private struct PasswordSettings: View {
                 AutofillToggleRow(title: "Credit cards",
                                   detail: "Fills in card details on checkout pages. Security codes are never stored.",
                                   isOn: $cards, button: "Add Card…") { showAddCard = true }
-            } header: { Text("AutoFill web forms") } footer: {
+            } header: { SectionTitle("AutoFill web forms") } footer: {
                 Footnote("AutoFill only works on secure (https) pages, and only fills a password on the exact site it was saved for.")
             }
 
@@ -1386,7 +1432,7 @@ private struct PasswordSettings: View {
                             .buttonStyle(.borderless).help("Delete")
                     }
                 }
-            } header: { Text("Credit cards") }
+            } header: { SectionTitle("Credit cards") }
 
             if !neverSave.isEmpty {
                 Section {
@@ -1402,10 +1448,10 @@ private struct PasswordSettings: View {
                             .controlSize(.small)
                         }
                     }
-                } header: { Text("Never save passwords for") }
+                } header: { SectionTitle("Never save passwords for") }
             }
         }
-        .formStyle(.grouped)
+        .formStyle(SafariFormStyle())
         .onAppear { cardList = CardVault.list() }
         .onDisappear { lock() }
         .sheet(isPresented: $showAddCard) {
@@ -1502,7 +1548,7 @@ private struct AddCardSheet: View {
                     }
                 }
             }
-            .formStyle(.grouped)
+            .formStyle(SafariFormStyle())
             .frame(height: 170)
             if let error {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -1590,7 +1636,7 @@ private struct ExtensionSettings: View {
                             .foregroundStyle(store.statusIsError ? Color.orange : Color.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                } header: { Text("Add an extension") } footer: {
+                } header: { SectionTitle("Add an extension") } footer: {
                     Footnote("Find an extension in the Chrome Web Store, copy the address of its page and paste it here. Hush shows what it can access before adding it.")
                 }
 
@@ -1603,7 +1649,7 @@ private struct ExtensionSettings: View {
                     ForEach(safariExtensions) { info in
                         SafariExtensionRow(info: info)
                     }
-                } header: { Text("Safari extensions on this Mac") } footer: {
+                } header: { SectionTitle("Safari extensions on this Mac") } footer: {
                     Footnote("Safari web extensions run in Hush straight from their app. Content blockers can share their rules with Hush Guard when the app includes them as a file.")
                 }
 
@@ -1614,10 +1660,10 @@ private struct ExtensionSettings: View {
                     ForEach(store.installed) { ext in
                         ExtensionRow(ext: ext)
                     }
-                } header: { Text("Installed") }
+                } header: { SectionTitle("Installed") }
             }
         }
-        .formStyle(.grouped)
+        .formStyle(SafariFormStyle())
         .onAppear(perform: refreshSafari)
     }
 
