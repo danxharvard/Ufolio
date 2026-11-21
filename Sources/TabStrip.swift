@@ -48,6 +48,10 @@ struct WindowTabBar: View {
     var toolbarColor: Color = Chrome.toolbar
     var leadingInset: CGFloat = 80
     @State private var hoveredID: UUID?
+    /// Drag to reorder: the tab being dragged and how far it is from its slot.
+    @State private var draggingID: UUID?
+    @State private var dragOffset: CGFloat = 0
+    @State private var slotsMoved: CGFloat = 0
 
     var body: some View {
         GeometryReader { geo in
@@ -61,9 +65,14 @@ struct WindowTabBar: View {
                     let next = index + 1 < tabs.count ? tabs[index + 1] : nil
                     let divider = next != nil && tab.id != selectedID && next?.id != selectedID
                         && hoveredID != tab.id && hoveredID != next?.id
+                    let dragging = draggingID == tab.id
                     ChromeTab(model: model, tab: tab, isSelected: tab.id == selectedID, width: width,
-                              showsDivider: divider, fill: toolbarColor, hoveredID: $hoveredID)
-                        .zIndex(tab.id == selectedID ? 1 : 0)
+                              showsDivider: divider && draggingID == nil, fill: toolbarColor, hoveredID: $hoveredID)
+                        .offset(x: dragging ? dragOffset : 0)
+                        // The dragged tab follows the pointer exactly; the others slide out of its way.
+                        .transaction { if dragging { $0.animation = nil } }
+                        .zIndex(dragging ? 2 : tab.id == selectedID ? 1 : 0)
+                        .gesture(reorderGesture(for: tab, width: width))
                 }
                 NewTabButton { model.newTab(focus: true) }
                     .padding(.leading, 6)
@@ -81,6 +90,38 @@ struct WindowTabBar: View {
                 .simultaneousGesture(TapGesture(count: 2).onEnded { model.window?.performZoom(nil) })
         )
         .animation(.spring(response: 0.28, dampingFraction: 0.88), value: model.tabs.map(\.id))
+    }
+
+    private func reorderGesture(for tab: BrowserTab, width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 6)
+            .onChanged { value in
+                if draggingID == nil {
+                    draggingID = tab.id
+                    slotsMoved = 0
+                    if model.selectedID != tab.id { model.selectedID = tab.id }
+                }
+                guard draggingID == tab.id, let index = model.tabs.firstIndex(where: { $0 === tab }) else { return }
+                var offset = value.translation.width - slotsMoved * width
+                // Past halfway over a neighbour: swap places with it.
+                if offset > width / 2, index < model.tabs.count - 1 {
+                    model.moveTab(from: index, to: index + 1)
+                    slotsMoved += 1
+                    offset -= width
+                } else if offset < -width / 2, index > 0 {
+                    model.moveTab(from: index, to: index - 1)
+                    slotsMoved -= 1
+                    offset += width
+                }
+                dragOffset = offset
+            }
+            .onEnded { _ in
+                // Settle into its new slot.
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                    dragOffset = 0
+                    draggingID = nil
+                }
+                slotsMoved = 0
+            }
     }
 }
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.1
+
+**New**
+- Drag tabs to put them in any order. The other tabs slide out of the way, and the new order
+  is kept for next time.
+
 ## 0.17.0
 
 **New: redesigned tab bar**

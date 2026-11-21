@@ -321,6 +321,11 @@ enum ExtensionEvents {
         guard active, #available(macOS 15.4, *) else { return }
         MainActor.assumeIsolated { ExtensionManager.shared.tabActivated(tab, previous: previous) }
     }
+    static func moved(_ tab: BrowserTab, from index: Int, in model: BrowserModel) {
+        guard active, #available(macOS 15.4, *) else { return }
+        MainActor.assumeIsolated { ExtensionManager.shared.tabMoved(tab, from: index, in: model) }
+    }
+
     static func changed(_ tab: BrowserTab) {
         guard active, #available(macOS 15.4, *) else { return }
         MainActor.assumeIsolated { ExtensionManager.shared.tabChanged(tab) }
@@ -433,6 +438,9 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
     func tabOpened(_ tab: BrowserTab) { controller.didOpenTab(tab) }
     func tabClosed(_ tab: BrowserTab) { controller.didCloseTab(tab) }
     func tabActivated(_ tab: BrowserTab, previous: BrowserTab?) { controller.didActivateTab(tab, previousActiveTab: previous) }
+    func tabMoved(_ tab: BrowserTab, from index: Int, in model: BrowserModel) {
+        controller.didMoveTab(tab, from: index, in: model)
+    }
     func tabChanged(_ tab: BrowserTab) { controller.didChangeTabProperties([.URL, .title, .loading], for: tab) }
 
     // MARK: WKWebExtensionControllerDelegate

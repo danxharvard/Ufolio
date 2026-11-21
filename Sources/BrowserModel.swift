@@ -155,6 +155,15 @@ final class BrowserModel: NSObject, ObservableObject {
         if let tab = selectedTab { close(tab) }
     }
 
+    /// Moves a tab to a new position in the tab bar (drag to reorder).
+    func moveTab(from source: Int, to destination: Int) {
+        guard tabs.indices.contains(source), tabs.indices.contains(destination), source != destination else { return }
+        let tab = tabs.remove(at: source)
+        tabs.insert(tab, at: destination)
+        ExtensionEvents.moved(tab, from: source, in: self)
+        scheduleSessionSave()
+    }
+
     func selectAdjacentTab(_ offset: Int) {
         guard tabs.count > 1, let current = selectedTab,
               let index = tabs.firstIndex(where: { $0 === current }) else { return }
