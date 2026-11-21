@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.1
+
+**Improved**
+- Websites' location, camera and microphone requests: "Don't Allow" is now remembered too, and
+  "Allow Once" lasts until you quit Hush, so sites stop asking every time. Change any answer in
+  Settings › Location or Privacy & Security.
+- The Hush Guard panel shows the Hush logo when there's no website open (instead of a blank icon).
+
 ## 0.8.0
 
 **New: Chrome extensions** (macOS 15.4 or later)

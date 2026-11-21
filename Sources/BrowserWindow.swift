@@ -301,7 +301,7 @@ private struct ShieldsButton: View {
     }
 }
 
-private struct ShieldsPanel: View {
+struct ShieldsPanel: View {
     @ObservedObject var tab: BrowserTab
     let shieldsUp: Bool
     @ObservedObject private var stats = BlockStats.shared
@@ -313,7 +313,11 @@ private struct ShieldsPanel: View {
 
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 10) {
-                    Favicon(url: tab.url, size: 22)
+                    if tab.url == nil {
+                        HushLogoTile(size: 24)
+                    } else {
+                        Favicon(url: tab.url, size: 22)
+                    }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(tab.host?.strippingWWW ?? "Hush Guard")
                             .font(.system(size: 13.5, weight: .semibold))

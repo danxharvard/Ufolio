@@ -25,6 +25,8 @@ final class SitePermissions: ObservableObject {
 
     /// host → permission → allowed
     @Published private(set) var decisions: [String: [String: Bool]]
+    /// "Allow Once" answers, kept until Hush quits.
+    private var sessionAllowed: Set<String> = []
 
     private init() {
         decisions = UserDefaults.standard.dictionary(forKey: "sitePermissions") as? [String: [String: Bool]] ?? [:]
@@ -66,6 +68,8 @@ final class SitePermissions: ObservableObject {
     func request(_ kinds: [PermissionKind], host: String?, window: NSWindow?, completion: @escaping (Bool) -> Void) {
         guard let host, !host.isEmpty else { completion(false); return }
         if kinds.contains(where: { policy(for: $0) == .never }) { completion(false); return }
+        let siteKey = ContentBlocker.normalize(host)
+        if kinds.allSatisfy({ sessionAllowed.contains(siteKey + "|" + $0.rawValue) }) { completion(true); return }
         let remembered = kinds.map { decision(for: host, $0) }
         if remembered.allSatisfy({ $0 == true }) { completion(true); return }
         if remembered.contains(where: { $0 == false }) { completion(false); return }
@@ -93,12 +97,14 @@ final class SitePermissions: ObservableObject {
 
         let finish: (NSApplication.ModalResponse) -> Void = { [weak self] response in
             switch response {
-            case .alertFirstButtonReturn:           // Allow Once: just this time
+            case .alertFirstButtonReturn:           // Allow Once: until Hush quits
+                for kind in kinds { self?.sessionAllowed.insert(site + "|" + kind.rawValue) }
                 completion(true)
             case .alertSecondButtonReturn:          // Always Allow: remembered for this site
                 self?.set(true, for: site, kinds)
                 completion(true)
-            default:                                // Don't Allow: this time; the site can ask again later
+            default:                                // Don't Allow: remembered, so the site stops asking
+                self?.set(false, for: site, kinds)
                 completion(false)
             }
         }
