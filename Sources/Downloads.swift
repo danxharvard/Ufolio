@@ -74,7 +74,8 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
     private static let safeExtensions: Set<String> = [
         "jpg", "jpeg", "png", "gif", "heic", "webp", "tiff", "bmp",
         "mov", "mp4", "m4v", "mp3", "m4a", "aac", "wav", "aiff",
-        "pdf", "txt", "rtf", "csv", "zip",
+        "pdf", "txt", "rtf",
+        // Not zip (opening unpacks it straight away) or csv (spreadsheet apps can run formulas in it).
     ]
 
     static var folder: URL {
@@ -103,10 +104,7 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
 
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse,
                   suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
-        // Never let a site choose a path: keep only the file's name.
-        let safeName = (suggestedFilename as NSString).lastPathComponent
-            .replacingOccurrences(of: ":", with: "-")
-        let name = safeName.isEmpty || safeName.hasPrefix(".") ? "download" + safeName : safeName
+        let name = Self.safeFilename(suggestedFilename)
 
         let begin: (URL?) -> Void = { url in
             guard let url else { completionHandler(nil); return }
@@ -145,6 +143,22 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
             n += 1
         }
         begin(candidate)
+    }
+
+    /// Never let a site choose a path or disguise a file: keep only the name, drop invisible
+    /// direction-changing characters (which can make "app" look like "jpg"), and keep it short.
+    static func safeFilename(_ suggested: String) -> String {
+        let invisible: Set<UInt32> = [0x200E, 0x200F, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069, 0x061C]
+        var name = String(String.UnicodeScalarView((suggested as NSString).lastPathComponent.unicodeScalars.filter {
+            !invisible.contains($0.value) && !CharacterSet.controlCharacters.contains($0)
+        }))
+        name = name.replacingOccurrences(of: ":", with: "-").replacingOccurrences(of: "/", with: "-")
+            .trimmingCharacters(in: .whitespaces)
+        if name.isEmpty || name.hasPrefix(".") { name = "download" + name }
+        let ext = (name as NSString).pathExtension
+        var base = (name as NSString).deletingPathExtension
+        if base.utf8.count > 200 { base = String(base.prefix(120)) }
+        return ext.isEmpty || ext.count > 20 ? String(name.prefix(200)) : base + "." + ext
     }
 
     func downloadDidFinish(_ download: WKDownload) {

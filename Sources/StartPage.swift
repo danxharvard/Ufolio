@@ -509,7 +509,7 @@ private struct AuroraView: View {
     ]
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 24, paused: !animate || activeState == .inactive)) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 15, paused: !animate || activeState == .inactive)) { context in
             Canvas { ctx, size in
                 let base = dark ? Color(red: 0.07, green: 0.07, blue: 0.11) : Color(red: 0.97, green: 0.97, blue: 0.99)
                 ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(base.opacity(translucent ? 0.45 : 1)))

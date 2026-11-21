@@ -237,6 +237,9 @@ final class ContentBlocker: ObservableObject {
                 var request = URLRequest(url: url)
                 request.timeoutInterval = 60
                 let (data, response) = try await URLSession.shared.data(for: request)
+                guard data.count < 60_000_000 else {
+                    throw NSError(domain: "Hush", code: 413, userInfo: [NSLocalizedDescriptionKey: "That list is too large."])
+                }
                 if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                     throw NSError(domain: "Hush", code: http.statusCode, userInfo: [
                         NSLocalizedDescriptionKey: "The server answered with error \(http.statusCode).",
@@ -618,10 +621,11 @@ enum UserScripts {
         var boxes = document.querySelectorAll(CONTAINERS);
         for (var b = 0; b < boxes.length; b++) {
           var box = boxes[b];
-          if (!/cookie|consent|privacy|gdpr|tracking|personal data|partners/i.test(box.innerText || '')) continue;
+          // textContent, not innerText: reading innerText makes the page lay itself out again.
+          if (!/cookie|consent|privacy|gdpr|tracking|personal data|partners/i.test((box.textContent || '').slice(0, 4000))) continue;
           var buttons = box.querySelectorAll('button, [role="button"], a[href="#"], input[type="button"], input[type="submit"]');
           for (var k = 0; k < buttons.length; k++) {
-            var t = (buttons[k].innerText || buttons[k].value || buttons[k].getAttribute('aria-label') || '').trim();
+            var t = (buttons[k].textContent || buttons[k].value || buttons[k].getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim();
             if (t.length < 40 && REJECT.test(t) && press(buttons[k])) return;
           }
         }

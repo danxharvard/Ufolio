@@ -46,9 +46,11 @@ final class RecentlyClosed: ObservableObject {
         save()
     }
 
+    private static let saveQueue = DispatchQueue(label: "hush.recently-closed.save", qos: .utility)
+
     private func save() {
         let snapshot = tabs, file = self.file
-        DispatchQueue.global(qos: .utility).async {
+        Self.saveQueue.async {
             if let data = try? JSONEncoder().encode(snapshot) { try? data.write(to: file, options: .atomic) }
         }
     }
@@ -85,6 +87,8 @@ final class PrivacyReport: ObservableObject {
     private var days: [String: Day] = [:]
     private let file = AppPaths.support.appendingPathComponent("privacy-report.json")
     private var saveWork: DispatchWorkItem?
+    private var recomputeScheduled = false
+    private let saveQueue = DispatchQueue(label: "hush.privacy-report.save", qos: .utility)
     private static let dayFormat: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
@@ -112,6 +116,7 @@ final class PrivacyReport: ObservableObject {
     func recordBlocked(tracker url: URL, on site: String?) {
         guard let host = url.host else { return }
         let tracker = Domains.site(host)
+        let today = self.today
         var day = days[today, default: Day()]
         day.blocked += 1
         if let site, !site.isEmpty {
@@ -127,11 +132,19 @@ final class PrivacyReport: ObservableObject {
 
     func reset() {
         days = [:]
+        recompute()
         changed()
     }
 
+    /// Pages can block hundreds of requests as they load: add up the report at most twice a second.
     private func changed() {
-        recompute()
+        if !recomputeScheduled {
+            recomputeScheduled = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.recomputeScheduled = false
+                self?.recompute()
+            }
+        }
         saveWork?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.save() }
         saveWork = work
@@ -162,12 +175,14 @@ final class PrivacyReport: ObservableObject {
                           sitesWithTrackers: withTrackers.count, trackers: ranked)
     }
 
-    func save() {
+    func save(waiting: Bool = false) {
+        saveWork?.cancel()
         prune()
         let snapshot = days, file = self.file
-        DispatchQueue.global(qos: .utility).async {
+        let write = {
             if let data = try? JSONEncoder().encode(snapshot) { try? data.write(to: file, options: .atomic) }
         }
+        if waiting { saveQueue.sync(execute: write) } else { saveQueue.async(execute: write) }
     }
 }
 

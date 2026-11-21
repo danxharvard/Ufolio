@@ -240,8 +240,11 @@ enum URLResolver {
            ["http", "https", "file", "about"].contains(scheme) {
             return url
         }
-        if looksLikeAddress(input), let url = URL(string: "https://\(input)") {
-            return url
+        if looksLikeAddress(input) {
+            // Local servers usually don't do HTTPS.
+            let host = input.split(separator: "/").first.map { String($0.split(separator: ":").first ?? "") } ?? ""
+            let local = host == "localhost" || host.hasSuffix(".local") || host.split(separator: ".").allSatisfy { Int($0) != nil }
+            return URL(string: (local ? "http://" : "https://") + input)
         }
         return searchURL(for: input)
     }

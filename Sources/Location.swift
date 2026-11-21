@@ -75,6 +75,8 @@ final class SitePermissions: ObservableObject {
         if remembered.contains(where: { $0 == false }) { completion(false); return }
 
         let site = ContentBlocker.normalize(host)
+        // One question at a time: a page asking over and over can't stack up prompts.
+        if let window, window.attachedSheet != nil { completion(false); return }
         let what: String
         switch Set(kinds) {
         case [.location]: what = "your location"

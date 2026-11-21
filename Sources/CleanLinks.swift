@@ -29,17 +29,20 @@ enum CleanLinks {
     static func cleaned(_ url: URL) -> URL? {
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
               var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              let items = components.queryItems, !items.isEmpty else { return nil }
+              let query = components.percentEncodedQuery, !query.isEmpty else { return nil }
         let host = url.host?.lowercased().strippingWWW ?? ""
         let siteRules = perSite.first { host == $0.key || host.hasSuffix("." + $0.key) }?.value ?? []
-        let kept = items.filter { item in
-            let name = item.name.lowercased()
+        // Work on the raw, still-encoded pieces, so everything kept stays exactly as it was.
+        let pieces = query.split(separator: "&", omittingEmptySubsequences: false)
+        let kept = pieces.filter { piece in
+            let rawName = piece.split(separator: "=", maxSplits: 1).first.map(String.init) ?? ""
+            let name = (rawName.removingPercentEncoding ?? rawName).lowercased()
             if everywhere.contains(name) || siteRules.contains(name) { return false }
             if prefixes.contains(where: name.hasPrefix) { return false }
             return true
         }
-        guard kept.count != items.count else { return nil }
-        components.queryItems = kept.isEmpty ? nil : kept
+        guard kept.count != pieces.count else { return nil }
+        components.percentEncodedQuery = kept.isEmpty ? nil : kept.joined(separator: "&")
         return components.url
     }
 

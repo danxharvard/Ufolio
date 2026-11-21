@@ -249,15 +249,17 @@ actor FaviconCache {
         if let running = inFlight[host] { return await running.value }
 
         let task = Task<SiteIcon?, Never> {
+            // Kept on disk for two weeks, so icons appear instantly after a relaunch.
+            if let data = Self.cached(host), let icon = Self.makeIcon(data) { return icon }
             for path in ["/apple-touch-icon.png", "/apple-touch-icon-precomposed.png", "/favicon.ico"] {
                 guard let iconURL = URL(string: "https://\(host)\(path)") else { continue }
                 var request = URLRequest(url: iconURL)
                 request.timeoutInterval = 5
-                if let (data, response) = try? await URLSession.shared.data(for: request),
-                   (response as? HTTPURLResponse)?.statusCode == 200,
-                   let image = NSImage(data: data), image.isValid, image.size.width > 0 {
-                    let pixels = image.representations.map(\.pixelsWide).max() ?? Int(image.size.width)
-                    return SiteIcon(image: image, pixels: pixels, tint: Self.mainColor(of: image))
+                if let (data, response) = try? await Self.session.data(for: request),
+                   (response as? HTTPURLResponse)?.statusCode == 200, data.count < 1_000_000,
+                   let icon = Self.makeIcon(data) {
+                    Self.store(data, for: host)
+                    return icon
                 }
             }
             return nil
@@ -267,6 +269,54 @@ actor FaviconCache {
         inFlight[host] = nil
         if let result { cache[host] = result } else { misses.insert(host) }
         return result
+    }
+
+    /// Icons are fetched without cookies, so sites can't recognise you from them.
+    private static let session: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.httpShouldSetCookies = false
+        config.httpCookieAcceptPolicy = .never
+        return URLSession(configuration: config)
+    }()
+
+    private static let folder: URL = {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let dir = caches.appendingPathComponent("Hush Browser/Icons", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    private static func file(for host: String) -> URL? {
+        let safe = host.lowercased()
+        guard !safe.isEmpty, safe.count < 200, safe.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" }),
+              !safe.hasPrefix(".") else { return nil }
+        return folder.appendingPathComponent(safe)
+    }
+
+    /// Forgets saved icons (they show which sites you've visited), e.g. when history is cleared.
+    nonisolated static func clearDisk() {
+        let fm = FileManager.default
+        for file in (try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? [] {
+            try? fm.removeItem(at: file)
+        }
+    }
+
+    private static func cached(_ host: String) -> Data? {
+        guard let file = file(for: host),
+              let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
+              Date().timeIntervalSince(modified) < 14 * 86_400 else { return nil }
+        return try? Data(contentsOf: file)
+    }
+
+    private static func store(_ data: Data, for host: String) {
+        guard let file = file(for: host) else { return }
+        try? data.write(to: file, options: .atomic)
+    }
+
+    private static func makeIcon(_ data: Data) -> SiteIcon? {
+        guard let image = NSImage(data: data), image.isValid, image.size.width > 0 else { return nil }
+        let pixels = image.representations.map(\.pixelsWide).max() ?? Int(image.size.width)
+        return SiteIcon(image: image, pixels: pixels, tint: mainColor(of: image))
     }
 
     /// The average of the icon's coloured pixels (ignoring transparent and near-white ones).

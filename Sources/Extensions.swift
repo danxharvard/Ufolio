@@ -134,9 +134,11 @@ final class ExtensionStore: ObservableObject {
             guard (response as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty else {
                 throw ExtensionError("The Chrome Web Store didn’t provide this extension.")
             }
+            guard data.count < 200_000_000 else { throw ExtensionError("This extension is too large to add.") }
             let zip = try Self.zipData(fromCRX: data)
-            let staging = try unpack(zip: zip)
-            await finishInstall(from: staging, id: id, source: text.trimmingCharacters(in: .whitespacesAndNewlines))
+            let staging = try await Self.unpack(zip: zip)
+            // Always link to the store page itself, never to whatever text was pasted.
+            await finishInstall(from: staging, id: id, source: "https://chromewebstore.google.com/detail/\(id)")
         } catch {
             report(error.localizedDescription, error: true)
         }
@@ -176,7 +178,9 @@ final class ExtensionStore: ObservableObject {
         statusIsError = false
         let staging = FileManager.default.temporaryDirectory.appendingPathComponent("hush-ext-\(UUID().uuidString)")
         do {
-            try FileManager.default.copyItem(at: url, to: staging)
+            try await Task.detached(priority: .userInitiated) {
+                try FileManager.default.copyItem(at: url, to: staging)
+            }.value
             let id = "local-" + UUID().uuidString.lowercased().prefix(12)
             await finishInstall(from: staging, id: String(id), source: nil)
         } catch {
@@ -196,6 +200,7 @@ final class ExtensionStore: ObservableObject {
             return
         }
         do {
+            try FolderSafety.check(staging)
             let ext = try await WKWebExtension(resourceBaseURL: staging)
             let name = ext.displayName ?? "Extension"
             guard ExtensionManager.shared.confirmInstall(ext, name: name) else {
@@ -237,17 +242,20 @@ final class ExtensionStore: ObservableObject {
         return data.subdata(in: start..<data.count)
     }
 
-    private func unpack(zip: Data) throws -> URL {
+    private static func unpack(zip: Data) async throws -> URL {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent("hush-ext-\(UUID().uuidString)")
         let zipFile = temp.appendingPathExtension("zip")
         try zip.write(to: zipFile)
         defer { try? FileManager.default.removeItem(at: zipFile) }
-        let unzip = Process()
-        unzip.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
-        unzip.arguments = ["-x", "-k", zipFile.path, temp.path]
-        try unzip.run()
-        unzip.waitUntilExit()
-        guard unzip.terminationStatus == 0 else { throw ExtensionError("The extension couldn’t be unpacked.") }
+        // Refuse archives with entries that would land outside the folder ("zip slip").
+        let listing = try await ProcessRunner.run("/usr/bin/zipinfo", ["-1", zipFile.path])
+        guard listing.succeeded else { throw ExtensionError("The extension couldn’t be unpacked.") }
+        let names = listing.output.split(whereSeparator: \.isNewline)
+        guard names.count < 50_000, !names.contains(where: { name in
+            name.hasPrefix("/") || name.hasPrefix("~") || name.split(separator: "/").contains("..") || name.contains("\\")
+        }) else { throw ExtensionError("This extension’s files are packed in an unsafe way, so Hush didn’t add it.") }
+        let unzip = try await ProcessRunner.run("/usr/bin/ditto", ["-x", "-k", zipFile.path, temp.path])
+        guard unzip.succeeded else { throw ExtensionError("The extension couldn’t be unpacked.") }
         // Chrome's signature metadata isn't used by WebKit.
         try? FileManager.default.removeItem(at: temp.appendingPathComponent("_metadata"))
         return temp
@@ -261,7 +269,8 @@ final class ExtensionStore: ObservableObject {
         installed[i].enabled = enabled
         save()
         if #available(macOS 15.4, *) {
-            if enabled { Task { await ExtensionManager.shared.load(installed[i]) } } else { ExtensionManager.shared.unload(ext.id) }
+            let record = installed[i]   // captured now: the list may change before the task runs
+            if enabled { Task { await ExtensionManager.shared.load(record) } } else { ExtensionManager.shared.unload(ext.id) }
         }
     }
 

@@ -76,8 +76,16 @@ final class BrowserModel: NSObject, ObservableObject {
            LaunchBehavior(rawValue: Prefs.string(Prefs.launchBehavior)) == .restore,
            let saved = UserDefaults.standard.stringArray(forKey: "lastSession"), !saved.isEmpty {
             Self.didRestoreSession = true
-            for address in saved {
-                if let url = URL(string: address) { newTab(url: url) }
+            // Only web pages come back, and only the first loads now: the rest wait until you
+            // click them, so launching with lots of tabs stays quick.
+            let urls = saved.prefix(200).compactMap(URL.init(string:))
+                .filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") }
+            for (index, url) in urls.enumerated() {
+                if index == 0 {
+                    newTab(url: url)
+                } else {
+                    newTab(select: false, usePreferredPage: false, atEnd: true).restoreLazily(url)
+                }
             }
             selectedID = tabs.first?.id
         }
@@ -108,10 +116,10 @@ final class BrowserModel: NSObject, ObservableObject {
 
     @discardableResult
     func newTab(url: URL? = nil, configuration: WKWebViewConfiguration? = nil,
-                select: Bool = true, focus: Bool = false, usePreferredPage: Bool = true) -> BrowserTab {
+                select: Bool = true, focus: Bool = false, usePreferredPage: Bool = true, atEnd: Bool = false) -> BrowserTab {
         let tab = BrowserTab(model: self, configuration: configuration)
         defer { ExtensionEvents.opened(tab) }
-        if let current = selectedTab, let index = tabs.firstIndex(where: { $0 === current }) {
+        if !atEnd, let current = selectedTab, let index = tabs.firstIndex(where: { $0 === current }) {
             tabs.insert(tab, at: index + 1)
         } else {
             tabs.append(tab)

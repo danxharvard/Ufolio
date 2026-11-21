@@ -33,16 +33,22 @@ final class PageTranslator: ObservableObject {
 
     // MARK: Detecting
 
+    // Pages that say they're in your language skip the text sample (reading innerText makes
+    // the page lay itself out, so it's only done when needed).
     private static let sampleScript = """
+    const lang = document.documentElement.lang || '';
+    if (lang && lang.toLowerCase().split(/[-_]/)[0] === target) return { lang, text: '' };
     const text = (document.body ? document.body.innerText : '').slice(0, 3000);
-    return { lang: document.documentElement.lang || '', text };
+    return { lang, text };
     """
 
     /// Works out the page's language after it loads, and offers translation if it isn't yours.
     func detect(in tab: BrowserTab) {
         guard tab.translation == .none || tab.translation == .available else { return }
         Task { @MainActor in
-            guard let result = try? await tab.webView.callAsyncJavaScript(Self.sampleScript, arguments: [:], in: nil, contentWorld: .defaultClient) as? [String: Any] else { return }
+            let target = Self.target.languageCode?.identifier ?? "en"
+            guard let result = try? await tab.webView.callAsyncJavaScript(Self.sampleScript, arguments: ["target": target],
+                                                                          in: nil, contentWorld: .defaultClient) as? [String: Any] else { return }
             let text = result["text"] as? String ?? ""
             let declared = result["lang"] as? String ?? ""
             var language: Locale.Language?

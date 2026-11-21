@@ -61,7 +61,9 @@ final class SuggestionsModel: ObservableObject {
         task = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 90_000_000) // wait for a pause in typing
             guard !Task.isCancelled else { return }
-            let remote = Prefs.bool(Prefs.searchSuggestions) ? await Self.fetchSuggestions(q) : []
+            // Addresses and pasted links (which can carry private tokens) never go to the search engine.
+            let isAddress = URLResolver.looksLikeAddress(q) || q.contains("://") || q.lowercased().hasPrefix("file:")
+            let remote = Prefs.bool(Prefs.searchSuggestions) && !isAddress ? await Self.fetchSuggestions(q) : []
             guard !Task.isCancelled else { return }
             guard let self, self.query == q, self.active else { return }
             let localTexts = Set(local.map { $0.text.lowercased() })
@@ -96,12 +98,21 @@ final class SuggestionsModel: ObservableObject {
         return result
     }
 
+    /// Suggestions go without cookies or a cache, so the search engine can't tie your typing to you.
+    private static let session: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.httpShouldSetCookies = false
+        config.httpCookieAcceptPolicy = .never
+        config.urlCache = nil
+        return URLSession(configuration: config)
+    }()
+
     /// The chosen search engine's public suggestion endpoint.
     private static func fetchSuggestions(_ q: String) async -> [String] {
         guard let url = SearchEngine.current.suggestionURL(q) else { return [] }
         var request = URLRequest(url: url)
         request.timeoutInterval = 3
-        guard let (data, _) = try? await URLSession.shared.data(for: request),
+        guard let (data, _) = try? await session.data(for: request),
               let json = try? JSONSerialization.jsonObject(with: data) as? [Any],
               json.count > 1, let list = json[1] as? [String] else { return [] }
         return list

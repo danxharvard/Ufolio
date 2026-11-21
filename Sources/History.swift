@@ -32,7 +32,13 @@ final class HistoryStore: ObservableObject {
     static let shared = HistoryStore()
     private static let maxEntries = 10_000
 
-    @Published private(set) var entries: [String: HistoryEntry] = [:]
+    @Published private(set) var entries: [String: HistoryEntry] = [:] {
+        didSet { frequentCache = nil }
+    }
+    /// The start page asks for frequent sites on every redraw; work them out once per change.
+    private var frequentCache: (key: String, sites: [FrequentSite])?
+    /// Saves run one at a time, in order, so an older snapshot never overwrites a newer one.
+    private let saveQueue = DispatchQueue(label: "hush.history.save", qos: .utility)
     @Published private(set) var hiddenHosts: Set<String> = []
     private let file: URL
     private var saveWork: DispatchWorkItem?
@@ -75,6 +81,14 @@ final class HistoryStore: ObservableObject {
 
     /// The sites you visit most, one tile per site.
     func frequentSites(limit: Int = 8, excluding: Set<String> = []) -> [FrequentSite] {
+        let key = "\(limit)|\(hiddenHosts.sorted().joined(separator: ","))|\(excluding.sorted().joined(separator: ","))"
+        if let cache = frequentCache, cache.key == key { return cache.sites }
+        let sites = computeFrequentSites(limit: limit, excluding: excluding)
+        frequentCache = (key, sites)
+        return sites
+    }
+
+    private func computeFrequentSites(limit: Int, excluding: Set<String>) -> [FrequentSite] {
         var bySite: [String: (score: Double, best: HistoryEntry, last: Date)] = [:]
         for entry in entries.values {
             guard let host = entry.url.host?.lowercased().strippingWWW, !hiddenHosts.contains(host),
@@ -113,6 +127,7 @@ final class HistoryStore: ObservableObject {
 
     func clear() {
         BookmarkOffer.shared.reset()
+        DispatchQueue.global(qos: .utility).async { FaviconCache.clearDisk() }
         entries = [:]
         hiddenHosts = []
         UserDefaults.standard.removeObject(forKey: "hiddenFrequentHosts")
@@ -150,18 +165,21 @@ final class HistoryStore: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: work)
     }
 
-    func save() {
+    /// Writes history to disk. `waiting` blocks until it's written (used when Hush quits).
+    func save(waiting: Bool = false) {
+        saveWork?.cancel()
         var list = Array(entries.values)
         if list.count > Self.maxEntries {
             list = Array(list.sorted { $0.score > $1.score }.prefix(Self.maxEntries))
         }
         let snapshot = list
         let file = self.file
-        DispatchQueue.global(qos: .utility).async {
+        let write = {
             if let data = try? JSONEncoder().encode(snapshot) {
                 try? data.write(to: file, options: .atomic)
             }
         }
+        if waiting { saveQueue.sync(execute: write) } else { saveQueue.async(execute: write) }
     }
 
     /// "GitHub: Let’s build from here" → "GitHub"; falls back to a tidy host name.
@@ -262,10 +280,19 @@ enum BrowserImporter {
         let copy = FileManager.default.temporaryDirectory.appendingPathComponent("hush-import-\(UUID().uuidString).db")
         do {
             try FileManager.default.copyItem(at: source.database, to: copy)
+            // Recent visits may still be in the write-ahead log beside the database.
+            for suffix in ["-wal", "-shm"] {
+                let extra = URL(fileURLWithPath: source.database.path + suffix)
+                if FileManager.default.fileExists(atPath: extra.path) {
+                    try? FileManager.default.copyItem(at: extra, to: URL(fileURLWithPath: copy.path + suffix))
+                }
+            }
         } catch {
             throw source.kind == .safari ? ImportError.needsFullDiskAccess : ImportError.unreadable
         }
-        defer { try? FileManager.default.removeItem(at: copy) }
+        defer {
+            for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: copy.path + suffix) }
+        }
 
         var db: OpaquePointer?
         guard sqlite3_open_v2(copy.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {

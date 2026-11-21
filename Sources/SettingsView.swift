@@ -1463,6 +1463,8 @@ private struct PasswordSettings: View {
         .formStyle(SafariFormStyle())
         .onAppear { cardList = CardVault.list() }
         .onDisappear { lock() }
+        // Lock again as soon as you switch to another app.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in lock() }
         .sheet(isPresented: $showAddCard) {
             AddCardSheet { cardList = CardVault.list() }
         }
@@ -1488,6 +1490,8 @@ private struct PasswordSettings: View {
         let board = NSPasteboard.general
         board.clearContents()
         board.setString(password, forType: .string)
+        // Tells clipboard-history apps not to keep it (the convention 1Password and others use).
+        board.setString("", forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
         let change = board.changeCount
         copiedID = login.id
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { if copiedID == login.id { copiedID = nil } }
@@ -1733,7 +1737,8 @@ private struct ExtensionRow: View {
                     }
                     Divider()
                 }
-                if let source = ext.source, let url = URL(string: source) {
+                if let source = ext.source, let url = URL(string: source), url.scheme == "https",
+                   url.host == "chromewebstore.google.com" || url.host == "chrome.google.com" {
                     Button("Open in Chrome Web Store") { BrowserModel.frontmost?.newTab(url: url) }
                 }
                 Divider()

@@ -143,6 +143,15 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         }
     }
 
+    /// A tab restored from last time: shows its address and title but loads nothing until
+    /// you switch to it.
+    func restoreLazily(_ address: URL) {
+        url = address
+        title = address.host?.strippingWWW ?? ""
+        sleepState = nil
+        isAsleep = true
+    }
+
     func wakeIfNeeded() {
         guard isAsleep else { return }
         waking = true
@@ -174,6 +183,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     var host: String? { url?.host }
     /// The site this tab last finished loading, to tell arriving at a site from moving around in it.
     private var lastFinishedHost: String?
+    private var lastAppPrompt = Date.distantPast
 
     func load(_ url: URL) {
         lookalike = nil
@@ -208,8 +218,9 @@ extension BrowserTab: WKNavigationDelegate {
                  preferences: WKWebpagePreferences,
                  decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
         // ⌘-click opens the link in a new background tab.
+        // Only web addresses: anything else goes through the checks below.
         if action.navigationType == .linkActivated, action.modifierFlags.contains(.command),
-           let url = action.request.url {
+           let url = action.request.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
             model?.newTab(url: url, select: false)
             decisionHandler(.cancel, preferences)
             return
@@ -265,7 +276,10 @@ extension BrowserTab: WKNavigationDelegate {
 
     /// Asks before a page opens another app, the way Safari does.
     private func confirmOpeningApp(for url: URL) {
-        guard let app = NSWorkspace.shared.urlForApplication(toOpen: url), let window = webView.window else { return }
+        // One question at a time, and no more than one every few seconds: a page can't bury you in them.
+        guard let app = NSWorkspace.shared.urlForApplication(toOpen: url), let window = webView.window,
+              window.attachedSheet == nil, Date().timeIntervalSince(lastAppPrompt) > 3 else { return }
+        lastAppPrompt = Date()
         let name = FileManager.default.displayName(atPath: app.path).replacingOccurrences(of: ".app", with: "")
         let alert = NSAlert()
         alert.messageText = "Open this link in “\(name)”?"

@@ -389,7 +389,12 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
     /// Hands values to the page script. They travel as arguments, never pasted into code,
     /// and only if the tab is still on the same site.
     private func send(kind: String, data: [String: String], host: String, tab: BrowserTab) {
-        guard let current = tab.webView.url?.host, ContentBlocker.normalize(current) == host else { return }
+        guard let url = tab.webView.url, let current = url.host, ContentBlocker.normalize(current) == host else { return }
+        // Passwords and cards only ever go to a secure page (it may have changed while Touch ID was up).
+        if kind != "contact" {
+            let local = current == "localhost" || current == "127.0.0.1"
+            guard url.scheme == "https" || local else { return }
+        }
         tab.webView.callAsyncJavaScript("return window.__hushFill(kind, data);",
                                         arguments: ["kind": kind, "data": data],
                                         in: nil, in: .defaultClient) { _ in }

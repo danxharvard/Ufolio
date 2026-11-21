@@ -110,10 +110,12 @@ final class PerformanceCenter: ObservableObject {
         if mode != effectiveMode { effectiveMode = mode }
     }
 
+    /// Uses the battery state from the last check (refreshed every 30 seconds), so settings
+    /// changes don't each ask IOKit again.
     private func resolve() -> PowerMode {
         let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
         switch chosenMode {
-        case .automatic: return (Self.isOnBattery() || lowPower) ? .batterySaver : .balanced
+        case .automatic: return (onBattery || lowPower) ? .batterySaver : .balanced
         // Low Power Mode is the Mac asking every app to go easy: Performance steps down to Balanced.
         case .performance: return lowPower ? .balanced : .performance
         default: return chosenMode

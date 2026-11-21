@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.18.0
+
+A full security, bug and speed review of every part of Hush.
+
+**Security**
+- Updates only download from GitHub. The test override now works only with a server on your
+  own Mac, and the signature check is stricter.
+- Extensions are checked before they're unpacked. Archives that try to write files outside
+  their own folder, or that contain links to other files on your Mac, are refused. Oversized
+  downloads are refused too.
+- ⌘-clicking a link only opens web addresses in a new tab. Other kinds of links get the
+  usual checks.
+- Pages can no longer pile up "open another app" or permission prompts.
+- Passwords and cards are only filled into secure (https) pages, checked again at the moment
+  of filling.
+- Downloads: invisible characters that can disguise a file's real type (making an app look
+  like a photo) are removed from names. Zip and CSV files are no longer opened
+  automatically.
+- Saved passwords lock as soon as you switch apps, and copied passwords are hidden from
+  clipboard-history apps.
+- Address bar suggestions never send web addresses or pasted links to the search engine,
+  and suggestion requests no longer carry the search engine's cookies.
+- Site icons are fetched without cookies.
+
+**Fixed**
+- History, the privacy report and recently closed tabs could lose their latest changes if
+  Hush quit right after a visit. Everything is now written out before Hush quits, in order.
+- Clean Links could change other parts of an address while removing tracking tags. It now
+  leaves the rest exactly as it was.
+- Importing from Firefox now includes your most recent visits.
+- A crash that could happen when turning extensions on and off quickly.
+- Typing `localhost` or a local network address now opens it over http.
+
+**Faster**
+- Restoring "tabs from last time" now only loads the tab you're looking at. The others load
+  when you click them, so launching with many tabs is much quicker.
+- Installing updates and extensions no longer freezes the window while files are checked
+  and unpacked.
+- The privacy report adds itself up at most twice a second, instead of once for every
+  blocked ad.
+- Site icons are saved for two weeks, so they appear instantly after a relaunch. Clearing
+  your history clears them too.
+- The start page works out your suggested sites once, not on every redraw.
+- The cookie-banner tool and translation detection do much less work on each page.
+- The Aurora background uses less energy.
+
 ## 0.17.1
 
 **New**

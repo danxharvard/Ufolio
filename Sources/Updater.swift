@@ -67,7 +67,7 @@ final class Updater: ObservableObject {
         state = .checking
         do {
             // HUSH_UPDATE_API lets a test point Hush at a local fake server; normal users never set it.
-            let api = ProcessInfo.processInfo.environment["HUSH_UPDATE_API"] ?? "https://api.github.com"
+            let api = Self.apiBase
             var request = URLRequest(url: URL(string: "\(api)/repos/\(Self.repo)/releases/latest")!)
             request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
             request.cachePolicy = .reloadIgnoringLocalCacheData
@@ -89,7 +89,8 @@ final class Updater: ObservableObject {
 
             let assets = json["assets"] as? [[String: Any]] ?? []
             guard let asset = assets.first(where: { ($0["name"] as? String) == "HushBrowser-\(version).zip" }),
-                  let link = (asset["browser_download_url"] as? String).flatMap(URL.init(string:)) else {
+                  let link = (asset["browser_download_url"] as? String).flatMap(URL.init(string:)),
+                  Self.isTrustedDownload(link) else {
                 throw UpdateError("Version \(version) is out, but its download isn’t ready yet.")
             }
             latest = (version, link, asset["digest"] as? String)
@@ -129,16 +130,18 @@ final class Updater: ObservableObject {
                     }
                 }
             }
-            let data = try Data(contentsOf: zip)
-
             // GitHub publishes a SHA-256 for every release file; refuse anything that doesn't match.
+            // (Hashed off the main thread, so the window never stalls.)
             if let digest = latest.digest, digest.hasPrefix("sha256:") {
-                let actual = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-                guard actual == digest.dropFirst(7) else { throw UpdateError("The download was damaged. Try again.") }
+                let actual = try await Task.detached(priority: .utility) {
+                    let data = try Data(contentsOf: zip, options: .mappedIfSafe)
+                    return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+                }.value
+                guard actual == digest.dropFirst(7).lowercased() else { throw UpdateError("The download was damaged. Try again.") }
             }
 
             let unpacked = workDir.appendingPathComponent("unpacked", isDirectory: true)
-            try run("/usr/bin/ditto", ["-x", "-k", zip.path, unpacked.path])
+            try await Self.run("/usr/bin/ditto", ["-x", "-k", zip.path, unpacked.path])
             guard let appName = try FileManager.default.contentsOfDirectory(atPath: unpacked.path)
                     .first(where: { $0.hasSuffix(".app") }) else { throw UpdateError("The download didn’t contain Hush.") }
             let newApp = unpacked.appendingPathComponent(appName)
@@ -160,7 +163,7 @@ final class Updater: ObservableObject {
                     throw UpdateError("Hush \(latest.version) needs macOS \(minimum) or later. Update macOS in System Settings › General › Software Update to get it.")
                 }
             }
-            try run("/usr/bin/codesign", ["--verify", "--deep", newApp.path])
+            try await Self.run("/usr/bin/codesign", ["--verify", "--deep", "--strict", newApp.path])
             try? FileManager.default.removeItem(at: zip)
 
             pending = (latest.version, newApp, workDir)
@@ -186,6 +189,22 @@ final class Updater: ObservableObject {
     }
 
     private var currentBundle: URL { Bundle.main.bundleURL }
+
+    /// GitHub, or a local test server (HUSH_UPDATE_API, accepted only on this Mac).
+    private static var apiBase: String {
+        if let test = ProcessInfo.processInfo.environment["HUSH_UPDATE_API"],
+           let host = URL(string: test)?.host, host == "127.0.0.1" || host == "localhost" {
+            return test
+        }
+        return "https://api.github.com"
+    }
+
+    /// Release files must come from GitHub over HTTPS (or the local test server).
+    private static func isTrustedDownload(_ url: URL) -> Bool {
+        let host = url.host?.lowercased() ?? ""
+        if apiBase != "https://api.github.com" { return host == "127.0.0.1" || host == "localhost" }
+        return url.scheme == "https" && (host == "github.com" || host.hasSuffix(".githubusercontent.com"))
+    }
 
     var canInstallInPlace: Bool {
         let bundle = currentBundle
@@ -243,15 +262,9 @@ final class Updater: ObservableObject {
         return false
     }
 
-    private func run(_ tool: String, _ args: [String]) throws {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: tool)
-        process.arguments = args
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        try process.run()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
+    /// Runs a system tool without blocking the main thread.
+    private static func run(_ tool: String, _ args: [String]) async throws {
+        guard try await ProcessRunner.run(tool, args).succeeded else {
             throw UpdateError("The downloaded app couldn’t be verified, so it wasn’t installed.")
         }
     }

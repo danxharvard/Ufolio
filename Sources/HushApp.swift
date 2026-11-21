@@ -49,8 +49,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Write everything out before Hush exits (background saves might not finish otherwise).
         BlockStats.shared.save()
-        PrivacyReport.shared.save()
+        PrivacyReport.shared.save(waiting: true)
+        HistoryStore.shared.save(waiting: true)
     }
 
     /// Clicking Hush in the Dock with no window open brings one back.
