@@ -11,6 +11,7 @@ struct BrowserWindow: View {
     private var showTabStrip: Bool { model.tabs.count > 1 || alwaysShowTabBar }
     @State private var showWelcome = false
     @State private var showDefaultBanner = false
+    @State private var whatsNew: ReleaseNotes.Version?
 
 
     var body: some View {
@@ -69,6 +70,12 @@ struct BrowserWindow: View {
         // The welcome screen and default-browser question are drawn inside the window,
         // over a dimmed backdrop (SwiftUI sheets could end up off-screen and lock the window).
         .overlay {
+            if let notes = whatsNew {
+                LaunchCardOverlay {
+                    WhatsNewView(notes: notes) { whatsNew = nil }
+                }
+                .transition(.opacity)
+            }
             if showWelcome {
                 LaunchCardOverlay {
                     WelcomeView {
@@ -81,6 +88,7 @@ struct BrowserWindow: View {
             }
         }
         .animation(.easeOut(duration: 0.25), value: showWelcome)
+        .animation(.easeOut(duration: 0.25), value: whatsNew?.version)
         // Links opened from other apps (when Hush is the default browser) arrive here.
         .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         .onOpenURL { url in
@@ -95,11 +103,14 @@ struct BrowserWindow: View {
         .onReceive(NotificationCenter.default.publisher(for: QuitHelper.closeSheets)) { _ in
             showWelcome = false
             showDefaultBanner = false
+            whatsNew = nil
         }
         .onAppear {
             switch LaunchPrompts.next() {
             case .welcome:
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showWelcome = true }
+            case .whatsNew(let notes):
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { whatsNew = notes }
             case .defaultBrowser:
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showDefaultBanner = true }

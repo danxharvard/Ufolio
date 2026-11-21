@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.0
+
+**New**
+- What's New: after each update, Hush shows what changed the first time it opens.
+- Settings › Software Update shows what's in the version you have installed, plus earlier versions.
+- Search in Settings: type in the sidebar to find any setting ("cookies", "zoom", "password"…).
+
+**New look**
+- Settings has a Hush card at the top of the sidebar showing your version and whether you're up to date.
+- Each section opens with a large, glowing icon and a short description.
+- Main settings have small coloured icons, so each list is quicker to scan.
+- Sections fade gently into place as you move between them.
+
 ## 0.8.1
 
 **Improved**

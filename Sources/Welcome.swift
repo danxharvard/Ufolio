@@ -24,12 +24,19 @@ enum DefaultBrowser {
 enum LaunchPrompts {
     private static var handled = false
 
-    enum Prompt { case welcome, defaultBrowser }
+    enum Prompt { case welcome, whatsNew(ReleaseNotes.Version), defaultBrowser }
 
     static func next() -> Prompt? {
         guard !handled else { return nil }
         handled = true
+        let current = ReleaseNotes.currentVersion
+        let lastSeen = UserDefaults.standard.string(forKey: "lastSeenVersion")
+        UserDefaults.standard.set(current, forKey: "lastSeenVersion")
         if !Prefs.bool(Prefs.hasOnboarded) { return .welcome }
+        // First launch after an update: show what's new (once).
+        if lastSeen != current, let notes = ReleaseNotes.bundled.notes(for: current), !notes.sections.isEmpty {
+            return .whatsNew(notes)
+        }
         let snoozed = (UserDefaults.standard.object(forKey: "defaultBannerSnoozedUntil") as? Date).map { $0 > Date() } ?? false
         if Prefs.bool(Prefs.askDefaultBrowser) && !snoozed && !DefaultBrowser.isDefault { return .defaultBrowser }
         return nil

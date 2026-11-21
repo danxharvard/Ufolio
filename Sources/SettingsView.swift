@@ -18,6 +18,20 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Words that find this section in the Settings search.
+    var keywords: String {
+        switch self {
+        case .general: return "default browser homepage startup new tab window search engine suggestions history import downloads safe files tab sleep performance memory"
+        case .appearance: return "theme dark light night day accent colour color start page background aurora twilight translucent motion animation zoom bookmarks bar tab bar address"
+        case .adBlocker: return "ads ad blocker trackers block filter list easylist cookie banners collapse zapper hidden elements counter statistics"
+        case .extensions: return "chrome extension extensions web store add-on plugin dark reader"
+        case .privacy: return "cookies https tracking gpc fraud phishing look-alike clean links camera microphone pop-ups autoplay javascript website data clear"
+        case .passwords: return "autofill passwords credit cards contact card keychain touch id"
+        case .location: return "location weather permission maps"
+        case .updates: return "update updates version changelog what's new release notes"
+        }
+    }
+
     var symbol: String {
         switch self {
         case .general: return "gearshape.fill"
@@ -70,44 +84,100 @@ enum SettingsOpener {
 struct SettingsView: View {
     @AppStorage("settingsTab") private var selection = SettingsTab.general.rawValue
     @AppStorage(Prefs.accent) private var accent = AccentChoice.system.rawValue
+    @State private var query = ""
 
     private var current: Binding<SettingsTab?> {
         Binding(get: { SettingsTab(rawValue: selection) ?? .general },
                 set: { if let tab = $0 { selection = tab.rawValue } })
     }
 
+    private var visibleTabs: [SettingsTab] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return SettingsTab.allCases }
+        return SettingsTab.allCases.filter { $0.title.lowercased().contains(q) || $0.keywords.contains(q) }
+    }
+
     var body: some View {
         NavigationSplitView {
-            List(SettingsTab.allCases, selection: current) { tab in
-                HStack(spacing: 10) {
-                    IconTile(symbol: tab.symbol, colors: tab.colors, size: 22)
-                    Text(tab.title)
+            List(selection: current) {
+                SidebarCard { selection = SettingsTab.updates.rawValue }
+                    .listRowInsets(EdgeInsets(top: 4, leading: 6, bottom: 10, trailing: 6))
+                ForEach(visibleTabs) { tab in
+                    HStack(spacing: 10) {
+                        IconTile(symbol: tab.symbol, colors: tab.colors, size: 22)
+                        Text(tab.title)
+                    }
+                    .padding(.vertical, 2)
+                    .padding(.leading, 2)
+                    .tag(tab)
                 }
-                .padding(.vertical, 2)
-                .padding(.leading, 2)
-                .tag(tab)
             }
             .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 200, ideal: 215, max: 240)
+            .searchable(text: $query, placement: .sidebar, prompt: "Search settings")
+            .navigationSplitViewColumnWidth(min: 220, ideal: 235, max: 260)
         } detail: {
             let tab = current.wrappedValue ?? .general
-            Group {
-                switch tab {
-                case .general: GeneralSettings()
-                case .appearance: AppearanceSettings()
-                case .adBlocker: AdBlockerSettings()
-                case .extensions: ExtensionSettings()
-                case .privacy: PrivacySettings()
-                case .passwords: PasswordSettings()
-                case .location: LocationSettings()
-                case .updates: UpdateSettings()
+            ZStack {
+                Group {
+                    switch tab {
+                    case .general: GeneralSettings()
+                    case .appearance: AppearanceSettings()
+                    case .adBlocker: AdBlockerSettings()
+                    case .extensions: ExtensionSettings()
+                    case .privacy: PrivacySettings()
+                    case .passwords: PasswordSettings()
+                    case .location: LocationSettings()
+                    case .updates: UpdateSettings()
+                    }
                 }
+                .id(tab)
+                .transition(.opacity.combined(with: .offset(y: 6)))
             }
+            .animation(.easeOut(duration: 0.18), value: tab)
             .navigationTitle(tab.title)
-            .id(tab)
         }
-        .frame(width: 880, height: 660)
+        .frame(width: 900, height: 680)
         .accentColor(AccentChoice(rawValue: accent)?.color)
+        .onChange(of: query) { q in
+            // Searching jumps straight to the first matching section.
+            if !q.isEmpty, let first = visibleTabs.first { selection = first.rawValue }
+        }
+    }
+}
+
+/// The card at the top of the sidebar: Hush, its version and whether it's up to date.
+private struct SidebarCard: View {
+    let action: () -> Void
+    @ObservedObject private var updater = Updater.shared
+    @State private var hovering = false
+
+    private var status: String {
+        switch updater.state {
+        case .available(let v), .downloading(let v, _), .ready(let v): return "Update available: \(v)"
+        case .upToDate: return "Up to date"
+        case .checking: return "Checking for updates…"
+        default: return "Version \(updater.currentVersion)"
+        }
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 11) {
+                HushLogoTile(size: 38)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Hush Browser").font(.system(size: 13, weight: .semibold))
+                    Text(status).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(Color.primary.opacity(hovering ? 0.09 : 0.05)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
     }
 }
 
@@ -145,32 +215,73 @@ private struct SettingsHeader: View {
     let subtitle: String
 
     var body: some View {
-        HStack(spacing: 14) {
-            IconTile(symbol: tab.symbol, colors: tab.colors, size: 48)
-                .shadow(color: (tab.colors.last ?? .clear).opacity(0.3), radius: 6, y: 3)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(tab.title).font(.system(size: 15, weight: .semibold))
-                Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(RadialGradient(colors: [(tab.colors.first ?? .accentColor).opacity(0.35), .clear],
+                                         center: .center, startRadius: 0, endRadius: 60))
+                    .frame(width: 120, height: 120)
+                IconTile(symbol: tab.symbol, colors: tab.colors, size: 58)
+                    .shadow(color: (tab.colors.last ?? .clear).opacity(0.35), radius: 10, y: 5)
             }
-            Spacer(minLength: 0)
+            .frame(height: 74)
+            Text(tab.title).font(.system(size: 20, weight: .bold))
+            Text(subtitle)
+                .font(.system(size: 12.5))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 440)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
     }
 }
 
-/// A toggle with a grey explanation underneath.
+/// A toggle with a small coloured icon and a grey explanation underneath.
 private struct DescribedToggle: View {
     let title: String
     let detail: String
     @Binding var isOn: Bool
 
+    private static let blue = [Color(red: 0.30, green: 0.60, blue: 1.0), Color(red: 0.15, green: 0.42, blue: 0.95)]
+    private static let green = [Color(red: 0.30, green: 0.78, blue: 0.45), Color(red: 0.15, green: 0.58, blue: 0.30)]
+    private static let orange = [Color(red: 1.0, green: 0.65, blue: 0.25), Color(red: 0.95, green: 0.45, blue: 0.15)]
+    private static let purple = [Color(red: 0.62, green: 0.48, blue: 1.0), Color(red: 0.42, green: 0.30, blue: 0.88)]
+    private static let pink = [Color(red: 1.0, green: 0.42, blue: 0.62), Color(red: 0.85, green: 0.22, blue: 0.45)]
+    private static let red = [Color(red: 1.0, green: 0.42, blue: 0.36), Color(red: 0.86, green: 0.22, blue: 0.20)]
+    private static let teal = [Color(red: 0.25, green: 0.78, blue: 0.82), Color(red: 0.10, green: 0.55, blue: 0.62)]
+    private static let grey = [Color(white: 0.62), Color(white: 0.44)]
+
+    private static let icons: [String: (String, [Color])] = [
+        "Show search suggestions": ("magnifyingglass", blue),
+        "Open “safe” files after downloading": ("arrow.down.doc.fill", teal),
+        "Translucent background": ("square.on.square.squareshape.controlhandles", purple),
+        "Reduce motion": ("figure.walk.motion", grey),
+        "Block third-party cookies": ("hand.raised.fill", blue),
+        "Upgrade connections to HTTPS": ("lock.fill", green),
+        "Clean tracking from links": ("link", teal),
+        "Warn about look-alike websites": ("exclamationmark.triangle.fill", orange),
+        "Ask websites not to sell or share my data": ("person.crop.circle.badge.xmark", purple),
+        "Warn when visiting a fraudulent website": ("shield.lefthalf.filled.trianglebadge.exclamationmark", red),
+        "Collapse empty ad spaces": ("rectangle.compress.vertical", purple),
+        "Reject cookie banners automatically": ("xmark.seal.fill", pink),
+        "Hide cookie banners": ("eye.slash.fill", grey),
+        "Personalise the start page": ("cloud.sun.fill", blue),
+        "Download and install updates automatically": ("arrow.down.circle.fill", green),
+    ]
+
     var body: some View {
         Toggle(isOn: $isOn) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                Text(detail).font(.system(size: 11)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 11) {
+                if let icon = Self.icons[title] {
+                    IconTile(symbol: icon.0, colors: icon.1, size: 26)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                    Text(detail).font(.system(size: 11)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
@@ -1039,6 +1150,24 @@ private struct UpdateSettings: View {
                     ProgressView(value: progress)
                         .progressViewStyle(.linear)
                 }
+            }
+
+            if let installed = ReleaseNotes.bundled.notes(for: updater.currentVersion) {
+                Section {
+                    ReleaseNotesView(notes: installed)
+                        .padding(.vertical, 6)
+                } header: { Text("What’s in Hush \(installed.version)") }
+            }
+
+            let earlier = ReleaseNotes.bundled.versions.filter { $0.version != updater.currentVersion }.prefix(8)
+            if !earlier.isEmpty {
+                Section {
+                    ForEach(Array(earlier)) { version in
+                        DisclosureGroup("Hush \(version.version)") {
+                            ReleaseNotesView(notes: version).padding(.vertical, 6)
+                        }
+                    }
+                } header: { Text("Earlier versions") }
             }
 
             if let notes = updater.releaseNotes, isShowingRelease {
