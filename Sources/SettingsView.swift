@@ -302,6 +302,7 @@ private struct DescribedToggle: View {
 
     private static let icons: [String: (String, [Color])] = [
         "Show search suggestions": ("magnifyingglass", blue),
+        "Suggest favourites": ("star.fill", orange),
         "Open “safe” files after downloading": ("arrow.down.doc.fill", teal),
         "Translucent background": ("square.on.square.squareshape.controlhandles", purple),
         "Reduce motion": ("figure.walk.motion", grey),
@@ -393,6 +394,7 @@ private struct GeneralSettings: View {
     @AppStorage(Prefs.newTabPage) private var newTabPage = NewTabPage.startPage.rawValue
     @AppStorage(Prefs.homepage) private var homepage = ""
     @AppStorage(Prefs.historyRetention) private var historyRetention = HistoryRetention.year.rawValue
+    @AppStorage(Prefs.offerBookmarks) private var offerBookmarks = true
     @AppStorage(Prefs.downloadFolder) private var downloadFolder = ""
     @AppStorage(Prefs.downloadRetention) private var downloadRetention = DownloadRetention.oneDay.rawValue
     @AppStorage(Prefs.askWhereToSave) private var askWhereToSave = false
@@ -477,6 +479,9 @@ private struct GeneralSettings: View {
                     Spacer()
                     Button("Clear History…") { confirmClearHistory = true }
                 }
+                DescribedToggle(title: "Suggest favourites",
+                                detail: "When you visit a site at least 6 times a day for 3 days in a row, Hush offers to add it to your Favourites.",
+                                isOn: $offerBookmarks)
             } header: { SectionTitle("History") } footer: {
                 Footnote("History stays on this Mac. It powers Frequently Visited and address-bar suggestions.")
             }

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.15.0
+
+**New: Favourites suggestions**
+- When you visit a site at least 6 times a day for 3 days in a row, Hush offers to add it to your
+  Favourites with a slim bar above the page. One click and it's on your start page.
+- Not Now asks again in a week, or choose Never for This Site. Browsing around inside one site
+  counts as one visit, so only real return trips count.
+- The counts stay on this Mac, cover only the last few days and are wiped when you clear your
+  history. Turn it off in Settings › General › History.
+
 ## 0.14.0
 
 **Changed**

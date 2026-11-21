@@ -40,6 +40,10 @@ struct BrowserWindow: View {
             SelectedTab(model: model) { tab in
                 WebStoreBar(tab: tab).background(VisualEffect(material: .titlebar))
             }
+            // "You visit this site a lot: add it to your Favourites?" (no space otherwise).
+            SelectedTab(model: model) { tab in
+                BookmarkOfferBar(tab: tab).background(VisualEffect(material: .titlebar))
+            }
 
             ZStack(alignment: .top) {
                 PageArea(model: model)

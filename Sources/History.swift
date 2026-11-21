@@ -112,6 +112,7 @@ final class HistoryStore: ObservableObject {
     }
 
     func clear() {
+        BookmarkOffer.shared.reset()
         entries = [:]
         hiddenHosts = []
         UserDefaults.standard.removeObject(forKey: "hiddenFrequentHosts")

@@ -148,6 +148,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     var isBlank: Bool { url == nil && !isLoading }
 
     var host: String? { url?.host }
+    /// The site this tab last finished loading, to tell arriving at a site from moving around in it.
+    private var lastFinishedHost: String?
 
     func load(_ url: URL) {
         lookalike = nil
@@ -254,6 +256,8 @@ extension BrowserTab: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         if let url = webView.url {
             HistoryStore.shared.record(url, title: webView.title ?? "")
+            BookmarkOffer.shared.record(url, previousHost: lastFinishedHost)
+            lastFinishedHost = url.host
             if let host = url.host, url.scheme?.hasPrefix("http") == true { PrivacyReport.shared.recordVisit(site: host) }
         }
     }

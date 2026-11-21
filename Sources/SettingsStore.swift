@@ -60,6 +60,7 @@ enum Prefs {
     static let cameraPolicy = "cameraPolicy"
     // Location
     static let locationPolicy = "locationPolicy"
+    static let offerBookmarks = "offerBookmarks"
 
     static let defaults: [String: Any] = [
         appearance: AppearanceMode.system.rawValue,
@@ -111,6 +112,7 @@ enum Prefs {
         autoplay: AutoplayPolicy.stopSound.rawValue,
         cameraPolicy: PermissionPolicy.ask.rawValue,
         locationPolicy: PermissionPolicy.ask.rawValue,
+        offerBookmarks: true,
     ]
 
     static func register() {
