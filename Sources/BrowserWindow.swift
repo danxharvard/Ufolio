@@ -162,8 +162,12 @@ private struct TabPage: View {
             // isn't drawn over an empty white web view.
             if tab.isBlank {
                 StartPage(model: model)
+            } else if tab.isAsleep, let snapshot = tab.snapshot {
+                Image(nsImage: snapshot).resizable().aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).clipped()
             } else {
-                WebViewHost(webView: tab.webView)
+                // A woken tab has a new web view, so key the host on it.
+                WebViewHost(webView: tab.webView).id(ObjectIdentifier(tab.webView))
             }
             if let block = tab.lookalike {
                 LookalikeWarning(match: block.match) {

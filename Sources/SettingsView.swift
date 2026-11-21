@@ -68,12 +68,12 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(SettingsTab.allCases, selection: current) { tab in
-                Label {
-                    Text(tab.title)
-                } icon: {
+                HStack(spacing: 10) {
                     IconTile(symbol: tab.symbol, colors: tab.colors, size: 22)
+                    Text(tab.title)
                 }
-                .padding(.vertical, 1)
+                .padding(.vertical, 2)
+                .padding(.leading, 2)
                 .tag(tab)
             }
             .listStyle(.sidebar)
@@ -221,6 +221,7 @@ private struct GeneralSettings: View {
     @AppStorage(Prefs.askWhereToSave) private var askWhereToSave = false
     @AppStorage(Prefs.openSafeFiles) private var openSafeFiles = false
     @AppStorage(Prefs.askDefaultBrowser) private var askDefault = true
+    @AppStorage(Prefs.tabSleepMinutes) private var tabSleep = 15.0
     @State private var isDefaultBrowser = DefaultBrowser.isDefault
     @State private var confirmClearHistory = false
     @State private var importStatus: String?
@@ -320,6 +321,18 @@ private struct GeneralSettings: View {
                                 detail: "“Safe” files include movies, pictures, sounds, PDFs, text documents and archives.",
                                 isOn: $openSafeFiles)
             } header: { Text("Downloads") }
+
+            Section {
+                Picker("Sleep inactive tabs", selection: $tabSleep) {
+                    Text("Never").tag(0.0)
+                    Text("After 5 minutes").tag(5.0)
+                    Text("After 15 minutes").tag(15.0)
+                    Text("After 30 minutes").tag(30.0)
+                    Text("After 1 hour").tag(60.0)
+                }
+            } header: { Text("Performance") } footer: {
+                Footnote("Sleeping tabs free their memory and wake instantly with the page as you left it. Tabs playing sound or video never sleep.")
+            }
         }
         .formStyle(.grouped)
         .onAppear { isDefaultBrowser = DefaultBrowser.isDefault }
@@ -639,6 +652,7 @@ private struct PrivacySettings: View {
 private struct AdBlockerSettings: View {
     @ObservedObject private var blocker = ContentBlocker.shared
     @ObservedObject private var stats = BlockStats.shared
+    @ObservedObject private var zapper = ElementZapper.shared
     @AppStorage(Prefs.adBlockEnabled) private var ads = true
     @AppStorage(Prefs.trackerBlockEnabled) private var trackers = true
     @AppStorage(Prefs.hideCookieBanners) private var cookieBanners = true
@@ -709,6 +723,22 @@ private struct AdBlockerSettings: View {
                     }
                 }
             } header: { Text("Sites with shields down") }
+
+            Section {
+                if zapper.hidden.isEmpty {
+                    Text("None yet. Right-click a page and choose “Hide Elements on This Page…”, then click anything you don’t want to see.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(zapper.hidden.keys.sorted(), id: \.self) { site in
+                    HStack(spacing: 10) {
+                        Favicon(url: URL(string: "https://\(site)"), size: 16)
+                        Text(site)
+                        Text("\(zapper.hidden[site]?.count ?? 0) hidden").foregroundStyle(.secondary).font(.system(size: 11.5))
+                        Spacer()
+                        Button("Show Again") { zapper.showAgain(site) }.controlSize(.small)
+                    }
+                }
+            } header: { Text("Hidden elements") }
         }
         .formStyle(.grouped)
         .sheet(isPresented: $showWebSheet) { AddListSheet() }

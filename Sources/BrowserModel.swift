@@ -4,7 +4,14 @@ import WebKit
 /// One browser window: its tabs and which one is showing.
 final class BrowserModel: ObservableObject {
     @Published private(set) var tabs: [BrowserTab] = []
-    @Published var selectedID: UUID?
+    @Published var selectedID: UUID? {
+        didSet {
+            // The tab you leave starts its idle clock; the one you pick wakes if it was asleep.
+            if let old = tabs.first(where: { $0.id == oldValue }) { old.lastActive = Date() }
+            selectedTab?.wakeIfNeeded()
+        }
+    }
+    private var sleepTimer: Timer?
     /// Bumped to ask the address bar to take keyboard focus.
     @Published var addressFocusToken = 0
     /// The window's width, which sizes the address bar.
@@ -32,8 +39,24 @@ final class BrowserModel: ObservableObject {
         all.allObjects.contains { $0.window?.isVisible == true }
     }
 
+    /// Tab Sleep: background tabs idle for longer than the chosen time are put to sleep,
+    /// unless they're playing sound or video or using the camera or microphone.
+    private func sleepIdleTabs() {
+        let minutes = Prefs.double(Prefs.tabSleepMinutes)
+        guard minutes > 0 else { return }
+        for tab in tabs where tab !== selectedTab && !tab.isAsleep && !tab.isLoading
+            && Date().timeIntervalSince(tab.lastActive) > minutes * 60
+            && tab.webView.cameraCaptureState == .none && tab.webView.microphoneCaptureState == .none {
+            tab.webView.requestMediaPlaybackState { state in
+                if state == .none || state == .paused { tab.sleep() }
+            }
+        }
+    }
+
     init() {
         BrowserModel.all.add(self)
+        sleepTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.sleepIdleTabs() }
+        sleepTimer?.tolerance = 15
         // The first window after launch can bring back last time's tabs.
         if !Self.didRestoreSession,
            LaunchBehavior(rawValue: Prefs.string(Prefs.launchBehavior)) == .restore,

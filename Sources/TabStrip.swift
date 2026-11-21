@@ -37,6 +37,7 @@ private struct TabPill: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .foregroundStyle(isSelected ? .primary : .secondary)
+                .opacity(tab.isAsleep ? 0.55 : 1)
             Spacer(minLength: 0)
             Button { model.close(tab) } label: {
                 Image(systemName: "xmark")

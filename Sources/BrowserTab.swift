@@ -5,7 +5,7 @@ import Combine
 /// One tab: a WKWebView plus the bits of its state the UI shows.
 final class BrowserTab: NSObject, ObservableObject, Identifiable {
     let id = UUID()
-    let webView: WKWebView
+    private(set) var webView: WKWebView
     weak var model: BrowserModel?
 
     @Published private(set) var title = ""
@@ -42,38 +42,98 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     init(model: BrowserModel, configuration: WKWebViewConfiguration? = nil) {
         self.model = model
-        let config = configuration ?? BrowserTab.makeConfiguration()
-        webView = WKWebView(frame: .zero, configuration: config)
+        webView = HushWebView(frame: .zero, configuration: configuration ?? BrowserTab.makeConfiguration())
         super.init()
+        setUp(webView)
+    }
 
-        webView.allowsBackForwardNavigationGestures = true
-        webView.allowsMagnification = true
-        webView.navigationDelegate = self
-        webView.uiDelegate = self
+    /// Connects a web view to this tab: delegates, blocking, AutoFill and the state the UI shows.
+    private func setUp(_ view: WKWebView) {
+        view.allowsBackForwardNavigationGestures = true
+        view.allowsMagnification = true
+        view.navigationDelegate = self
+        view.uiDelegate = self
         let zoom = Prefs.double(Prefs.defaultZoom)
-        webView.pageZoom = zoom > 0 ? zoom : 1
-        ContentBlocker.shared.attach(webView.configuration.userContentController)
+        view.pageZoom = zoom > 0 ? zoom : 1
+        ContentBlocker.shared.attach(view.configuration.userContentController)
         AutofillCenter.shared.register(self)
+        ElementZapper.shared.register(self)
+        (view as? HushWebView)?.onHideElements = { [weak self] in
+            guard let self else { return }
+            ElementZapper.shared.start(in: self)
+        }
 
+        observers.removeAll()
         func bind<T>(_ keyPath: KeyPath<WKWebView, T>, _ apply: @escaping (BrowserTab, T) -> Void) {
-            webView.publisher(for: keyPath)
+            view.publisher(for: keyPath)
                 .receive(on: RunLoop.main)
                 .sink { [weak self] value in if let self { apply(self, value) } }
                 .store(in: &observers)
         }
         bind(\.title) { tab, title in
+            if tab.waking && (title ?? "").isEmpty { return }
             tab.title = title ?? ""
             if let url = tab.url, let title, !title.isEmpty { HistoryStore.shared.updateTitle(url, title: title) }
         }
         bind(\.url) { tab, url in
+            // While waking from sleep the new web view briefly has no address; keep the old one.
+            if tab.waking && url == nil { return }
+            if url != nil { tab.waking = false }
             tab.url = url
             tab.model?.scheduleSessionSave()
         }
         bind(\.isLoading) { $0.isLoading = $1 }
         bind(\.estimatedProgress) { $0.progress = $1 }
-        bind(\.canGoBack) { $0.canGoBack = $1 }
-        bind(\.canGoForward) { $0.canGoForward = $1 }
+        bind(\.canGoBack) { tab, value in if !tab.waking { tab.canGoBack = value } }
+        bind(\.canGoForward) { tab, value in if !tab.waking { tab.canGoForward = value } }
         bind(\.hasOnlySecureContent) { $0.isSecure = $1 }
+    }
+
+    // MARK: Tab Sleep
+
+    /// Sleeping tabs keep a picture of the page and its full state (including back/forward
+    /// history) but release the web page itself, freeing its memory and processor time.
+    @Published private(set) var isAsleep = false
+    @Published private(set) var snapshot: NSImage?
+    var lastActive = Date()
+    private var sleepState: Any?
+    private var waking = false
+
+    func sleep() {
+        guard !isAsleep, url != nil, !isLoading, model?.selectedTab !== self else { return }
+        webView.takeSnapshot(with: nil) { [weak self] image, _ in
+            guard let self, !self.isAsleep, self.model?.selectedTab !== self else { return }
+            self.snapshot = image
+            self.sleepState = self.webView.interactionState
+            self.observers.removeAll()
+            let old = self.webView
+            old.stopLoading()
+            old.navigationDelegate = nil
+            old.uiDelegate = nil
+            old.removeFromSuperview()
+            // An empty web view starts no web process until it loads something.
+            self.webView = HushWebView(frame: .zero, configuration: BrowserTab.makeConfiguration())
+            self.isAsleep = true
+        }
+    }
+
+    func wakeIfNeeded() {
+        guard isAsleep else { return }
+        waking = true
+        setUp(webView)
+        if let state = sleepState {
+            webView.interactionState = state
+        } else if let url {
+            webView.load(URLRequest(url: url))
+        }
+        sleepState = nil
+        isAsleep = false
+        lastActive = Date()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            guard let self, !self.isAsleep else { return }
+            self.waking = false
+            self.snapshot = nil
+        }
     }
 
     var displayTitle: String {
@@ -312,6 +372,23 @@ extension BrowserTab: WKUIDelegate {
         SitePermissions.shared.request([.location], host: frame.securityOrigin.host, window: webView.window,
                                        completion: decisionHandler)
     }
+}
+
+/// Hush's web view: adds "Hide Elements on This Page…" to the page's right-click menu.
+final class HushWebView: WKWebView {
+    var onHideElements: (() -> Void)?
+
+    override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
+        super.willOpenMenu(menu, with: event)
+        guard onHideElements != nil, url != nil else { return }
+        menu.addItem(.separator())
+        let item = NSMenuItem(title: "Hide Elements on This Page…", action: #selector(hideElements), keyEquivalent: "")
+        item.target = self
+        item.image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: nil)
+        menu.addItem(item)
+    }
+
+    @objc private func hideElements() { onHideElements?() }
 }
 
 extension String {

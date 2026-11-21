@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0
+
+**New**
+- Element Zapper: right-click a page › Hide Elements on This Page…, then click anything to hide it.
+  Hidden elements stay hidden on that site (applied by WebKit before the page draws). Review or
+  bring them back in Settings › Hush Shields › Hidden elements.
+- Tab Sleep: background tabs you haven't used for a while (15 minutes by default) free their
+  memory and wake instantly, with their page and back/forward history intact. Tabs playing sound or
+  video, or using the camera or microphone, never sleep. Settings › General › Performance.
+
+**Improved**
+- More space between the icons and names in the Settings sidebar.
+
 ## 0.5.0
 
 **New**

@@ -79,6 +79,9 @@ final class ContentBlocker: ObservableObject {
         for builtIn in BuiltInRules.allCases {
             loadCompiled(builtIn.identifier) { builtIn.json }
         }
+        if ElementZapper.shared.rulesJSON != nil {
+            loadCompiled(ElementZapper.ruleIdentifier) { ElementZapper.shared.rulesJSON }
+        }
         for list in lists {
             if list.isOutdated {
                 // Converted by an older, buggy converter: never load those rules.
@@ -143,6 +146,22 @@ final class ContentBlocker: ObservableObject {
     private var activeIdentifiers: [String] {
         BuiltInRules.allCases.filter(\.isEnabled).map(\.identifier)
             + lists.filter { $0.enabled && !$0.isOutdated }.map(\.identifier)
+            + [ElementZapper.ruleIdentifier]
+    }
+
+    /// Element Zapper's per-site hiding rules (nil when nothing is hidden).
+    func installZapperRules(_ json: String?) {
+        let id = ElementZapper.ruleIdentifier
+        guard let json else {
+            compiled[id] = nil
+            store.removeContentRuleList(forIdentifier: id) { _ in }
+            refresh()
+            return
+        }
+        store.compileContentRuleList(forIdentifier: id, encodedContentRuleList: json) { [weak self] list, error in
+            if let error { NSLog("Hush: Element Zapper rules failed: \(error)") }
+            if let list { self?.install(list, as: id) }
+        }
     }
 
     private func configure(_ controller: WKUserContentController) {
