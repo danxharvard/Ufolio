@@ -325,6 +325,7 @@ private struct DescribedToggle: View {
         "Skip tracking redirects": ("arrow.uturn.right", teal),
         "Open original pages instead of AMP": ("bolt.slash.fill", orange),
         "Magic Theme": ("wand.and.stars", pink),
+        "Show News": ("newspaper.fill", purple),
         "Pause sound and video in background tabs": ("pause.circle.fill", green),
         "Free up memory automatically": ("memorychip.fill", blue),
         "Open “safe” files after downloading": ("arrow.down.doc.fill", teal),
@@ -567,6 +568,7 @@ private struct AppearanceSettings: View {
     @AppStorage(Prefs.startGreeting) private var greeting = true
     @AppStorage(Prefs.startBookmarks) private var startBookmarks = true
     @AppStorage(Prefs.magicTheme) private var magicTheme = false
+    @AppStorage(Prefs.startNews) private var startNews = false
     @AppStorage(Prefs.startFrequent) private var startFrequent = true
     @AppStorage(Prefs.startRecentlyClosed) private var startClosed = true
     @AppStorage(Prefs.startPrivacyReport) private var startPrivacy = true
@@ -613,6 +615,9 @@ private struct AppearanceSettings: View {
                 Toggle("Show Favourites", isOn: $startBookmarks)
                 Toggle("Show Suggestions", isOn: $startFrequent)
                 Toggle("Show Privacy Report", isOn: $startPrivacy)
+                DescribedToggle(title: "Show News",
+                                detail: "Headlines from publishers you choose, fetched privately by Hush. Customise topics from the start page.",
+                                isOn: $startNews)
             } header: { SectionTitle("Start page") }
 
             Section {

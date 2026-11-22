@@ -16,6 +16,7 @@ struct StartPage: View {
     @AppStorage(Prefs.startFrequent) private var showSuggestions = true
     @AppStorage(Prefs.startPrivacyReport) private var showPrivacy = true
     @State private var personalising = false
+    @State private var customisingNews = false
 
     var body: some View {
         let favouriteHosts = Set(bookmarks.items.compactMap { $0.url.host?.lowercased().strippingWWW })
@@ -37,6 +38,7 @@ struct StartPage: View {
                     if showPrivacy {
                         PrivacyReportSection().riseIn(4)
                     }
+                    NewsSection(model: model, customising: $customisingNews).riseIn(5)
                 }
                 .frame(maxWidth: 940, alignment: .leading)
                 .padding(.horizontal, 48)
@@ -56,7 +58,12 @@ struct StartPage: View {
                 LaunchCardOverlay { PersonaliseCard { personalising = false } }
                     .transition(.opacity)
             }
+            if customisingNews {
+                LaunchCardOverlay { NewsCustomiseCard { customisingNews = false } }
+                    .transition(.opacity)
+            }
         }
+        .animation(.easeOut(duration: 0.2), value: customisingNews)
         .animation(.easeOut(duration: 0.25), value: closed.tabs.count)
         .animation(.easeOut(duration: 0.2), value: personalising)
         .onAppear { weather.refreshIfNeeded() }

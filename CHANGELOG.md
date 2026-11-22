@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.24.0
+
+**New: Hush News**
+- Turn it on from the start page (or Settings › Appearance) for the day's stories from the
+  BBC, the Guardian, Sky News, The Verge, Ars Technica, Wired, NASA, New Scientist and more.
+- A magazine-style layout: a big hero story, then picture cards, wide stories, compact cards
+  and numbered "Also in the news" lists, with headlines set in an elegant serif.
+- Topics along the top: For You, Top Stories, World, UK, Technology, Science, Business, Sport
+  and Culture.
+- Customise topics and publishers, or add any RSS or Atom feed. Right-click a story to open it
+  in a new tab, copy a clean link or hide a publisher. Stories you've read are dimmed.
+- Private by design: Hush fetches every feed and picture itself, straight from each
+  publisher, without cookies. No news service sits in between, and nobody sees what you
+  read.
+
 ## 0.23.0
 
 **New: script blocking**

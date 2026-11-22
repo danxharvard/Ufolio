@@ -67,6 +67,7 @@ enum Prefs {
     static let debounceLinks = "debounceLinks"
     static let deAMP = "deAMP"
     static let blockingMode = "blockingMode"
+    static let startNews = "startNews"
     static let scriptPolicy = "scriptPolicy"
     static let fingerprintMode = "fingerprintMode"
     static let cookiePolicy = "cookiePolicy"
@@ -130,6 +131,7 @@ enum Prefs {
         debounceLinks: true,
         deAMP: true,
         blockingMode: BlockingMode.standard.rawValue,
+        startNews: false,
         pauseBackgroundMedia: false,
         freeMemoryAutomatically: true,
     ]
