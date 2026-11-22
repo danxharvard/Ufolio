@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.26.0
+
+**New: Bookmarks & History sidebar**
+- Click the sidebar button beside Back, or press ⇧⌘L, to keep your bookmarks and history
+  beside the page while you browse.
+- Switch between Bookmarks and History at the top, and search either one.
+- Bookmarks: click to open (⌘-click for a new tab), drag to reorder, and right-click to rename,
+  copy or remove. Bookmark the page you're on from the bottom of the sidebar.
+- History: grouped by day, with Show All History and Clear at the bottom.
+
+**Removed**
+- Ask Hush. On most Macs a model running locally was too slow to be useful, so it's gone. Its
+  settings and any API keys it stored in your keychain have been removed.
+
 ## 0.25.0
 
 **New: Ask Hush, with your own AI model**

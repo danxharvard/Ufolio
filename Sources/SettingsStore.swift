@@ -1,4 +1,5 @@
 import SwiftUI
+import Security
 import WebKit
 
 /// Every setting's storage key and default. Views read them with @AppStorage;
@@ -387,4 +388,18 @@ enum BlockingMode: String, CaseIterable, Identifiable {
         }
     }
     static var current: BlockingMode { BlockingMode(rawValue: Prefs.string(Prefs.blockingMode)) ?? .standard }
+}
+
+
+/// Tidies away what features removed from Hush left behind.
+enum RemovedFeatures {
+    static func cleanUp() {
+        let d = UserDefaults.standard
+        // Ask Hush (0.25.0): its model list, and any API keys it kept in the keychain.
+        guard d.object(forKey: "ai.models") != nil || d.object(forKey: "ai.selected") != nil else { return }
+        d.removeObject(forKey: "ai.models")
+        d.removeObject(forKey: "ai.selected")
+        SecItemDelete([kSecClass as String: kSecClassGenericPassword,
+                       kSecAttrService as String: "Hush Browser AI"] as CFDictionary)
+    }
 }

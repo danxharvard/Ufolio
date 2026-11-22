@@ -86,6 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ExtensionEvents.launch()
         PerformanceCenter.shared.start()
         Updater.shared.start()
+        RemovedFeatures.cleanUp()
         #if SNAPSHOT
         Snapshotter.run()   // automated screenshots in test builds only; never in releases
         #endif
@@ -175,6 +176,8 @@ struct HushCommands: Commands {
             Button("Actual Size") { browser?.selectedTab?.resetZoom() }
                 .keyboardShortcut(Shortcuts.get(.actualSize))
             Divider()
+            Button(browser?.sidebarOpen == true ? "Hide Sidebar" : "Show Sidebar") { browser?.sidebarOpen.toggle() }
+                .keyboardShortcut(Shortcuts.get(.sidebar))
             Button(browser?.splitPair != nil ? "Close Split View" : "Split View") {
                 guard let model = browser else { return }
                 if model.splitPair != nil { model.closeSplit(keeping: model.selectedID) } else { model.openSplit() }
@@ -182,8 +185,6 @@ struct HushCommands: Commands {
             .keyboardShortcut(Shortcuts.get(.splitView))
             Button(browser?.selectedTab?.reader != nil ? "Leave Reader" : "Show Reader") { browser?.selectedTab?.toggleReader() }
                 .keyboardShortcut(Shortcuts.get(.reader))
-            Button("Ask Hush") { browser?.aiOpen.toggle() }
-                .keyboardShortcut(Shortcuts.get(.askHush))
             Button("Picture in Picture") {
                 if let view = browser?.selectedTab?.webView { WebKitExtras.togglePictureInPicture(view) }
             }

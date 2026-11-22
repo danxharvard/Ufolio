@@ -59,6 +59,12 @@ final class BookmarkStore: ObservableObject {
         save()
     }
 
+    /// Drag to reorder (the sidebar).
+    func move(fromOffsets source: IndexSet, toOffset destination: Int) {
+        items.move(fromOffsets: source, toOffset: destination)
+        save()
+    }
+
     func move(_ bookmark: Bookmark, by offset: Int) {
         guard let i = items.firstIndex(where: { $0.id == bookmark.id }) else { return }
         let j = i + offset

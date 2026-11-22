@@ -9,8 +9,8 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
     case reload, back, forward, nextTab, previousTab
     case print, savePage, copyCleanLink
     case zoomIn, zoomOut, actualSize
-    case splitView, reader, pictureInPicture, translate, muteTab, askHush
-    case bookmark, bookmarksBar, history
+    case splitView, reader, pictureInPicture, translate, muteTab
+    case bookmark, bookmarksBar, history, sidebar
 
     var id: String { rawValue }
 
@@ -41,10 +41,10 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .pictureInPicture: return "Picture in Picture"
         case .translate: return "Translate Page"
         case .muteTab: return "Mute Tab"
-        case .askHush: return "Ask Hush"
         case .bookmark: return "Bookmark This Page"
         case .bookmarksBar: return "Show Bookmarks Bar"
         case .history: return "Show All History"
+        case .sidebar: return "Show Bookmarks & History Sidebar"
         }
     }
 
@@ -55,8 +55,8 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .reload, .back, .forward, .nextTab, .previousTab: return "Getting around"
         case .print, .savePage, .copyCleanLink: return "Pages"
         case .zoomIn, .zoomOut, .actualSize: return "Zoom"
-        case .splitView, .reader, .pictureInPicture, .translate, .muteTab, .askHush: return "Views and media"
-        case .bookmark, .bookmarksBar, .history: return "Bookmarks and history"
+        case .splitView, .reader, .pictureInPicture, .translate, .muteTab: return "Views and media"
+        case .bookmark, .bookmarksBar, .history, .sidebar: return "Bookmarks and history"
         }
     }
 
@@ -87,10 +87,10 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .pictureInPicture: return KeyCombo("p", [.command, .option])
         case .translate: return KeyCombo("y", [.command, .shift])
         case .muteTab: return KeyCombo("m", [.command, .control])
-        case .askHush: return KeyCombo("a", [.command, .option])
         case .bookmark: return KeyCombo("d")
         case .bookmarksBar: return KeyCombo("b", [.command, .shift])
         case .history: return KeyCombo("y")
+        case .sidebar: return KeyCombo("l", [.command, .shift])
         }
     }
 }

@@ -67,6 +67,12 @@ struct BrowserWindow: View {
             }
 
             HStack(spacing: 0) {
+            // Bookmarks & History, beside the page (⇧⌘L).
+            if model.sidebarOpen {
+                LibrarySidebar(model: model)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+                Divider()
+            }
             ZStack(alignment: .topLeading) {
                 PageArea(model: model)
                 if let tab = model.selectedTab {
@@ -83,14 +89,8 @@ struct BrowserWindow: View {
                 }
             }
             .animation(.easeOut(duration: 0.12), value: suggestions.isVisible)
-                // Ask Hush, alongside the page.
-                if model.aiOpen {
-                    Divider()
-                    AIPanel(model: model)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
             }
-            .animation(.spring(response: 0.32, dampingFraction: 0.9), value: model.aiOpen)
+            .animation(.spring(response: 0.32, dampingFraction: 0.9), value: model.sidebarOpen)
         }
         .ignoresSafeArea(.container, edges: .top)
         .background(VisualEffect(material: .titlebar, blending: .behindWindow).ignoresSafeArea())
@@ -191,6 +191,7 @@ struct BrowserWindow: View {
     /// Back, forward and reload; the address bar across the middle; then the tools.
     private var toolbarRow: some View {
         HStack(spacing: 6) {
+            SidebarButton(model: model)
             SelectedTab(model: model) { NavButtons(tab: $0) }
             SelectedTab(model: model) { tab in
                 AddressBar(model: model, tab: tab, suggestions: suggestions, onGo: go)
@@ -204,7 +205,6 @@ struct BrowserWindow: View {
                 DownloadsButton()
                 if !model.isPrivate { ExtensionButtons() }   // up to three, right beside Hush Guard
                 SelectedTab(model: model) { ShieldsButton(tab: $0) }
-                AskHushButton(model: model)
                 PrivateWindowButton(isPrivate: model.isPrivate)
             }
         }

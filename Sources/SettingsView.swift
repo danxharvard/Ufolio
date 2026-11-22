@@ -2,7 +2,7 @@ import SwiftUI
 import WebKit
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, appearance, performance, adBlocker, extensions, privacy, passwords, ai, location, keyboard, updates
+    case general, appearance, performance, adBlocker, extensions, privacy, passwords, location, keyboard, updates
     var id: String { rawValue }
 
     var title: String {
@@ -16,7 +16,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .passwords: return "Passwords & AutoFill"
         case .location: return "Location"
         case .keyboard: return "Keyboard"
-        case .ai: return "AI"
         case .updates: return "Software Update"
         }
     }
@@ -33,7 +32,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .passwords: return "autofill passwords credit cards contact card keychain touch id"
         case .location: return "location weather town postcode personalise start page permission maps"
         case .keyboard: return "keyboard shortcuts keys hotkeys customise command"
-        case .ai: return "ai ask hush model llm claude ollama lm studio openai chatgpt summarise assistant api key"
         case .updates: return "update updates version changelog what's new release notes"
         }
     }
@@ -49,7 +47,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .passwords: return "key.fill"
         case .location: return "location.fill"
         case .keyboard: return "keyboard.fill"
-        case .ai: return "sparkles"
         case .updates: return "arrow.down.circle.fill"
         }
     }
@@ -66,7 +63,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .passwords: return [Color(red: 0.60, green: 0.62, blue: 0.66), Color(red: 0.40, green: 0.42, blue: 0.46)]
         case .location: return [Color(red: 0.25, green: 0.75, blue: 1.0), Color(red: 0.10, green: 0.50, blue: 0.95)]
         case .keyboard: return [Color(white: 0.55), Color(white: 0.38)]
-        case .ai: return [Color(red: 0.62, green: 0.49, blue: 1.0), Color(red: 0.38, green: 0.26, blue: 0.86)]
         case .updates: return [Color(red: 0.62, green: 0.62, blue: 0.65), Color(red: 0.44, green: 0.44, blue: 0.48)]
         }
     }
@@ -142,7 +138,6 @@ struct SettingsView: View {
                     case .performance: PerformanceSettings()
                     case .location: LocationSettings()
                     case .keyboard: KeyboardSettings()
-                    case .ai: AISettings()
                     case .updates: UpdateSettings()
                     }
                 }
