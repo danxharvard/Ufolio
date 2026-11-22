@@ -71,6 +71,8 @@ final class ContentBlocker: ObservableObject {
          Prefs.blockThirdPartyCookies, Prefs.httpsUpgrade, Prefs.globalPrivacyControl,
          Prefs.fingerprintProtection, Prefs.deAMP]
             .map { Prefs.bool($0) ? "1" : "0" }.joined() + Prefs.string(Prefs.blockingMode)
+            + Prefs.string(Prefs.scriptPolicy) + Prefs.string(Prefs.fingerprintMode) + Prefs.string(Prefs.cookiePolicy)
+            + Prefs.string(ShieldSettings.sitesKey)
     }
 
     // MARK: Setup
@@ -135,7 +137,8 @@ final class ContentBlocker: ObservableObject {
     func update(_ controller: WKUserContentController, forHost host: String?) {
         let old = hostOf.object(forKey: controller) as String?
         if let host { hostOf.setObject(host as NSString, forKey: controller) } else { hostOf.removeObject(forKey: controller) }
-        if old.map(isShieldsDown) != host.map(isShieldsDown) || old == nil {
+        let shields = ShieldSettings.shared
+        if old.map(isShieldsDown) != host.map(isShieldsDown) || old == nil || shields.effective(for: old) != shields.effective(for: host) {
             configure(controller)
         }
     }
@@ -148,10 +151,23 @@ final class ContentBlocker: ObservableObject {
         for controller in controllers.allObjects { configure(controller) }
     }
 
-    private var activeIdentifiers: [String] {
-        BuiltInRules.allCases.filter(\.isEnabled).map(\.identifier)
-            + lists.filter { $0.enabled && !$0.isOutdated }.map(\.identifier)
-            + [ElementZapper.ruleIdentifier]
+    /// The rule lists a page gets with these protections.
+    private func identifiers(for shields: Shields) -> [String] {
+        var ids: [String] = []
+        if shields.blocking != .off {
+            if Prefs.bool(Prefs.adBlockEnabled) { ids.append(BuiltInRules.ads.identifier) }
+            if Prefs.bool(Prefs.trackerBlockEnabled) { ids.append(BuiltInRules.trackers.identifier) }
+            if shields.blocking == .strict { ids.append(BuiltInRules.strict.identifier) }
+            ids += lists.filter { $0.enabled && !$0.isOutdated }.map(\.identifier)
+        }
+        switch shields.cookies {
+        case .blockThirdParty: ids.append(BuiltInRules.thirdPartyCookies.identifier)
+        case .blockAll: ids.append(BuiltInRules.allCookies.identifier)
+        case .allowAll: break
+        }
+        if shields.scripts == .blockThirdParty { ids.append(BuiltInRules.thirdPartyScripts.identifier) }
+        ids.append(ElementZapper.ruleIdentifier)
+        return ids
     }
 
     /// Element Zapper's per-site hiding rules (nil when nothing is hidden).
@@ -173,21 +189,29 @@ final class ContentBlocker: ObservableObject {
         controller.removeAllContentRuleLists()
         controller.removeAllUserScripts()
         let host = hostOf.object(forKey: controller) as String?
-        // Off mode switches Hush Guard off everywhere; otherwise per-site shields decide.
-        let shieldsOn = BlockingMode.current != .off && !(host.map(isShieldsDown) ?? false)
+        // The site's switch in the Hush Guard panel turns everything off for it; otherwise
+        // your defaults apply, with any of the site's own settings on top.
+        let shieldsOn = !(host.map(isShieldsDown) ?? false)
         if shieldsOn {
-            if Fingerprinting.isEnabled {
-                controller.addUserScript(BlockingMode.current == .strict ? Fingerprinting.strict : Fingerprinting.standard)
+            let shields = ShieldSettings.shared.effective(for: host)
+            switch shields.fingerprinting {
+            case .standard: controller.addUserScript(Fingerprinting.standard)
+            case .strict: controller.addUserScript(Fingerprinting.strict)
+            case .off: break
             }
-            for id in activeIdentifiers {
+            for id in identifiers(for: shields) {
                 if let list = compiled[id] { controller.add(list) }
             }
-            if Prefs.bool(Prefs.autoRejectCookies) { controller.addUserScript(UserScripts.rejectCookieBanners) }
-            if Prefs.bool(Prefs.hideCookieBanners) { controller.addUserScript(UserScripts.hideCookieBanners) }
-            if Prefs.bool(Prefs.collapseAdSpace) && (Prefs.bool(Prefs.adBlockEnabled) || lists.contains(where: \.enabled)) {
-                controller.addUserScript(UserScripts.collapseAdSpace)
+            if shields.blocking != .off {
+                if Prefs.bool(Prefs.autoRejectCookies) { controller.addUserScript(UserScripts.rejectCookieBanners) }
+                if Prefs.bool(Prefs.hideCookieBanners) { controller.addUserScript(UserScripts.hideCookieBanners) }
+                if Prefs.bool(Prefs.collapseAdSpace) && (Prefs.bool(Prefs.adBlockEnabled) || lists.contains(where: \.enabled)) {
+                    controller.addUserScript(UserScripts.collapseAdSpace)
+                }
             }
         }
+        // Secure connections are a privacy setting of their own, kept even when Hush Guard is off.
+        if Prefs.bool(Prefs.httpsUpgrade), let list = compiled[BuiltInRules.httpsUpgrade.identifier] { controller.add(list) }
         if Prefs.bool(Prefs.globalPrivacyControl) { controller.addUserScript(UserScripts.globalPrivacyControl) }
         if CleanLinks.deAMPEnabled { controller.addUserScript(CleanLinks.deAMPScript) }
         if AutofillCenter.isEnabled { controller.addUserScript(AutofillCenter.script) }
@@ -362,7 +386,7 @@ final class ContentBlocker: ObservableObject {
 // MARK: - Built-in protection
 
 enum BuiltInRules: String, CaseIterable {
-    case ads, trackers, thirdPartyCookies, httpsUpgrade, strict
+    case ads, trackers, thirdPartyCookies, httpsUpgrade, strict, allCookies, thirdPartyScripts
 
     var identifier: String { "hush-\(rawValue)-v2" }
 
@@ -373,6 +397,7 @@ enum BuiltInRules: String, CaseIterable {
         case .thirdPartyCookies: return Prefs.bool(Prefs.blockThirdPartyCookies)
         case .httpsUpgrade: return Prefs.bool(Prefs.httpsUpgrade)
         case .strict: return BlockingMode.current == .strict
+        case .allCookies, .thirdPartyScripts: return false   // chosen per site, see ShieldSettings
         }
     }
 
@@ -393,12 +418,21 @@ enum BuiltInRules: String, CaseIterable {
             ]]
         case .strict:
             // Strict: social widgets, fingerprinting services, tracking pings and all third-party cookies.
+            // Strict: social widgets, fingerprinting services and tracking pings.
             rules = Self.strictDomains.map(Self.blockThirdParty) + [
                 ["trigger": ["url-filter": ".*", "resource-type": ["ping"], "load-type": ["third-party"]] as [String: Any],
                  "action": ["type": "block"]],
-                ["trigger": ["url-filter": ".*", "load-type": ["third-party"]] as [String: Any],
-                 "action": ["type": "block-cookies"]],
             ]
+        case .allCookies:
+            rules = [[
+                "trigger": ["url-filter": ".*"] as [String: Any],
+                "action": ["type": "block-cookies"],
+            ]]
+        case .thirdPartyScripts:
+            rules = [[
+                "trigger": ["url-filter": ".*", "resource-type": ["script"], "load-type": ["third-party"]] as [String: Any],
+                "action": ["type": "block"],
+            ]]
         case .httpsUpgrade:
             rules = [[
                 "trigger": ["url-filter": "^http://", "unless-domain": ["localhost", "*.local", "*.localhost", "*.test"]] as [String: Any],

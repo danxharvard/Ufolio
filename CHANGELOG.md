@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.23.0
+
+**New: script blocking**
+- Choose Allow, Block third-party (only the site's own scripts run) or Block all (no JavaScript)
+  for every site, or for one site at a time.
+
+**New: settings for each site**
+- The Hush Guard panel has a This Site card. For the site you're on, set ads and trackers
+  (Standard, Strict or Off), scripts, fingerprinting protection (Off, Standard or Strict) and
+  cookies (Allow all, Block third-party or Block all). Anything left on Default follows your
+  defaults, and Use Defaults resets the site.
+- Settings › Hush Guard lists every site you've changed, with a Reset button for each.
+
+**New: defaults for every site**
+- Settings › Hush Guard › Defaults for every site sets the blocking level, scripts,
+  fingerprinting protection and cookies everywhere. Your earlier cookie and fingerprinting
+  choices carry over; those switches moved here from Privacy & Security.
+
+**Improved**
+- The Settings title is centred in the title bar.
+- Upgrading connections to HTTPS now keeps working on sites where Hush Guard is off.
+
 ## 0.22.0
 
 **New: Settings › Keyboard**

@@ -393,9 +393,10 @@ struct ShieldsPanel: View {
     let shieldsUp: Bool
     @ObservedObject private var stats = BlockStats.shared
     @AppStorage(Prefs.blockingMode) private var mode = BlockingMode.standard.rawValue
-    @AppStorage(Prefs.fingerprintProtection) private var fingerprinting = true
+    @ObservedObject private var siteShields = ShieldSettings.shared
 
     private var blockingMode: BlockingMode { BlockingMode(rawValue: mode) ?? .standard }
+    private var shields: Shields { siteShields.effective(for: tab.host) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -422,11 +423,11 @@ struct ShieldsPanel: View {
                         GuardStat(symbol: "rectangle.slash", label: "Ads", value: "\(tab.adsOnPage)", tint: Color(red: 0.95, green: 0.45, blue: 0.40))
                         GuardStat(symbol: "eye.slash.fill", label: "Trackers", value: "\(tab.trackersOnPage)", tint: Color(red: 0.36, green: 0.62, blue: 1.0))
                         GuardStat(symbol: "touchid", label: "Fingerprint",
-                                  value: fingerprinting && blockingMode != .off ? (blockingMode == .strict ? "Strict" : "Masked") : "Off",
+                                  value: shields.fingerprinting == .off ? "Off" : (shields.fingerprinting == .strict ? "Strict" : "Masked"),
                                   tint: Color(red: 0.62, green: 0.48, blue: 1.0))
                     }
                 }
-                levelPicker
+                if shieldsUp, tab.host != nil { siteSettings }
                 if tab.url != nil { tabActions }
             }
             .padding(.horizontal, 14)
@@ -485,33 +486,37 @@ struct ShieldsPanel: View {
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.045)))
     }
 
-    /// Standard / Strict / Off for every site.
-    private var levelPicker: some View {
+    /// This site's own settings: anything left on Default follows Settings › Hush Guard.
+    private var siteSettings: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("BLOCKING").font(.system(size: 10, weight: .semibold)).tracking(0.8).foregroundStyle(.secondary)
-            HStack(spacing: 6) {
-                ForEach(BlockingMode.allCases) { option in
-                    let selected = blockingMode == option
-                    Button {
-                        mode = option.rawValue
-                        tab.webView.reload()
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: option.symbol).font(.system(size: 10.5, weight: .semibold))
-                            Text(option.label).font(.system(size: 12, weight: selected ? .semibold : .regular))
-                        }
-                        .foregroundStyle(selected ? Color.white : Color.primary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 28)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(selected ? AnyShapeStyle(LinearGradient(colors: option.colors, startPoint: .top, endPoint: .bottom))
-                                           : AnyShapeStyle(Color.primary.opacity(0.05))))
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .help(option.detail)
+            HStack {
+                Text("THIS SITE").font(.system(size: 10, weight: .semibold)).tracking(0.8).foregroundStyle(.secondary)
+                Spacer()
+                if let host = tab.host, !siteShields.overrides(for: host).isEmpty {
+                    Button("Use Defaults") { siteShields.reset(host); tab.webView.reload() }
+                        .buttonStyle(.link).font(.system(size: 10.5))
                 }
             }
+            VStack(spacing: 0) {
+                SiteSettingRow(symbol: "shield.lefthalf.filled", title: "Ads & trackers", tab: tab, keyPath: \.blocking,
+                               options: BlockingMode.allCases.map { ($0.rawValue, $0.label) },
+                               current: shields.blocking.label, defaultLabel: ShieldSettings.defaults.blocking.label)
+                Divider().padding(.leading, 34)
+                SiteSettingRow(symbol: "curlybraces", title: "Scripts", tab: tab, keyPath: \.scripts,
+                               options: ScriptPolicy.allCases.map { ($0.rawValue, $0.label) },
+                               current: shields.scripts.label, defaultLabel: ShieldSettings.defaults.scripts.label)
+                Divider().padding(.leading, 34)
+                SiteSettingRow(symbol: "touchid", title: "Fingerprinting", tab: tab, keyPath: \.fingerprinting,
+                               options: FingerprintLevel.allCases.map { ($0.rawValue, $0.label) },
+                               current: shields.fingerprinting.label, defaultLabel: ShieldSettings.defaults.fingerprinting.label)
+                Divider().padding(.leading, 34)
+                SiteSettingRow(symbol: "birthday.cake", title: "Cookies", tab: tab, keyPath: \.cookies,
+                               options: CookiePolicy.allCases.map { ($0.rawValue, $0.label) },
+                               current: shields.cookies.label, defaultLabel: ShieldSettings.defaults.cookies.label)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 2)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.045)))
         }
     }
 
@@ -526,6 +531,54 @@ struct ShieldsPanel: View {
             GuardAction(symbol: "eraser", label: "Forget", active: false) { SiteForgetter.confirmAndForget(tab) }
                 .help("Forget This Site: delete its cookies, data and history")
         }
+    }
+}
+
+/// One of a site's settings in the Hush Guard panel: Default, or one of the choices.
+private struct SiteSettingRow: View {
+    let symbol: String
+    let title: String
+    @ObservedObject var tab: BrowserTab
+    let keyPath: WritableKeyPath<SiteOverrides, String?>
+    let options: [(String, String)]
+    let current: String
+    let defaultLabel: String
+    @ObservedObject private var siteShields = ShieldSettings.shared
+
+    var body: some View {
+        let host = tab.host ?? ""
+        let chosen = siteShields.overrides(for: host)[keyPath: keyPath]
+        HStack(spacing: 10) {
+            Image(systemName: symbol).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Color.accentColor).frame(width: 22)
+            Text(title).font(.system(size: 12.5))
+            Spacer()
+            Menu {
+                Button { set(nil) } label: {
+                    if chosen == nil { Label("Default (\(defaultLabel))", systemImage: "checkmark") } else { Text("Default (\(defaultLabel))") }
+                }
+                Divider()
+                ForEach(options, id: \.0) { value, label in
+                    Button { set(value) } label: {
+                        if chosen == value { Label(label, systemImage: "checkmark") } else { Text(label) }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    if chosen != nil { Circle().fill(Color.accentColor).frame(width: 5, height: 5) }
+                    Text(current).font(.system(size: 12, weight: chosen != nil ? .semibold : .regular))
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help(chosen == nil ? "Following your default" : "Changed for this site")
+        }
+        .frame(height: 32)
+    }
+
+    private func set(_ value: String?) {
+        guard let host = tab.host else { return }
+        siteShields.update(host) { $0[keyPath: keyPath] = value }
+        tab.webView.reload()
     }
 }
 

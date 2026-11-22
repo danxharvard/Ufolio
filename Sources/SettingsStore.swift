@@ -67,6 +67,9 @@ enum Prefs {
     static let debounceLinks = "debounceLinks"
     static let deAMP = "deAMP"
     static let blockingMode = "blockingMode"
+    static let scriptPolicy = "scriptPolicy"
+    static let fingerprintMode = "fingerprintMode"
+    static let cookiePolicy = "cookiePolicy"
     static let pauseBackgroundMedia = "pauseBackgroundMedia"
     static let freeMemoryAutomatically = "freeMemoryAutomatically"
 
@@ -376,9 +379,9 @@ enum BlockingMode: String, CaseIterable, Identifiable {
     }
     var detail: String {
         switch self {
-        case .standard: return "Blocks ads, trackers and fingerprinting without breaking sites."
-        case .strict: return "Also blocks social widgets, tracking pings and hides more about your Mac. A few sites may not work."
-        case .off: return "No blocking anywhere. Not recommended."
+        case .standard: return "Blocks ads and trackers without breaking sites."
+        case .strict: return "Also blocks social widgets, fingerprinting services and tracking pings. A few sites may not work."
+        case .off: return "No ad or tracker blocking. Not recommended."
         }
     }
     static var current: BlockingMode { BlockingMode(rawValue: Prefs.string(Prefs.blockingMode)) ?? .standard }

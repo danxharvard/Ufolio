@@ -347,7 +347,11 @@ extension BrowserTab: WKNavigationDelegate {
             ContentBlocker.shared.update(webView.configuration.userContentController,
                                          forHost: action.request.url?.host)
         }
-        preferences.allowsContentJavaScript = Prefs.bool(Prefs.javaScript) && !javaScriptOff
+        // Script blocking: the site's Hush Guard setting (Block all turns JavaScript off for it).
+        let scriptHost = (action.targetFrame?.isMainFrame ?? true) ? action.request.url?.host : host
+        let siteOn = !(scriptHost.map(ContentBlocker.shared.isShieldsDown) ?? false)
+        let scriptsBlocked = siteOn && ShieldSettings.shared.effective(for: scriptHost).scripts == .blockAll
+        preferences.allowsContentJavaScript = Prefs.bool(Prefs.javaScript) && !javaScriptOff && !scriptsBlocked
         decisionHandler(action.shouldPerformDownload ? .download : .allow, preferences)
     }
 

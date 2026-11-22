@@ -145,12 +145,20 @@ struct SettingsView: View {
                 .transition(.opacity.combined(with: .offset(y: 6)))
             }
             .animation(.easeOut(duration: 0.18), value: tab)
-            .navigationTitle(tab.title)
+        }
+        // The section's name, centred in the title bar. It belongs to the whole window (not the
+        // changing section), so SwiftUI keeps one copy instead of leaving old ones on the left.
+        .toolbar(removing: .title)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text((current.wrappedValue ?? .general).title).font(.system(size: 13, weight: .semibold))
+            }
         }
         // A slim, compact title bar (keeps the window's close/minimise/zoom buttons).
         .background(WindowReader { window in
             window?.toolbarStyle = .unifiedCompact
             window?.titlebarSeparatorStyle = .none
+            window?.titleVisibility = .hidden   // the centred title above replaces the left-hand one
         })
         .frame(width: 900, height: 680)
         .accentColor(AccentChoice(rawValue: accent)?.color)
@@ -751,15 +759,18 @@ private struct PrivacySettings: View {
             }
 
             Section {
-                DescribedToggle(title: "Block third-party cookies",
-                                detail: "Stops companies embedded in websites from recognising you across sites.",
-                                isOn: $thirdPartyCookies)
+                LabeledContent {
+                    Button("Hush Guard Settings…") { UserDefaults.standard.set(SettingsTab.adBlocker.rawValue, forKey: "settingsTab") }
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Cookies, scripts and fingerprinting")
+                        Text("Set for every site, or one site at a time, in Hush Guard.")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                }
                 DescribedToggle(title: "Upgrade connections to HTTPS",
                                 detail: "Loads the secure version of a site whenever it exists.",
                                 isOn: $https)
-                DescribedToggle(title: "Fingerprinting protection",
-                                detail: "Adds tiny, invisible noise to the details sites use to recognise your Mac, different on every site.",
-                                isOn: $fingerprinting)
                 DescribedToggle(title: "Clean tracking from links",
                                 detail: "Removes tags like utm_source and fbclid that follow you between sites.",
                                 isOn: $cleanLinks)
@@ -902,7 +913,15 @@ private struct AdBlockerSettings: View {
     @AppStorage(Prefs.collapseAdSpace) private var collapse = true
     @AppStorage(Prefs.autoRejectCookies) private var autoReject = true
     @AppStorage(Prefs.blockingMode) private var mode = BlockingMode.standard.rawValue
+    @ObservedObject private var siteShields = ShieldSettings.shared
+    @State private var defaultsRevision = 0
     @State private var showWebSheet = false
+
+    /// A picker binding for a default stored as text (with older on/off answers carried over).
+    private func defaultBinding(_ key: String, _ current: String) -> Binding<String> {
+        Binding(get: { _ = defaultsRevision; return current },
+                set: { UserDefaults.standard.set($0, forKey: key); defaultsRevision += 1 })
+    }
 
     var body: some View {
         Form {
@@ -925,7 +944,24 @@ private struct AdBlockerSettings: View {
                         }
                     }
                 }
-            } header: { SectionTitle("Blocking") }
+                LabeledContent("Scripts") {
+                    Picker("", selection: defaultBinding(Prefs.scriptPolicy, ShieldSettings.defaults.scripts.rawValue)) {
+                        ForEach(ScriptPolicy.allCases) { Text($0.label).tag($0.rawValue) }
+                    }.labelsHidden().fixedSize()
+                }
+                LabeledContent("Fingerprinting protection") {
+                    Picker("", selection: defaultBinding(Prefs.fingerprintMode, ShieldSettings.defaults.fingerprinting.rawValue)) {
+                        ForEach(FingerprintLevel.allCases) { Text($0.label).tag($0.rawValue) }
+                    }.labelsHidden().fixedSize()
+                }
+                LabeledContent("Cookies") {
+                    Picker("", selection: defaultBinding(Prefs.cookiePolicy, ShieldSettings.defaults.cookies.rawValue)) {
+                        ForEach(CookiePolicy.allCases) { Text($0.label).tag($0.rawValue) }
+                    }.labelsHidden().fixedSize()
+                }
+            } header: { SectionTitle("Defaults for every site") } footer: {
+                Footnote("Each site can be set differently from the Hush Guard panel in the toolbar. Blocking scripts or all cookies makes many sites stop working, so they’re best chosen for single sites.")
+            }
 
             Section {
                 Toggle("Block ads", isOn: $ads)
@@ -969,20 +1005,31 @@ private struct AdBlockerSettings: View {
             }
 
             Section {
-                if blocker.shieldsDown.isEmpty {
-                    Text("None. Use the shield in the toolbar to turn Hush Guard off for a site that doesn’t work properly.")
+                let custom = Set(siteShields.sites.keys).union(blocker.shieldsDown).sorted()
+                if custom.isEmpty {
+                    Text("None yet. Change a site’s settings from the Hush Guard panel in the toolbar.")
                         .foregroundStyle(.secondary)
                 }
-                ForEach(blocker.shieldsDown, id: \.self) { host in
+                ForEach(custom, id: \.self) { site in
+                    let off = blocker.isShieldsDown(site)
                     HStack(spacing: 10) {
-                        Favicon(url: URL(string: "https://\(host)"), size: 16)
-                        Text(host)
+                        Favicon(url: URL(string: "https://\(site)"), size: 16)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(site)
+                            Text(off ? "Hush Guard off" : siteShields.summary(for: site))
+                                .font(.system(size: 11)).foregroundStyle(off ? Color.orange : .secondary)
+                                .lineLimit(2)
+                        }
                         Spacer()
-                        Button("Turn Hush Guard Back On") { blocker.setShields(true, for: host) }
-                            .controlSize(.small)
+                        Button("Reset") {
+                            if off { blocker.setShields(true, for: site) }
+                            siteShields.reset(site)
+                        }
+                        .controlSize(.small)
+                        .help("Use your defaults on this site again")
                     }
                 }
-            } header: { SectionTitle("Sites with Hush Guard off") }
+            } header: { SectionTitle("Site settings") }
 
             Section {
                 if zapper.hidden.isEmpty {
