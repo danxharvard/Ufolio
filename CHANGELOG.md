@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.20.1
+
+**New look**
+- Forget This Site now asks with a small, animated card instead of a plain alert. The site's icon
+  sits among drifting stars while bits of its data float away. One line explains what happens,
+  and Forget is shown in red.
+
 ## 0.20.0
 
 **New: fingerprinting protection**

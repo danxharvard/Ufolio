@@ -121,6 +121,17 @@ struct BrowserWindow: View {
         // The welcome screen and default-browser question are drawn inside the window,
         // over a dimmed backdrop (SwiftUI sheets could end up off-screen and lock the window).
         .overlay {
+            if let request = model.forgetRequest {
+                LaunchCardOverlay {
+                    ForgetSiteCard(request: request) {
+                        model.forgetRequest = nil
+                        SiteForgetter.forget(request.site, in: model)
+                    } onCancel: {
+                        model.forgetRequest = nil
+                    }
+                }
+                .transition(.opacity)
+            }
             if let notes = whatsNew {
                 LaunchCardOverlay {
                     WhatsNewView(notes: notes) { whatsNew = nil }
@@ -153,7 +164,9 @@ struct BrowserWindow: View {
             if let tab = model.selectedTab { DispatchQueue.main.async { tab.webView.window?.makeFirstResponder(tab.webView) } }
             NSApp.activate(ignoringOtherApps: true)
         }
+        .animation(.easeOut(duration: 0.2), value: model.forgetRequest)
         .onReceive(NotificationCenter.default.publisher(for: QuitHelper.closeSheets)) { _ in
+            model.forgetRequest = nil
             showWelcome = false
             showDefaultBanner = false
             whatsNew = nil
@@ -604,7 +617,7 @@ private struct GuardScene: View {
 }
 
 /// Stars that slowly drift across and twinkle.
-private struct GuardStars: View {
+struct GuardStars: View {
     let on: Bool
     let t: Double
     let size: CGSize

@@ -79,6 +79,8 @@ final class BrowserModel: NSObject, ObservableObject {
     let dataStore: WKWebsiteDataStore
     /// Find on Page (⌘F) for this window.
     let find = FindModel()
+    /// Forget This Site waiting for your answer (shown as a card over the window).
+    @Published var forgetRequest: SiteForgetter.Request?
     private var audioTimer: Timer?
 
     init(isPrivate: Bool = false) {
