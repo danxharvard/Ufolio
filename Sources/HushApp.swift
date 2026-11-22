@@ -94,6 +94,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 struct HushCommands: Commands {
     @Environment(\.openWindow) private var openWindow
+    /// Redraws the menus when you change a shortcut in Settings › Keyboard.
+    @AppStorage(Shortcuts.storageKey) private var shortcutOverrides = ""
     @FocusedObject private var focusedBrowser: BrowserModel?
     private var browser: BrowserModel? { focusedBrowser ?? BrowserModel.frontmost }
     @ObservedObject private var bookmarks = BookmarkStore.shared
@@ -120,27 +122,27 @@ struct HushCommands: Commands {
                 WindowOpener.ensureWindow()
                 browser?.newTab(focus: true)
             }
-            .keyboardShortcut("t")
+            .keyboardShortcut(Shortcuts.get(.newTab))
             Button("New Private Window") { openWindow(id: "private") }
-                .keyboardShortcut("n", modifiers: [.command, .shift])
+                .keyboardShortcut(Shortcuts.get(.privateWindow))
             Button("Open Location…") { browser?.focusAddressBar() }
-                .keyboardShortcut("l")
+                .keyboardShortcut(Shortcuts.get(.openLocation))
         }
 
         Group {
         CommandGroup(after: .textEditing) {
             Divider()
             Button("Find on Page…") { browser?.find.show() }
-                .keyboardShortcut("f")
+                .keyboardShortcut(Shortcuts.get(.find))
             Button("Find Next") { browser?.find.search(in: browser?.selectedTab?.webView) }
-                .keyboardShortcut("g")
+                .keyboardShortcut(Shortcuts.get(.findNext))
             Button("Find Previous") { browser?.find.search(in: browser?.selectedTab?.webView, backwards: true) }
-                .keyboardShortcut("g", modifiers: [.command, .shift])
+                .keyboardShortcut(Shortcuts.get(.findPrevious))
         }
 
         CommandGroup(replacing: .printItem) {
             Button("Print…") { browser?.selectedTab?.printPage() }
-                .keyboardShortcut("p")
+                .keyboardShortcut(Shortcuts.get(.print))
         }
 
         CommandGroup(after: .pasteboard) {
@@ -149,49 +151,49 @@ struct HushCommands: Commands {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(CleanLinks.clean(url).absoluteString, forType: .string)
             }
-            .keyboardShortcut("c", modifiers: [.command, .shift])
+            .keyboardShortcut(Shortcuts.get(.copyCleanLink))
         }
 
         CommandGroup(replacing: .saveItem) {
             Button("Close Tab") { browser?.closeSelectedTab() }
-                .keyboardShortcut("w")
+                .keyboardShortcut(Shortcuts.get(.closeTab))
             Button("Close Window") { NSApp.keyWindow?.performClose(nil) }
-                .keyboardShortcut("w", modifiers: [.command, .shift])
+                .keyboardShortcut(Shortcuts.get(.closeWindow))
             Divider()
             Button("Save Page As…") { browser?.selectedTab?.savePage() }
-                .keyboardShortcut("s")
+                .keyboardShortcut(Shortcuts.get(.savePage))
         }
 
         CommandGroup(before: .toolbar) {
             Button("Reload Page") { browser?.selectedTab?.reload() }
-                .keyboardShortcut("r")
+                .keyboardShortcut(Shortcuts.get(.reload))
             Divider()
             Button("Zoom In") { browser?.selectedTab?.zoom(by: 0.1) }
-                .keyboardShortcut("+")
+                .keyboardShortcut(Shortcuts.get(.zoomIn))
             Button("Zoom Out") { browser?.selectedTab?.zoom(by: -0.1) }
-                .keyboardShortcut("-")
+                .keyboardShortcut(Shortcuts.get(.zoomOut))
             Button("Actual Size") { browser?.selectedTab?.resetZoom() }
-                .keyboardShortcut("0")
+                .keyboardShortcut(Shortcuts.get(.actualSize))
             Divider()
             Button(browser?.splitPair != nil ? "Close Split View" : "Split View") {
                 guard let model = browser else { return }
                 if model.splitPair != nil { model.closeSplit(keeping: model.selectedID) } else { model.openSplit() }
             }
-            .keyboardShortcut("s", modifiers: [.command, .control])
+            .keyboardShortcut(Shortcuts.get(.splitView))
             Button(browser?.selectedTab?.reader != nil ? "Leave Reader" : "Show Reader") { browser?.selectedTab?.toggleReader() }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
+                .keyboardShortcut(Shortcuts.get(.reader))
             Button("Picture in Picture") {
                 if let view = browser?.selectedTab?.webView { WebKitExtras.togglePictureInPicture(view) }
             }
-            .keyboardShortcut("p", modifiers: [.command, .option])
+            .keyboardShortcut(Shortcuts.get(.pictureInPicture))
             Button("Translate Page") {
                 guard let tab = browser?.selectedTab else { return }
                 if tab.translation == .translated { PageTranslator.shared.showOriginal(tab) } else { PageTranslator.shared.translate(tab) }
             }
-            .keyboardShortcut("y", modifiers: [.command, .shift])
+            .keyboardShortcut(Shortcuts.get(.translate))
             Divider()
             Toggle("Show Bookmarks Bar", isOn: $showBookmarkBar)
-                .keyboardShortcut("b", modifiers: [.command, .shift])
+                .keyboardShortcut(Shortcuts.get(.bookmarksBar))
             Toggle("Block Ads", isOn: $adBlockEnabled)
             Picker("Appearance", selection: $appearance) {
                 ForEach(AppearanceMode.allCases) { Text($0.label).tag($0.rawValue) }
@@ -201,7 +203,7 @@ struct HushCommands: Commands {
 
         CommandMenu("Tab") {
             Button(browser?.selectedTab?.isMuted == true ? "Unmute Tab" : "Mute Tab") { browser?.selectedTab?.toggleMute() }
-                .keyboardShortcut("m", modifiers: [.command, .control])
+                .keyboardShortcut(Shortcuts.get(.muteTab))
             Button(browser?.selectedTab?.isPinned == true ? "Unpin Tab" : "Pin Tab") {
                 if let model = browser, let tab = model.selectedTab { model.togglePin(tab) }
             }
@@ -210,25 +212,25 @@ struct HushCommands: Commands {
 
         CommandMenu("History") {
             Button("Show All History") { openWindow(id: "history") }
-                .keyboardShortcut("y")
+                .keyboardShortcut(Shortcuts.get(.history))
             Divider()
             Button("Reopen Closed Tab") { browser?.reopenClosedTab() }
-                .keyboardShortcut("t", modifiers: [.command, .shift])
+                .keyboardShortcut(Shortcuts.get(.reopenTab))
             Divider()
             Button("Back") { browser?.selectedTab?.webView.goBack() }
-                .keyboardShortcut("[")
+                .keyboardShortcut(Shortcuts.get(.back))
             Button("Forward") { browser?.selectedTab?.webView.goForward() }
-                .keyboardShortcut("]")
+                .keyboardShortcut(Shortcuts.get(.forward))
             Divider()
             Button("Show Next Tab") { browser?.selectAdjacentTab(1) }
-                .keyboardShortcut("]", modifiers: [.command, .shift])
+                .keyboardShortcut(Shortcuts.get(.nextTab))
             Button("Show Previous Tab") { browser?.selectAdjacentTab(-1) }
-                .keyboardShortcut("[", modifiers: [.command, .shift])
+                .keyboardShortcut(Shortcuts.get(.previousTab))
         }
 
         CommandMenu("Bookmarks") {
             Button("Bookmark This Page") { browser?.toggleBookmarkForSelectedTab() }
-                .keyboardShortcut("d")
+                .keyboardShortcut(Shortcuts.get(.bookmark))
             if !bookmarks.items.isEmpty {
                 Divider()
                 ForEach(bookmarks.items) { bookmark in

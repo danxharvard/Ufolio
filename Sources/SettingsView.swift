@@ -2,7 +2,7 @@ import SwiftUI
 import WebKit
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, appearance, performance, adBlocker, extensions, privacy, passwords, location, updates
+    case general, appearance, performance, adBlocker, extensions, privacy, passwords, location, keyboard, updates
     var id: String { rawValue }
 
     var title: String {
@@ -15,6 +15,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .privacy: return "Privacy & Security"
         case .passwords: return "Passwords & AutoFill"
         case .location: return "Location"
+        case .keyboard: return "Keyboard"
         case .updates: return "Software Update"
         }
     }
@@ -30,6 +31,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .privacy: return "fingerprinting farbling redirects debounce amp cookies https tracking gpc fraud phishing look-alike clean links camera microphone pop-ups autoplay javascript website data clear"
         case .passwords: return "autofill passwords credit cards contact card keychain touch id"
         case .location: return "location weather town postcode personalise start page permission maps"
+        case .keyboard: return "keyboard shortcuts keys hotkeys customise command"
         case .updates: return "update updates version changelog what's new release notes"
         }
     }
@@ -44,6 +46,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .privacy: return "hand.raised.fill"
         case .passwords: return "key.fill"
         case .location: return "location.fill"
+        case .keyboard: return "keyboard.fill"
         case .updates: return "arrow.down.circle.fill"
         }
     }
@@ -59,6 +62,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .privacy: return [Color(red: 0.25, green: 0.60, blue: 1.0), Color(red: 0.10, green: 0.42, blue: 0.95)]
         case .passwords: return [Color(red: 0.60, green: 0.62, blue: 0.66), Color(red: 0.40, green: 0.42, blue: 0.46)]
         case .location: return [Color(red: 0.25, green: 0.75, blue: 1.0), Color(red: 0.10, green: 0.50, blue: 0.95)]
+        case .keyboard: return [Color(white: 0.55), Color(white: 0.38)]
         case .updates: return [Color(red: 0.62, green: 0.62, blue: 0.65), Color(red: 0.44, green: 0.44, blue: 0.48)]
         }
     }
@@ -133,6 +137,7 @@ struct SettingsView: View {
                     case .passwords: PasswordSettings()
                     case .performance: PerformanceSettings()
                     case .location: LocationSettings()
+                    case .keyboard: KeyboardSettings()
                     case .updates: UpdateSettings()
                     }
                 }
@@ -476,7 +481,7 @@ private struct GeneralSettings: View {
                     ForEach(HistoryRetention.allCases) { Text($0.label).tag($0.rawValue) }
                 }.labelsHidden().fixedSize() }
                 HStack {
-                    Menu("Import from Another Browser") {
+                    Menu("Import History and Bookmarks") {
                         ForEach(BrowserImporter.available()) { source in
                             Button(source.name) { runImport(source) }
                         }
@@ -525,7 +530,8 @@ private struct GeneralSettings: View {
             let message: String
             do {
                 let count = try BrowserImporter.importTopSites(from: source)
-                message = "Imported \(count) pages from \(source.name)."
+                let marks = (try? BrowserImporter.importBookmarks(from: source)) ?? 0
+                message = "Imported \(count) pages and \(marks) bookmarks from \(source.name)."
             } catch {
                 message = error.localizedDescription
             }
@@ -1410,6 +1416,8 @@ private struct PasswordSettings: View {
         return q.isEmpty ? logins : logins.filter { $0.host.contains(q) || $0.account.lowercased().contains(q) }
     }
 
+    @State private var importMessage: String?
+
     var body: some View {
         Form {
             Section {
@@ -1491,6 +1499,21 @@ private struct PasswordSettings: View {
                         Button("Lock") { lock() }.buttonStyle(.link).font(.system(size: 11))
                     }
                 }
+            }
+
+            Section {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Import passwords from another browser")
+                        if let importMessage {
+                            Text(importMessage).font(.system(size: 11)).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Button("Choose File…") { PasswordImporter.run { importMessage = $0; if unlocked { logins = PasswordVault.logins() } } }
+                }
+            } header: { SectionTitle("Import") } footer: {
+                Footnote("First export your passwords as a file. Chrome, Brave and Edge: Settings › Passwords › Export. Safari: File › Export › Passwords. Firefox: Passwords › ⋯ › Export Passwords.")
             }
 
             Section {

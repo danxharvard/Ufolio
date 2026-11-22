@@ -34,6 +34,18 @@ final class BookmarkStore: ObservableObject {
         save()
     }
 
+    /// Adds bookmarks brought over from another browser, skipping ones you already have.
+    func add(imported: [(title: String, url: URL)]) -> Int {
+        var added = 0
+        for item in imported where !contains(item.url) && !items.contains(where: { Self.same($0.url, item.url) }) {
+            let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            items.append(Bookmark(title: title.isEmpty ? (item.url.host ?? item.url.absoluteString) : String(title.prefix(200)), url: item.url))
+            added += 1
+        }
+        if added > 0 { save() }
+        return added
+    }
+
     func remove(_ bookmark: Bookmark) {
         items.removeAll { $0.id == bookmark.id }
         save()

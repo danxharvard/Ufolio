@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.22.0
+
+**New: Settings › Keyboard**
+- See every Hush shortcut in one place, grouped by what it does, and change any of them: click a
+  shortcut and press the keys you'd like. Press Delete to remove one, or Restore Defaults to
+  start again. Hush tells you if a combination is already in use.
+
+**New: bring your bookmarks over**
+- Settings › General › Import History and Bookmarks now brings over bookmarks too (as
+  Favourites) from Chrome, Brave, Edge, Arc, Vivaldi, Firefox and Safari. Ones you already
+  have are skipped.
+
+**New: import passwords**
+- Settings › Passwords & AutoFill › Import: choose the passwords file you exported from
+  Chrome, Safari, Firefox, Edge or Brave. Each one goes into your Mac's keychain, and Hush
+  then offers to move the exported file (which holds your passwords as plain text) to the
+  Trash.
+
 ## 0.21.0
 
 **New: Split View**
