@@ -32,6 +32,14 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     var isPrivate: Bool { model?.isPrivate ?? false }
 
+    /// Set when the page's process crashed: the tab shows a friendly Reload screen.
+    @Published private(set) var crashed = false
+
+    func recoverFromCrash() {
+        crashed = false
+        if let url { webView.load(URLRequest(url: url)) } else { webView.reload() }
+    }
+
     /// JavaScript switched off for just this tab (right-click the tab).
     @Published private(set) var javaScriptOff = false
 
@@ -126,6 +134,10 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         (view as? HushWebView)?.onHideElements = { [weak self] in
             guard let self else { return }
             ElementZapper.shared.start(in: self)
+        }
+        (view as? HushWebView)?.onFocus = { [weak self] in
+            guard let self, let model = self.model, model.isInSplit(self), model.selectedID != self.id else { return }
+            model.selectedID = self.id
         }
 
         observers.removeAll()
@@ -344,7 +356,15 @@ extension BrowserTab: WKNavigationDelegate {
         decisionHandler(response.canShowMIMEType ? .allow : .download)
     }
 
+    /// The page's web process crashed or was stopped by macOS.
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        guard webView === self.webView, !isAsleep else { return }
+        crashed = true
+        isPlayingAudio = false
+    }
+
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        if crashed { crashed = false }
         blockedOnPage = 0
         adsOnPage = 0
         trackersOnPage = 0
@@ -359,18 +379,15 @@ extension BrowserTab: WKNavigationDelegate {
     private func confirmOpeningApp(for url: URL) {
         // One question at a time, and no more than one every few seconds: a page can't bury you in them.
         guard let app = NSWorkspace.shared.urlForApplication(toOpen: url), let window = webView.window,
-              window.attachedSheet == nil, Date().timeIntervalSince(lastAppPrompt) > 3 else { return }
+              !DialogHost.isBusy(window), Date().timeIntervalSince(lastAppPrompt) > 3 else { return }
         lastAppPrompt = Date()
         let name = FileManager.default.displayName(atPath: app.path).replacingOccurrences(of: ".app", with: "")
-        let alert = NSAlert()
-        alert.messageText = "Open this link in “\(name)”?"
-        alert.informativeText = "\(host?.strippingWWW ?? "This page") wants to open another app on your Mac."
-        alert.addButton(withTitle: "Open")
-        alert.addButton(withTitle: "Cancel")
-        alert.icon = NSWorkspace.shared.icon(forFile: app.path)
-        alert.beginSheetModal(for: window) { response in
-            if response == .alertFirstButtonReturn { NSWorkspace.shared.open(url) }
-        }
+        DialogHost.show(HushDialog(
+            art: .image(NSWorkspace.shared.icon(forFile: app.path)), badge: "arrow.up.forward", theme: .caution, motion: .pulse,
+            title: "Open this link in “\(name)”?",
+            message: "\(host?.strippingWWW ?? "This page") wants to open another app on your Mac.",
+            choices: [.init(title: "Cancel", role: .cancel), .init(title: "Open", role: .primary)],
+            completion: { choice, _ in if choice == 1 { NSWorkspace.shared.open(url) } }), in: window)
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -445,22 +462,22 @@ extension BrowserTab: WKUIDelegate {
     /// origin WebKit reports. After two, the user can silence the page.
     private func pageDialog(_ message: String, frame: WKFrameInfo, confirm: Bool,
                             completion: @escaping (Bool) -> Void) {
-        guard !dialogsSilenced, let window = webView.window else { completion(false); return }
+        guard !dialogsSilenced, let window = webView.window, !DialogHost.isBusy(window) else { completion(false); return }
         dialogsShown += 1
-        let alert = NSAlert()
         let origin = frame.securityOrigin.host
-        alert.messageText = origin.isEmpty ? "This page says" : "\(origin.strippingWWW) says"
-        alert.informativeText = String(message.prefix(2_000))
-        alert.addButton(withTitle: "OK")
-        if confirm { alert.addButton(withTitle: "Cancel") }
-        if dialogsShown > 1 {
-            alert.showsSuppressionButton = true
-            alert.suppressionButton?.title = "Don’t show more messages from this page"
-        }
-        alert.beginSheetModal(for: window) { [weak self] response in
-            if alert.suppressionButton?.state == .on { self?.dialogsSilenced = true }
-            completion(response == .alertFirstButtonReturn)
-        }
+        let choices: [HushDialog.Choice] = confirm
+            ? [.init(title: "Cancel", role: .cancel), .init(title: "OK", role: .primary)]
+            : [.init(title: "OK", role: .primary)]
+        DialogHost.show(HushDialog(
+            art: .site(url), badge: "text.bubble.fill", theme: .hush, motion: .pulse,
+            title: origin.isEmpty ? "This page says" : "\(origin.strippingWWW) says",
+            message: String(message.prefix(2_000)),
+            checkbox: dialogsShown > 1 ? "Don’t show more messages from this page" : nil,
+            choices: choices,
+            completion: { [weak self] choice, checked in
+                if checked { self?.dialogsSilenced = true }
+                completion(confirm ? choice == 1 : true)
+            }), in: window)
     }
 
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
@@ -509,6 +526,13 @@ extension BrowserTab: WKUIDelegate {
 /// Hush's web view: adds "Hide Elements on This Page…" to the page's right-click menu.
 final class HushWebView: WKWebView {
     var onHideElements: (() -> Void)?
+    var onFocus: (() -> Void)?
+
+    override func becomeFirstResponder() -> Bool {
+        let accepted = super.becomeFirstResponder()
+        if accepted { onFocus?() }
+        return accepted
+    }
 
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
         super.willOpenMenu(menu, with: event)

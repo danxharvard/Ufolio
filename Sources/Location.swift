@@ -83,7 +83,7 @@ final class SitePermissions: ObservableObject {
 
         let site = ContentBlocker.normalize(host)
         // One question at a time: a page asking over and over can't stack up prompts.
-        if let window, window.attachedSheet != nil { completion(false); return }
+        if DialogHost.isBusy(window) { completion(false); return }
         let what: String
         switch Set(kinds) {
         case [.location]: what = "your location"
@@ -91,37 +91,27 @@ final class SitePermissions: ObservableObject {
         case [.microphone]: what = "your microphone"
         default: what = "your camera and microphone"
         }
-        let alert = NSAlert()
-        alert.messageText = "“\(site)” wants to use \(what)"
-        alert.informativeText = kinds.contains(.location)
-            ? "The website will be told your approximate position. You can change your answer any time in Hush Settings › Location."
-            : "You can change your answer any time in Hush Settings › Privacy."
-        alert.addButton(withTitle: "Allow Once")
-        alert.addButton(withTitle: "Always Allow")
-        alert.addButton(withTitle: "Don’t Allow")
-        alert.buttons[2].keyEquivalent = "\u{1b}" // Esc = Don't Allow
-        if let image = NSImage(systemSymbolName: kinds[0].symbol, accessibilityDescription: nil) {
-            alert.icon = image
-        }
-
-        let finish: (NSApplication.ModalResponse) -> Void = { [weak self] response in
-            switch response {
-            case .alertFirstButtonReturn:           // Allow Once: until Hush quits
-                for kind in kinds { self?.sessionAllowed.insert(site + "|" + kind.rawValue) }
-                completion(true)
-            case .alertSecondButtonReturn:          // Always Allow: remembered for this site
-                self?.set(true, for: site, kinds)
-                completion(true)
-            default:                                // Don't Allow: remembered, so the site stops asking
-                self?.set(false, for: site, kinds)
-                completion(false)
-            }
-        }
-        if let window {
-            alert.beginSheetModal(for: window, completionHandler: finish)
-        } else {
-            finish(alert.runModal())
-        }
+        let dialog = HushDialog(
+            art: .site(URL(string: "https://\(host)")), badge: kinds[0].symbol, theme: .permission, motion: .orbit,
+            title: "“\(site)” wants to use \(what)",
+            message: kinds.contains(.location)
+                ? "The website will be told your approximate position. You can change your answer any time in Settings › Location."
+                : "You can change your answer any time in Settings › Privacy & Security.",
+            choices: [.init(title: "Allow Once"), .init(title: "Always Allow", role: .primary), .init(title: "Don’t Allow", role: .cancel)],
+            completion: { [weak self] choice, _ in
+                switch choice {
+                case 0:                                  // Allow Once: until Hush quits
+                    for kind in kinds { self?.sessionAllowed.insert(site + "|" + kind.rawValue) }
+                    completion(true)
+                case 1:                                  // Always Allow: remembered for this site
+                    self?.set(true, for: site, kinds)
+                    completion(true)
+                default:                                 // Don't Allow: remembered, so the site stops asking
+                    self?.set(false, for: site, kinds)
+                    completion(false)
+                }
+            })
+        DialogHost.show(dialog, in: window)
     }
 }
 

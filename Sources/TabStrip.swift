@@ -162,6 +162,12 @@ private struct ChromeTab: View {
                 }
             }
             if showsTitle {
+                if model.isInSplit(tab) {
+                    Image(systemName: "rectangle.split.2x1")
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .help("In Split View")
+                }
                 Text(tab.displayTitle)
                     .font(.system(size: 12.5, weight: isSelected ? .medium : .regular))
                     .lineLimit(1)
@@ -226,6 +232,13 @@ private struct ChromeTab: View {
         .contextMenu {
             Button("New Tab") { model.newTab(focus: true) }
             Divider()
+            if model.isInSplit(tab) {
+                Button("Close Split View") { model.closeSplit(keeping: tab.id) }
+            } else if tab.id == model.selectedTab?.id {
+                Button("Open Split View with New Tab") { model.openSplit() }
+            } else {
+                Button("Open in Split View") { model.openSplit(with: tab) }
+            }
             Button(tab.isPinned ? "Unpin Tab" : "Pin Tab") { model.togglePin(tab) }
             Button(tab.isMuted ? "Unmute Tab" : "Mute Tab") { tab.toggleMute() }
             Button(tab.javaScriptOff ? "Turn On JavaScript in This Tab" : "Turn Off JavaScript in This Tab") { tab.toggleJavaScript() }

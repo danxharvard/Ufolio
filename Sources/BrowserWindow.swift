@@ -121,17 +121,6 @@ struct BrowserWindow: View {
         // The welcome screen and default-browser question are drawn inside the window,
         // over a dimmed backdrop (SwiftUI sheets could end up off-screen and lock the window).
         .overlay {
-            if let request = model.forgetRequest {
-                LaunchCardOverlay {
-                    ForgetSiteCard(request: request) {
-                        model.forgetRequest = nil
-                        SiteForgetter.forget(request.site, in: model)
-                    } onCancel: {
-                        model.forgetRequest = nil
-                    }
-                }
-                .transition(.opacity)
-            }
             if let notes = whatsNew {
                 LaunchCardOverlay {
                     WhatsNewView(notes: notes) { whatsNew = nil }
@@ -164,9 +153,8 @@ struct BrowserWindow: View {
             if let tab = model.selectedTab { DispatchQueue.main.async { tab.webView.window?.makeFirstResponder(tab.webView) } }
             NSApp.activate(ignoringOtherApps: true)
         }
-        .animation(.easeOut(duration: 0.2), value: model.forgetRequest)
+        .hushDialogs(model.dialogs)
         .onReceive(NotificationCenter.default.publisher(for: QuitHelper.closeSheets)) { _ in
-            model.forgetRequest = nil
             showWelcome = false
             showDefaultBanner = false
             whatsNew = nil
@@ -230,11 +218,23 @@ struct PageArea: View {
 
     var body: some View {
         if let tab = model.selectedTab {
-            TabPage(model: model, tab: tab).id(tab.id)
+            if let pair = model.splitPair, pair.contains(tab.id),
+               let left = model.tabs.first(where: { $0.id == pair.left }), let right = model.tabs.first(where: { $0.id == pair.right }) {
+                SplitPages(model: model, left: left, right: right)
+            } else {
+                TabPage(model: model, tab: tab).id(tab.id)
+            }
         } else {
             Color.clear
         }
     }
+}
+
+/// One tab's page (used by Split View for each side).
+struct TabPageContent: View {
+    @ObservedObject var model: BrowserModel
+    @ObservedObject var tab: BrowserTab
+    var body: some View { TabPage(model: model, tab: tab) }
 }
 
 private struct TabPage: View {
@@ -253,6 +253,10 @@ private struct TabPage: View {
             } else {
                 // A woken tab has a new web view, so key the host on it.
                 WebViewHost(webView: tab.webView).id(ObjectIdentifier(tab.webView))
+            }
+            if tab.crashed {
+                CrashedPage { tab.recoverFromCrash() }
+                    .transition(.opacity)
             }
             if let article = tab.reader {
                 ReaderView(article: article) { tab.toggleReader() }
@@ -740,6 +744,39 @@ struct VisualEffect: NSViewRepresentable {
 }
 
 /// Hands the view's NSWindow to SwiftUI code once it's on screen.
+/// Shown when a page's process crashed, instead of a blank tab.
+private struct CrashedPage: View {
+    let onReload: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color(nsColor: .windowBackgroundColor)
+            VStack(spacing: 14) {
+                ZStack {
+                    Circle().fill(Color.primary.opacity(0.05)).frame(width: 110, height: 110)
+                    HushMark(color: Color.secondary.opacity(0.7), showStars: false, outlined: true)
+                        .frame(width: 58, height: 58)
+                }
+                Text("This page stopped working")
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                Text("Something on the page made it crash. The rest of Hush is fine, and your other tabs weren’t affected.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 380)
+                Button(action: onReload) {
+                    Label("Reload Page", systemImage: "arrow.clockwise")
+                }
+                .controlSize(.large)
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .padding(.top, 4)
+            }
+            .padding(40)
+        }
+    }
+}
+
 /// Shows the Find bar for the window's selected tab.
 private struct FindBarHost: View {
     @ObservedObject var model: BrowserModel

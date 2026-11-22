@@ -412,7 +412,6 @@ private struct GeneralSettings: View {
     @AppStorage(Prefs.openSafeFiles) private var openSafeFiles = false
     @AppStorage(Prefs.askDefaultBrowser) private var askDefault = true
     @State private var isDefaultBrowser = DefaultBrowser.isDefault
-    @State private var confirmClearHistory = false
     @State private var importStatus: String?
     @State private var importing = false
 
@@ -487,7 +486,7 @@ private struct GeneralSettings: View {
                     if importing { ProgressView().controlSize(.small) }
                     if let importStatus { Text(importStatus).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2) }
                     Spacer()
-                    Button("Clear History…") { confirmClearHistory = true }
+                    Button("Clear History…") { HushDialogs.clearHistory(in: .settings) }
                 }
                 DescribedToggle(title: "Suggest favourites",
                                 detail: "When you visit a site at least 6 times a day for 3 days in a row, Hush offers to add it to your Favourites.",
@@ -517,16 +516,6 @@ private struct GeneralSettings: View {
         }
         .formStyle(SafariFormStyle())
         .onAppear { isDefaultBrowser = DefaultBrowser.isDefault }
-        .alert("Clear all history?", isPresented: $confirmClearHistory) {
-            Button("Clear History", role: .destructive) {
-                HistoryStore.shared.clear()
-                RecentlyClosed.shared.clear()
-                PrivacyReport.shared.reset()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes every page Hush remembers, including Suggestions, Recently Closed Tabs and the Privacy Report. It can’t be undone.")
-        }
     }
 
     private func runImport(_ source: BrowserImporter.Source) {
@@ -748,7 +737,6 @@ private struct PrivacySettings: View {
     @AppStorage(Prefs.autoplay) private var autoplay = AutoplayPolicy.stopSound.rawValue
     @AppStorage(Prefs.javaScript) private var javaScript = true
     @State private var siteCount: Int?
-    @State private var confirmClear = false
 
     var body: some View {
         Form {
@@ -813,19 +801,20 @@ private struct PrivacySettings: View {
                             .font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Clear All…") { confirmClear = true }
+                    Button("Clear All…") {
+                        DialogHost.settings.present(HushDialog(
+                            art: .symbol("externaldrive.fill"), badge: "trash.fill", theme: .danger, motion: .drift,
+                            title: "Clear all website data?",
+                            message: "You’ll be signed out of websites and they’ll forget your preferences. This can’t be undone.",
+                            choices: [.init(title: "Cancel", role: .cancel), .init(title: "Clear All", role: .destructive)],
+                            completion: { choice, _ in if choice == 1 { clearData() } }))
+                    }
                         .disabled(siteCount == 0)
                 }
             } header: { SectionTitle("Website data") }
         }
         .formStyle(SafariFormStyle())
         .onAppear(perform: countSites)
-        .alert("Clear all website data?", isPresented: $confirmClear) {
-            Button("Clear", role: .destructive, action: clearData)
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("You’ll be signed out of websites and they’ll forget your preferences. This can’t be undone.")
-        }
     }
 
     private func countSites() {
@@ -908,12 +897,18 @@ private struct AdBlockerSettings: View {
     @AppStorage(Prefs.autoRejectCookies) private var autoReject = true
     @AppStorage(Prefs.blockingMode) private var mode = BlockingMode.standard.rawValue
     @State private var showWebSheet = false
-    @State private var confirmReset = false
 
     var body: some View {
         Form {
             Section {
-                StatsCard(stats: stats) { confirmReset = true }
+                StatsCard(stats: stats) {
+                    DialogHost.settings.present(HushDialog(
+                        art: .symbol("hush"), badge: "arrow.counterclockwise", theme: .hush, motion: .drift,
+                        title: "Reset the counter?",
+                        message: "The count of blocked ads and trackers starts again from zero.",
+                        choices: [.init(title: "Cancel", role: .cancel), .init(title: "Reset", role: .destructive)],
+                        completion: { choice, _ in if choice == 1 { BlockStats.shared.reset() } }))
+                }
             }
 
             Section {
@@ -1001,12 +996,6 @@ private struct AdBlockerSettings: View {
         }
         .formStyle(SafariFormStyle())
         .sheet(isPresented: $showWebSheet) { AddListSheet() }
-        .alert("Reset the counter?", isPresented: $confirmReset) {
-            Button("Reset", role: .destructive) { stats.reset() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("The blocked ads and trackers count starts again from zero.")
-        }
     }
 
     private func importFile() {

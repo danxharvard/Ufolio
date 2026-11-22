@@ -4,7 +4,6 @@ import SwiftUI
 struct HistoryWindowView: View {
     @ObservedObject private var history = HistoryStore.shared
     @State private var query = ""
-    @State private var confirmClear = false
 
     private var days: [(day: Date, entries: [HistoryEntry])] {
         let q = query.lowercased()
@@ -28,7 +27,7 @@ struct HistoryWindowView: View {
                 .padding(.horizontal, 10)
                 .frame(height: 30)
                 .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.06)))
-                Button("Clear History…") { confirmClear = true }
+                Button("Clear History…") { HushDialogs.clearHistory(in: .history) }
             }
             .padding(14)
             Divider()
@@ -53,11 +52,7 @@ struct HistoryWindowView: View {
             }
         }
         .frame(minWidth: 520, minHeight: 420)
-        .confirmationDialog("Clear all history?", isPresented: $confirmClear) {
-            Button("Clear History", role: .destructive) { history.clear() }
-        } message: {
-            Text("This removes every page from your history, suggestions and Frequently Visited. It can’t be undone.")
-        }
+        .hushDialogs(DialogHost.history)
     }
 
     static func dayTitle(_ day: Date) -> String {

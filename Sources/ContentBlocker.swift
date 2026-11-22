@@ -620,7 +620,7 @@ enum UserScripts {
       var CONTAINERS = '[id*="cookie" i], [class*="cookie" i], [id*="consent" i], [class*="consent" i], ' +
         '[id*="gdpr" i], [class*="gdpr" i], [id*="cmp" i], [class*="cmp" i], [id^="sp_message"], [class*="privacy-banner" i], ' +
         '[aria-label*="cookie" i], [aria-label*="consent" i], [aria-label*="privacy" i], [role="dialog"], [aria-modal="true"]';
-      var REJECT = /^\s*(reject all|reject all cookies|reject|reject non-essential( cookies)?|reject optional cookies|decline|decline all|decline optional cookies|deny|deny all|refuse|refuse all|disagree|i disagree|do not accept|don['’]t accept|necessary (cookies )?only|only necessary( cookies)?|use necessary cookies only|accept (only )?(strictly )?necessary( cookies)?|continue without (accepting|agreeing)|nur notwendige|alle ablehnen|ablehnen|tout refuser|refuser|rechazar( todo)?|rifiuta( tutto)?|weigeren|alles weigeren)\s*$/i;
+      var REJECT = /^\s*(reject all|reject all cookies|reject|reject non-essential( cookies)?|reject optional cookies|reject additional( cookies)?|reject unnecessary( cookies)?|decline additional( cookies)?|decline|decline all|decline optional cookies|deny|deny all|refuse|refuse all|disagree|i disagree|do not accept|don['’]t accept|necessary (cookies )?only|only necessary( cookies)?|use necessary cookies only|accept (only )?(strictly )?necessary( cookies)?|continue without (accepting|agreeing)|nur notwendige|alle ablehnen|ablehnen|tout refuser|refuser|rechazar( todo)?|rifiuta( tutto)?|weigeren|alles weigeren)\s*$/i;
       var done = false;
 
       function visible(el) { var r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; }

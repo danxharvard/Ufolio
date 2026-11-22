@@ -3,7 +3,7 @@ import WebKit
 
 /// One download in the Downloads list.
 final class DownloadItem: ObservableObject, Identifiable {
-    enum State: String, Codable { case downloading, finished, failed, cancelled }
+    enum State: String, Codable { case downloading, paused, finished, failed, cancelled }
 
     let id: UUID
     @Published var filename: String
@@ -12,6 +12,9 @@ final class DownloadItem: ObservableObject, Identifiable {
     @Published var state: State
     @Published var totalBytes: Int64
     let started: Date
+    /// Where the file came from (to retry), and the data needed to pick up where it stopped.
+    var sourceURL: URL?
+    var resumeData: Data?
     weak var download: WKDownload?
     private var observation: NSKeyValueObservation?
 
@@ -33,6 +36,7 @@ final class DownloadItem: ObservableObject, Identifiable {
         state = saved.state
         totalBytes = saved.bytes
         started = saved.started
+        sourceURL = saved.source.flatMap(URL.init(string:))
     }
 
     func watch(_ progressObject: Progress) {
@@ -55,10 +59,12 @@ final class DownloadItem: ObservableObject, Identifiable {
         var state: State
         var bytes: Int64
         var started: Date
+        var source: String?
     }
 
     var saved: Saved {
-        Saved(id: id, filename: filename, path: destination?.path, state: state, bytes: totalBytes, started: started)
+        Saved(id: id, filename: filename, path: destination?.path, state: state == .paused ? .failed : state,
+              bytes: totalBytes, started: started, source: sourceURL?.absoluteString)
     }
 }
 
@@ -104,12 +110,24 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
 
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse,
                   suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
+        // A paused or retried download picks up its old place in the list (and its file).
+        if let item = resuming {
+            resuming = nil
+            item.download = download
+            item.state = .downloading
+            item.watch(download.progress)
+            byDownload[ObjectIdentifier(download)] = item
+            if let url = item.destination { try? FileManager.default.removeItem(at: url) }
+            completionHandler(item.destination)
+            return
+        }
         let name = Self.safeFilename(suggestedFilename)
 
         let begin: (URL?) -> Void = { url in
             guard let url else { completionHandler(nil); return }
             let item = DownloadItem(filename: url.lastPathComponent, download: download)
             item.destination = url
+            item.sourceURL = download.originalRequest?.url
             item.watch(download.progress)
             self.byDownload[ObjectIdentifier(download)] = item
             self.items.insert(item, at: 0)
@@ -181,9 +199,55 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
         guard let item = byDownload.removeValue(forKey: ObjectIdentifier(download)) else { return }
         item.stopWatching()
-        item.state = (error as? URLError)?.code == .cancelled ? .cancelled : .failed
+        if let resumeData { item.resumeData = resumeData }
+        // Pausing stops the download too; keep it paused rather than "cancelled".
+        if item.state != .paused {
+            item.state = (error as? URLError)?.code == .cancelled ? .cancelled : .failed
+        }
         save()
     }
+
+    // MARK: Pause, resume, retry
+
+    /// The item a resumed or retried download belongs to, until WebKit hands it over.
+    private var resuming: DownloadItem?
+
+    func pause(_ item: DownloadItem) {
+        guard item.state == .downloading, let download = item.download else { return }
+        item.state = .paused
+        download.cancel { data in
+            DispatchQueue.main.async { if let data { item.resumeData = data } }
+        }
+    }
+
+    /// Carries on from where it stopped, or starts again from the beginning if it can't.
+    func resume(_ item: DownloadItem) {
+        guard let webView = BrowserModel.frontmostNormal?.selectedTab?.webView ?? BrowserModel.frontmost?.selectedTab?.webView else { return }
+        if let data = item.resumeData {
+            item.resumeData = nil
+            resuming = item
+            item.state = .downloading
+            webView.resumeDownload(fromResumeData: data) { [weak self] download in
+                download.delegate = self
+                // Resumed downloads keep writing to the same file without asking again.
+                if self?.byDownload[ObjectIdentifier(download)] == nil {
+                    self?.resuming = nil
+                    item.download = download
+                    item.watch(download.progress)
+                    self?.byDownload[ObjectIdentifier(download)] = item
+                }
+            }
+        } else if let source = item.sourceURL {
+            resuming = item
+            item.state = .downloading
+            item.progress = 0
+            webView.startDownload(using: URLRequest(url: source)) { [weak self] download in
+                download.delegate = self
+            }
+        }
+    }
+
+    func canRetry(_ item: DownloadItem) -> Bool { item.resumeData != nil || item.sourceURL != nil }
 
     // MARK: List
 
@@ -311,6 +375,11 @@ private struct DownloadRow: View {
                     ProgressView(value: item.progress)
                         .progressViewStyle(.linear)
                         .controlSize(.small)
+                case .paused:
+                    HStack(spacing: 6) {
+                        ProgressView(value: item.progress).progressViewStyle(.linear).controlSize(.small).tint(.secondary)
+                        Text("Paused").font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
                 case .finished:
                     Text(sizeText).font(.system(size: 11)).foregroundStyle(.secondary)
                 case .failed:
@@ -321,11 +390,16 @@ private struct DownloadRow: View {
             }
             Spacer(minLength: 4)
             if item.state == .downloading {
-                Button { Downloads.shared.cancel(item) } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                RowButton(symbol: "pause.circle.fill", help: "Pause") { Downloads.shared.pause(item) }
+                RowButton(symbol: "xmark.circle.fill", help: "Stop") { Downloads.shared.cancel(item) }
+            } else if item.state == .paused {
+                RowButton(symbol: "play.circle.fill", help: "Resume", tint: .accentColor) { Downloads.shared.resume(item) }
+                RowButton(symbol: "xmark.circle.fill", help: "Stop") {
+                    item.resumeData = nil
+                    item.state = .cancelled
                 }
-                .buttonStyle(.plain)
-                .help("Stop")
+            } else if item.state == .failed || item.state == .cancelled, Downloads.shared.canRetry(item) {
+                RowButton(symbol: "arrow.clockwise.circle.fill", help: "Try Again", tint: .accentColor) { Downloads.shared.resume(item) }
             } else if item.state == .finished {
                 Button { Downloads.shared.reveal(item) } label: {
                     Image(systemName: "magnifyingglass.circle.fill").foregroundStyle(.secondary)
@@ -340,6 +414,13 @@ private struct DownloadRow: View {
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture(count: 2) { Downloads.shared.open(item) }
+        // Drag a finished file out of the list into Finder, Mail or any app.
+        .onDrag {
+            guard item.state == .finished, let url = item.destination, FileManager.default.fileExists(atPath: url.path) else {
+                return NSItemProvider()
+            }
+            return NSItemProvider(contentsOf: url) ?? NSItemProvider()
+        }
         .contextMenu {
             Button("Open") { Downloads.shared.open(item) }.disabled(item.state != .finished)
             Button("Show in Finder") { Downloads.shared.reveal(item) }.disabled(item.state != .finished)
@@ -358,5 +439,20 @@ private struct DownloadRow: View {
     private var sizeText: String {
         let size = item.totalBytes > 0 ? ByteCountFormatter.string(fromByteCount: item.totalBytes, countStyle: .file) : ""
         return [size, item.started.formatted(date: .omitted, time: .shortened)].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+}
+
+private struct RowButton: View {
+    let symbol: String
+    let help: String
+    var tint: Color = .secondary
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 15)).foregroundStyle(tint)
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 }

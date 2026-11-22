@@ -10,8 +10,10 @@ final class BrowserModel: NSObject, ObservableObject {
             let old = tabs.first(where: { $0.id == oldValue })
             old?.lastActive = Date()
             selectedTab?.wakeIfNeeded()
-            // Pause sound and video in the tab you leave (Eco, or Settings › Performance).
-            if let old, old !== selectedTab, !old.isAsleep, PerformanceCenter.shared.pausesBackgroundMedia {
+            // Pause sound and video in the tab you leave (Eco, or Settings › Performance),
+            // unless it's still showing on the other side of Split View.
+            let stillVisible = old.map { splitPair?.contains($0.id) == true && splitPair?.contains(selectedID) == true } ?? false
+            if let old, old !== selectedTab, !old.isAsleep, !stillVisible, PerformanceCenter.shared.pausesBackgroundMedia {
                 old.webView.setAllMediaPlaybackSuspended(true)
             }
             if let tab = selectedTab, !tab.isAsleep { tab.webView.setAllMediaPlaybackSuspended(false) }
@@ -65,7 +67,9 @@ final class BrowserModel: NSObject, ObservableObject {
     /// Sleeps background tabs idle for at least `seconds`, unless they're playing media
     /// or using the camera or microphone.
     func sleepBackgroundTabs(idleFor seconds: TimeInterval) {
-        for tab in tabs where tab !== selectedTab && !tab.isAsleep && !tab.isLoading
+        // The other side of Split View is on screen too: never put it to sleep.
+        let visible = splitPair.flatMap { $0.contains(selectedID) ? $0 : nil }
+        for tab in tabs where tab !== selectedTab && !(visible?.contains(tab.id) ?? false) && !tab.isAsleep && !tab.isLoading
             && Date().timeIntervalSince(tab.lastActive) >= seconds
             && tab.webView.cameraCaptureState == .none && tab.webView.microphoneCaptureState == .none {
             tab.webView.requestMediaPlaybackState { state in
@@ -79,8 +83,39 @@ final class BrowserModel: NSObject, ObservableObject {
     let dataStore: WKWebsiteDataStore
     /// Find on Page (⌘F) for this window.
     let find = FindModel()
-    /// Forget This Site waiting for your answer (shown as a card over the window).
-    @Published var forgetRequest: SiteForgetter.Request?
+    /// Questions waiting to be shown over this window (one at a time).
+    let dialogs = DialogHost()
+    /// Split View: the two tabs shown side by side, and how much room the left one gets.
+    @Published var splitPair: SplitPair?
+    @Published var splitRatio: CGFloat = 0.5
+
+    func isInSplit(_ tab: BrowserTab) -> Bool { splitPair?.contains(tab.id) ?? false }
+
+    /// Shows a tab beside the current one. Splitting the current tab itself opens a new tab beside it.
+    func openSplit(with tab: BrowserTab? = nil) {
+        guard let current = selectedTab else { return }
+        if let tab, tab !== current {
+            splitPair = SplitPair(left: current.id, right: tab.id)
+            tab.wakeIfNeeded()
+        } else {
+            let fresh = newTab(select: false, usePreferredPage: true)
+            splitPair = SplitPair(left: current.id, right: fresh.id)
+            selectedID = fresh.id
+            if fresh.url == nil { focusAddressBar() }
+        }
+    }
+
+    /// Leaves Split View, showing the given tab (or the active one).
+    func closeSplit(keeping id: UUID? = nil) {
+        guard splitPair != nil else { return }
+        splitPair = nil
+        if let id { selectedID = id }
+    }
+
+    func swapSplit() {
+        guard let pair = splitPair else { return }
+        splitPair = SplitPair(left: pair.right, right: pair.left)
+    }
     private var audioTimer: Timer?
 
     init(isPrivate: Bool = false) {
@@ -180,6 +215,12 @@ final class BrowserModel: NSObject, ObservableObject {
     func close(_ tab: BrowserTab, remember: Bool = true) {
         guard let index = tabs.firstIndex(where: { $0 === tab }) else { return }
         let wasSelected = tab.id == selectedTab?.id
+        // Closing one side of Split View shows the other on its own.
+        var partner: UUID?
+        if let pair = splitPair, pair.contains(tab.id) {
+            partner = pair.left == tab.id ? pair.right : pair.left
+            splitPair = nil
+        }
         if remember, !isPrivate, let url = tab.url { RecentlyClosed.shared.add(title: tab.title, url: url) }
         ExtensionEvents.closed(tab)
         tab.tearDown()
@@ -190,7 +231,11 @@ final class BrowserModel: NSObject, ObservableObject {
             return
         }
         if wasSelected {
-            selectedID = tabs[min(index, tabs.count - 1)].id
+            if let partner, tabs.contains(where: { $0.id == partner }) {
+                selectedID = partner
+            } else {
+                selectedID = tabs[min(index, tabs.count - 1)].id
+            }
         }
     }
 

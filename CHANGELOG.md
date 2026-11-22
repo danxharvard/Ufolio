@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.21.0
+
+**New: Split View**
+- Show two tabs side by side: right-click a tab and choose Open in Split View, or press ⌃⌘S.
+- Click a side to make it active; the address bar, Find and menus work on that side. Drag the
+  divider to resize, or double-click it for equal halves. Swap or close a side from its header.
+
+**New look: one design for every question**
+- Every question Hush asks now uses the same card, each with its own little animation in the
+  Hush Guard style:
+  - website permissions, with circling beads
+  - opening another app, and messages from a page, with a pulse
+  - saving a password, with rising sparkles
+  - adding an extension, with twinkling stars
+  - Forget This Site and clearing history or data, with drifting dust
+
+**New: downloads you can pause**
+- Pause and resume downloads, and try failed ones again (they carry on where they stopped
+  when the site allows).
+- Drag a finished download out of the list into Finder, Mail or any app.
+
+**New: crash recovery**
+- If a page crashes, its tab shows a calm "This page stopped working" screen with a Reload
+  button, instead of going blank. Your other tabs aren't affected.
+
+**Improved**
+- Cookie banners that say "Reject additional cookies" (like the BBC's) are now rejected
+  automatically.
+
 ## 0.20.1
 
 **New look**

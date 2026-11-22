@@ -41,6 +41,7 @@ struct HushApp: App {
 
         Settings {
             SettingsView()
+                .hushDialogs(DialogHost.settings)
                 .transaction { if reduceMotion { $0.animation = nil } }
         }
 
@@ -172,6 +173,11 @@ struct HushCommands: Commands {
             Button("Actual Size") { browser?.selectedTab?.resetZoom() }
                 .keyboardShortcut("0")
             Divider()
+            Button(browser?.splitPair != nil ? "Close Split View" : "Split View") {
+                guard let model = browser else { return }
+                if model.splitPair != nil { model.closeSplit(keeping: model.selectedID) } else { model.openSplit() }
+            }
+            .keyboardShortcut("s", modifiers: [.command, .control])
             Button(browser?.selectedTab?.reader != nil ? "Leave Reader" : "Show Reader") { browser?.selectedTab?.toggleReader() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
             Button("Picture in Picture") {

@@ -450,28 +450,27 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
 
         let existing = PasswordVault.logins(for: host).first { $0.account == username }
         if let existing, PasswordVault.password(for: existing) == password { return }
-        guard let window = tab.webView.window else { return }
+        guard let window = tab.webView.window, !DialogHost.isBusy(window) else { return }
 
-        let alert = NSAlert()
         let who = username.isEmpty ? "" : " for “\(username)”"
-        alert.messageText = existing == nil ? "Save this password?" : "Update your saved password?"
-        alert.informativeText = existing == nil
-            ? "Hush can save the password\(who) on \(host) in your Mac’s keychain and fill it in for you next time."
-            : "The password\(who) on \(host) has changed. Update it in your keychain?"
-        alert.addButton(withTitle: existing == nil ? "Save Password" : "Update Password")
-        alert.addButton(withTitle: "Not Now")
-        if existing == nil { alert.addButton(withTitle: "Never for This Website") }
-        alert.icon = NSImage(systemSymbolName: "key.fill", accessibilityDescription: nil)
-        alert.beginSheetModal(for: window) { response in
-            switch response {
-            case .alertFirstButtonReturn:
-                PasswordVault.save(host: host, account: username, password: password)
-            case .alertThirdButtonReturn:
-                PasswordVault.neverSave = PasswordVault.neverSave + [host]
-            default:
-                break
-            }
-        }
+        var choices: [HushDialog.Choice] = [.init(title: existing == nil ? "Save Password" : "Update Password", role: .primary),
+                                            .init(title: "Not Now", role: .cancel)]
+        if existing == nil { choices.append(.init(title: "Never for This Website")) }
+        DialogHost.show(HushDialog(
+            art: .site(tab.url), badge: "key.fill", theme: .save, motion: .rise,
+            title: existing == nil ? "Save this password?" : "Update your saved password?",
+            message: existing == nil
+                ? "Hush can keep the password\(who) on \(host) in your Mac’s keychain and fill it in for you next time."
+                : "The password\(who) on \(host) has changed. Update it in your keychain?",
+            note: ("lock.fill", "Locked with your Mac password or Touch ID"),
+            choices: choices,
+            completion: { choice, _ in
+                switch choice {
+                case 0: PasswordVault.save(host: host, account: username, password: password)
+                case 2: PasswordVault.neverSave = PasswordVault.neverSave + [host]
+                default: break
+                }
+            }), in: window)
     }
 
     // MARK: Page script

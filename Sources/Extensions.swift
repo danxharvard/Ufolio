@@ -154,7 +154,7 @@ final class ExtensionStore: ObservableObject {
         do {
             let ext = try await WKWebExtension(appExtensionBundle: bundle)
             let name = ext.displayName ?? info.name
-            guard ExtensionManager.shared.confirmInstall(ext, name: name) else {
+            guard await ExtensionManager.shared.confirmInstall(ext, name: name) else {
                 report("“\(name)” wasn’t added.", error: false)
                 return
             }
@@ -203,7 +203,7 @@ final class ExtensionStore: ObservableObject {
             try FolderSafety.check(staging)
             let ext = try await WKWebExtension(resourceBaseURL: staging)
             let name = ext.displayName ?? "Extension"
-            guard ExtensionManager.shared.confirmInstall(ext, name: name) else {
+            guard await ExtensionManager.shared.confirmInstall(ext, name: name) else {
                 report("“\(name)” wasn’t added.", error: false)
                 return
             }
@@ -404,19 +404,17 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
     }
 
     /// Shows what an extension wants before it's added, the way Chrome does.
-    func confirmInstall(_ ext: WKWebExtension, name: String) -> Bool {
+    func confirmInstall(_ ext: WKWebExtension, name: String) async -> Bool {
         #if SNAPSHOT
         if ProcessInfo.processInfo.environment["SNAP_MODE"] != nil { return true } // automated tests only
         #endif
-        let alert = NSAlert()
-        alert.messageText = "Add “\(name)” to Hush?"
         var lines: [String] = []
         let patterns = ext.allRequestedMatchPatterns.map { $0.string }
         if patterns.contains(where: { $0 == "<all_urls>" || $0.hasPrefix("*://*/") || $0.hasPrefix("http://*/") || $0.hasPrefix("https://*/") }) {
-            lines.append("• Read and change all your data on all websites")
+            lines.append("Read and change all your data on all websites")
         } else if !patterns.isEmpty {
             let hosts = patterns.prefix(4).map { $0.replacingOccurrences(of: "*://", with: "").replacingOccurrences(of: "/*", with: "") }
-            lines.append("• Read and change your data on " + hosts.joined(separator: ", ") + (patterns.count > 4 ? " and more" : ""))
+            lines.append("Read and change your data on " + hosts.joined(separator: ", ") + (patterns.count > 4 ? " and more" : ""))
         }
         let readable: [String: String] = [
             "tabs": "Read your browsing activity", "history": "Read and change your browsing history",
@@ -426,15 +424,19 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
             "nativeMessaging": "Talk to other apps on your Mac", "notifications": "Show notifications",
         ]
         for permission in ext.requestedPermissions.map(\.rawValue).sorted() {
-            if let text = readable[permission] { lines.append("• " + text) }
+            if let text = readable[permission] { lines.append(text) }
         }
-        alert.informativeText = lines.isEmpty
+        let message = lines.isEmpty
             ? "This extension doesn’t ask for any special access."
-            : "It will be able to:\n" + lines.joined(separator: "\n")
-        alert.addButton(withTitle: "Add Extension")
-        alert.addButton(withTitle: "Cancel")
-        if let icon = ext.icon(for: CGSize(width: 64, height: 64)) { alert.icon = icon }
-        return alert.runModal() == .alertFirstButtonReturn
+            : "It will be able to:\n" + lines.map { "• " + $0 }.joined(separator: "\n")
+        let art: HushDialog.Art = ext.icon(for: CGSize(width: 64, height: 64)).map { .image($0) } ?? .symbol("puzzlepiece.extension.fill")
+        return await withCheckedContinuation { continuation in
+            DialogHost.active.present(HushDialog(
+                art: art, badge: "plus", theme: .hush, motion: .sparkle,
+                title: "Add “\(name)” to Hush?", message: message,
+                choices: [.init(title: "Cancel", role: .cancel), .init(title: "Add Extension", role: .primary)],
+                completion: { choice, _ in continuation.resume(returning: choice == 1) }))
+        }
     }
 
     func performAction(_ id: String) {
@@ -480,24 +482,26 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
                                 in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext,
                                 completionHandler: @escaping (Set<WKWebExtension.Permission>, Date?) -> Void) {
         let name = extensionContext.webExtension.displayName ?? "An extension"
-        let alert = NSAlert()
-        alert.messageText = "“\(name)” wants more access"
-        alert.informativeText = "It’s asking for: " + permissions.map(\.rawValue).sorted().joined(separator: ", ")
-        alert.addButton(withTitle: "Allow")
-        alert.addButton(withTitle: "Don’t Allow")
-        completionHandler(alert.runModal() == .alertFirstButtonReturn ? permissions : [], nil)
+        let art: HushDialog.Art = extensionContext.webExtension.icon(for: CGSize(width: 64, height: 64)).map { .image($0) } ?? .symbol("puzzlepiece.extension.fill")
+        DialogHost.active.present(HushDialog(
+            art: art, badge: "lock.open.fill", theme: .permission, motion: .orbit,
+            title: "“\(name)” wants more access",
+            message: "It’s asking for: " + permissions.map(\.rawValue).sorted().joined(separator: ", "),
+            choices: [.init(title: "Don’t Allow", role: .cancel), .init(title: "Allow", role: .primary)],
+            completion: { choice, _ in completionHandler(choice == 1 ? permissions : [], nil) }))
     }
 
     func webExtensionController(_ controller: WKWebExtensionController, promptForPermissionToAccess urls: Set<URL>,
                                 in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext,
                                 completionHandler: @escaping (Set<URL>, Date?) -> Void) {
         let name = extensionContext.webExtension.displayName ?? "An extension"
-        let alert = NSAlert()
-        alert.messageText = "Allow “\(name)” on this site?"
-        alert.informativeText = urls.compactMap(\.host).sorted().joined(separator: ", ")
-        alert.addButton(withTitle: "Allow")
-        alert.addButton(withTitle: "Don’t Allow")
-        completionHandler(alert.runModal() == .alertFirstButtonReturn ? urls : [], nil)
+        let art: HushDialog.Art = extensionContext.webExtension.icon(for: CGSize(width: 64, height: 64)).map { .image($0) } ?? .symbol("puzzlepiece.extension.fill")
+        DialogHost.active.present(HushDialog(
+            art: art, badge: "globe", theme: .permission, motion: .orbit,
+            title: "Allow “\(name)” on this site?",
+            message: urls.compactMap(\.host).sorted().joined(separator: ", "),
+            choices: [.init(title: "Don’t Allow", role: .cancel), .init(title: "Allow", role: .primary)],
+            completion: { choice, _ in completionHandler(choice == 1 ? urls : [], nil) }))
     }
 
     func webExtensionController(_ controller: WKWebExtensionController, didUpdate action: WKWebExtension.Action,
