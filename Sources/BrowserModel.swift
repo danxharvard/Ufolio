@@ -23,9 +23,6 @@ final class BrowserModel: NSObject, ObservableObject {
     private var sleepTimer: Timer?
     /// Bumped to ask the address bar to take keyboard focus.
     @Published var addressFocusToken = 0
-    /// The window's width, which sizes the address bar.
-    @Published var windowWidth: CGFloat = 1280
-    var addressWidth: CGFloat { min(720, max(260, windowWidth - 420)) }
     /// The window showing this model (set by the view once it's on screen).
     weak var window: NSWindow?
 
@@ -175,6 +172,12 @@ final class BrowserModel: NSObject, ObservableObject {
             // A new window opens the homepage if Settings › General says so.
             if let home = NewTabPage.windowURL { newTab(url: home) } else { newTab(focus: true, usePreferredPage: false) }
         }
+    }
+
+    deinit {
+        // A closed window's timers stop with it.
+        sleepTimer?.invalidate()
+        audioTimer?.invalidate()
     }
 
     /// Remembers this window's open pages (for "Tabs from last time").

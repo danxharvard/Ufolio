@@ -75,6 +75,7 @@ private struct BookmarksList: View {
     @ObservedObject private var store = BookmarkStore.shared
     @State private var renaming: UUID?
     @State private var newTitle = ""
+    @State private var dragging: UUID?
 
     private var filtered: [Bookmark] {
         let q = query.lowercased()
@@ -86,14 +87,23 @@ private struct BookmarksList: View {
             if filtered.isEmpty {
                 EmptyNote(symbol: "star", text: query.isEmpty ? "No bookmarks yet. Press ⌘D on any page to add one." : "No bookmarks match “\(query)”.")
             } else {
-                List {
-                    ForEach(filtered) { bookmark in
-                        row(bookmark)
+                // A light scrolling stack (much quicker to open than a full list view), with
+                // drag and drop to reorder.
+                ScrollView {
+                    LazyVStack(spacing: 1) {
+                        ForEach(filtered) { bookmark in
+                            row(bookmark)
+                                .opacity(dragging == bookmark.id ? 0.4 : 1)
+                                .onDrag {
+                                    dragging = bookmark.id
+                                    return NSItemProvider(object: bookmark.url.absoluteString as NSString)
+                                }
+                                .onDrop(of: [.text], delegate: BookmarkDrop(target: bookmark, dragging: $dragging, enabled: query.isEmpty))
+                        }
                     }
-                    .onMove(perform: query.isEmpty ? { from, to in store.move(fromOffsets: from, toOffset: to) } : nil)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 6)
                 }
-                .listStyle(.sidebar)
-                .scrollContentBackground(.hidden)
             }
             footer
         }
@@ -171,9 +181,10 @@ private struct HistoryList: View {
             if groups.isEmpty {
                 EmptyNote(symbol: "clock", text: query.isEmpty ? "No history yet." : "Nothing matches “\(query)”.")
             } else {
-                List {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 1, pinnedViews: [.sectionHeaders]) {
                     ForEach(groups, id: \.day) { group in
-                        SwiftUI.Section(HistoryWindowView.dayTitle(group.day)) {
+                        SwiftUI.Section {
                             ForEach(group.entries) { entry in
                                 LibraryRow(url: entry.url, title: entry.title.isEmpty ? (entry.url.host ?? "") : entry.title,
                                            detail: entry.lastVisit.formatted(date: .omitted, time: .shortened) + " · " + (entry.url.host?.strippingWWW ?? ""),
@@ -187,11 +198,18 @@ private struct HistoryList: View {
                                     Button("Remove from History") { history.remove(entry) }
                                 }
                             }
+                        } header: {
+                            Text(HistoryWindowView.dayTitle(group.day))
+                                .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 8).padding(.top, 8).padding(.bottom, 3)
+                                .background(VisualEffect(material: .sidebar))
                         }
                     }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 6)
                 }
-                .listStyle(.sidebar)
-                .scrollContentBackground(.hidden)
             }
             HStack {
                 Button("Show All History") { openWindow(id: "history") }
@@ -203,6 +221,30 @@ private struct HistoryList: View {
             .padding(.horizontal, 14).frame(height: 36)
             .overlay(alignment: .top) { Divider() }
         }
+    }
+}
+
+/// Dropping one bookmark onto another moves it there.
+private struct BookmarkDrop: DropDelegate {
+    let target: Bookmark
+    @Binding var dragging: UUID?
+    let enabled: Bool
+
+    func dropEntered(info: DropInfo) {
+        guard enabled, let moving = dragging, moving != target.id else { return }
+        let store = BookmarkStore.shared
+        guard let from = store.items.firstIndex(where: { $0.id == moving }),
+              let to = store.items.firstIndex(where: { $0.id == target.id }) else { return }
+        withAnimation(.easeOut(duration: 0.15)) {
+            store.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
     }
 }
 
@@ -226,10 +268,14 @@ private struct LibraryRow: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.vertical, 2)
+            .padding(.vertical, 5)
+            .padding(.horizontal, 8)
+            .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(current ? Color.accentColor.opacity(0.16) : Color.primary.opacity(hovering ? 0.07 : 0)))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { hovering = $0 }
         .help(url.absoluteString)
     }
 }

@@ -103,8 +103,8 @@ struct FindBar: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 36)
-        .onChange(of: find.query) { _ in find.search(in: webView, restart: true) }
-        .onChange(of: find.focusToken) { _ in focused = true }
+        .onChange(of: find.query) { _, _ in find.search(in: webView, restart: true) }
+        .onChange(of: find.focusToken) { _, _ in focused = true }
         .onAppear { focused = true }
     }
 }

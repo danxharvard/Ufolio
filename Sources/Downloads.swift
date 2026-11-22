@@ -111,6 +111,8 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse,
                   suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
         // A paused or retried download picks up its old place in the list (and its file).
+        // (Only briefly: if a retry never starts, a later download mustn't take its place.)
+        if resuming != nil, Date().timeIntervalSince(resumingSince) >= 30 { resuming = nil }
         if let item = resuming {
             resuming = nil
             item.download = download
@@ -210,7 +212,10 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
     // MARK: Pause, resume, retry
 
     /// The item a resumed or retried download belongs to, until WebKit hands it over.
-    private var resuming: DownloadItem?
+    private var resuming: DownloadItem? {
+        didSet { if resuming != nil { resumingSince = Date() } }
+    }
+    private var resumingSince = Date.distantPast
 
     func pause(_ item: DownloadItem) {
         guard item.state == .downloading, let download = item.download else { return }

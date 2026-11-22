@@ -362,3 +362,8 @@ actor FaviconCache {
         return NSColor(red: r / n, green: g / n, blue: b / n, alpha: 1)
     }
 }
+
+
+// Pictures are created once and then only read, so they're safe to hand between threads
+// (Hush decodes icons and news pictures off the main thread).
+extension NSImage: @retroactive @unchecked Sendable {}

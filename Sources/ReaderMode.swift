@@ -141,7 +141,6 @@ struct ReaderView: View {
     @AppStorage("reader.serif") private var serif = true
 
     private var theme: ReaderTheme { ReaderTheme(rawValue: themeName) ?? .light }
-    private var bodyFont: Font { .system(size: size, design: serif ? .serif : .default) }
 
     var body: some View {
         ZStack(alignment: .top) {

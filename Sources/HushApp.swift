@@ -19,7 +19,7 @@ struct HushApp: App {
                 .accentColor(AccentChoice(rawValue: accent)?.color)
                 .transaction { if reduceMotion { $0.animation = nil } }
                 .onAppear { AppearanceMode.apply(appearance) }
-                .onChange(of: appearance) { AppearanceMode.apply($0) }
+                .onChange(of: appearance) { _, mode in AppearanceMode.apply(mode) }
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1280, height: 820)

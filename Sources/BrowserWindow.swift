@@ -68,11 +68,7 @@ struct BrowserWindow: View {
 
             HStack(spacing: 0) {
             // Bookmarks & History, beside the page (⇧⌘L).
-            if model.sidebarOpen {
-                LibrarySidebar(model: model)
-                    .transition(.move(edge: .leading).combined(with: .opacity))
-                Divider()
-            }
+            SidebarSlot(model: model)
             ZStack(alignment: .topLeading) {
                 PageArea(model: model)
                 if let tab = model.selectedTab {
@@ -90,19 +86,11 @@ struct BrowserWindow: View {
             }
             .animation(.easeOut(duration: 0.12), value: suggestions.isVisible)
             }
-            .animation(.spring(response: 0.32, dampingFraction: 0.9), value: model.sidebarOpen)
         }
         .ignoresSafeArea(.container, edges: .top)
         .background(VisualEffect(material: .titlebar, blending: .behindWindow).ignoresSafeArea())
         .coordinateSpace(name: "window")
         .onPreferenceChange(AddressFrameKey.self) { addressFrame = $0 }
-        .background(
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { model.windowWidth = geo.size.width }
-                    .onChange(of: geo.size.width) { model.windowWidth = $0 }
-            }
-        )
         .background(WindowReader { window in
             // Remember the window's size and position between launches.
             if let window, model.window !== window, !model.isPrivate {
@@ -370,7 +358,7 @@ private struct ShieldsButton: View {
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.12), value: hovering)
         // A tiny "hush" pulse when something is blocked (at most once a second).
-        .onChange(of: tab.blockedOnPage) { count in
+        .onChange(of: tab.blockedOnPage) { _, count in
             guard count > 0, !reduceMotion, Date().timeIntervalSince(lastPulse) > 1 else { return }
             lastPulse = Date()
             withAnimation(.spring(response: 0.18, dampingFraction: 0.5)) { pulse = true }
@@ -807,6 +795,56 @@ struct VisualEffect: NSViewRepresentable {
 }
 
 /// Hands the view's NSWindow to SwiftUI code once it's on screen.
+/// The sidebar is built once (shortly after launch) and kept, so opening it is instant. Only
+/// the sidebar itself slides; the page takes its new width in a single step rather than being
+/// re-laid out on every frame of the animation.
+private struct SidebarSlot: View {
+    @ObservedObject var model: BrowserModel
+    @State private var built = false
+    @State private var slotOpen = false
+    @State private var slidIn = false
+    private let width: CGFloat = 281
+
+    var body: some View {
+        Group {
+            if built {
+                HStack(spacing: 0) {
+                    LibrarySidebar(model: model)
+                    Divider()
+                }
+                .frame(width: width)
+                .compositingGroup()
+                .offset(x: slidIn ? 0 : -width)
+                .animation(.spring(response: 0.3, dampingFraction: 0.9), value: slidIn)   // only the slide animates
+                .frame(width: slotOpen ? width : 0, alignment: .leading)
+                .clipped()
+                .allowsHitTesting(slotOpen)
+                .accessibilityHidden(!slotOpen)
+            }
+        }
+        .onAppear {
+            if model.sidebarOpen { open() } else {
+                // Build it quietly while nothing else is happening.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { built = true }
+            }
+        }
+        .onChange(of: model.sidebarOpen) { _, isOpen in isOpen ? open() : close() }
+    }
+
+    private func open() {
+        built = true
+        slotOpen = true                          // the page makes room in one step
+        DispatchQueue.main.async { slidIn = true }   // then the sidebar glides in
+    }
+
+    private func close() {
+        slidIn = false                           // the sidebar glides out first
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+            if !model.sidebarOpen { slotOpen = false }   // then the page takes the space back
+        }
+    }
+}
+
 /// Shown when a page's process crashed, instead of a blank tab.
 private struct CrashedPage: View {
     let onReload: () -> Void

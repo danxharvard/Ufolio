@@ -100,7 +100,7 @@ final class ContentBlocker: ObservableObject {
                 continue
             }
             let file = jsonFile(for: list)
-            loadCompiled(list.identifier) { try? String(contentsOf: file) }
+            loadCompiled(list.identifier) { try? String(contentsOf: file, encoding: .utf8) }
         }
     }
 
@@ -389,17 +389,6 @@ enum BuiltInRules: String, CaseIterable {
     case ads, trackers, thirdPartyCookies, httpsUpgrade, strict, allCookies, thirdPartyScripts
 
     var identifier: String { "hush-\(rawValue)-v2" }
-
-    var isEnabled: Bool {
-        switch self {
-        case .ads: return Prefs.bool(Prefs.adBlockEnabled)
-        case .trackers: return Prefs.bool(Prefs.trackerBlockEnabled)
-        case .thirdPartyCookies: return Prefs.bool(Prefs.blockThirdPartyCookies)
-        case .httpsUpgrade: return Prefs.bool(Prefs.httpsUpgrade)
-        case .strict: return BlockingMode.current == .strict
-        case .allCookies, .thirdPartyScripts: return false   // chosen per site, see ShieldSettings
-        }
-    }
 
     var json: String {
         let rules: [[String: Any]]
@@ -784,3 +773,7 @@ final class BlockStats: ObservableObject {
         d.set(since, forKey: "stats.since")
     }
 }
+
+
+// Hush Guard's state is only changed on the main thread; WebKit's compile callbacks hop back there.
+extension ContentBlocker: @unchecked Sendable {}

@@ -102,16 +102,16 @@ struct AddressBar: View {
         .onAppear { text = displayText }
         // onChange actions can still see the previous values, so always use the new value
         // or read the selected tab from the model, never the captured `tab`.
-        .onChange(of: tab.url) { newURL in
+        .onChange(of: tab.url) { _, newURL in
             // A page arriving while the bar is focused but untouched (e.g. a link from another app).
             if !isEditing || text.isEmpty { text = display(newURL) }
         }
         // Switching tabs must show the new tab's address (or nothing, for a new tab).
-        .onChange(of: tab.id) { _ in
+        .onChange(of: tab.id) { _, _ in
             if !isEditing { text = display(model.selectedTab?.url) }
             suggestions.dismiss()
         }
-        .onChange(of: showFullAddress) { _ in if !isEditing { text = display(model.selectedTab?.url) } }
+        .onChange(of: showFullAddress) { _, _ in if !isEditing { text = display(model.selectedTab?.url) } }
     }
 
     private var leadingSymbol: String {
@@ -160,7 +160,7 @@ struct AddressTextField: NSViewRepresentable {
         // Follow the toolbar's light or dark look (Magic Theme can differ from the system's).
         let look = NSAppearance(named: context.environment.colorScheme == .dark ? .darkAqua : .aqua)
         if field.appearance?.name != look?.name { field.appearance = look }
-        if field.stringValue != text { field.stringValue = text }
+        if field.stringValue != text { field.setText(text) }
         field.alignment = centered ? .center : .left
         if context.coordinator.lastFocusToken != focusToken {
             context.coordinator.lastFocusToken = focusToken
@@ -219,10 +219,16 @@ struct AddressTextField: NSViewRepresentable {
 
 final class FocusTextField: NSTextField {
     var onFocus: (() -> Void)?
+    /// Set when the field gains focus: once the full address replaces the short site name,
+    /// it's all selected, ready to type over.
+    var selectAllAfterUpdate = false
 
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()
-        if ok { onFocus?() }
+        if ok {
+            selectAllAfterUpdate = true
+            onFocus?()
+        }
         return ok
     }
 
@@ -230,7 +236,24 @@ final class FocusTextField: NSTextField {
     override func mouseDown(with event: NSEvent) {
         let wasEditing = currentEditor() != nil
         super.mouseDown(with: event)
-        if !wasEditing { currentEditor()?.selectAll(nil) }
+        if !wasEditing {
+            currentEditor()?.selectAll(nil)
+            // The address is swapped in a moment later; select it again then.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.selectAllAfterUpdate else { return }
+                self.selectAllAfterUpdate = false
+                self.currentEditor()?.selectAll(nil)
+            }
+        }
+    }
+
+    /// Puts in new text, keeping everything selected if the field has just been focused.
+    func setText(_ text: String) {
+        stringValue = text
+        if selectAllAfterUpdate, let editor = currentEditor() {
+            selectAllAfterUpdate = false
+            editor.selectAll(nil)
+        }
     }
 }
 

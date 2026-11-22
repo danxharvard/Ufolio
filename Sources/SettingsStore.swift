@@ -9,7 +9,6 @@ enum Prefs {
     static let appearance = "appearance"
     static let accent = "accentColor"
     static let showBookmarkBar = "showBookmarkBar"
-    static let alwaysShowTabBar = "alwaysShowTabBar"
     static let showFullAddress = "showFullAddress"
     static let reduceMotion = "reduceMotion"
     static let startBackground = "startBackground"
@@ -79,7 +78,6 @@ enum Prefs {
         appearance: AppearanceMode.system.rawValue,
         accent: AccentChoice.system.rawValue,
         showBookmarkBar: true,
-        alwaysShowTabBar: false,
         showFullAddress: false,
         reduceMotion: false,
         startBackground: StartBackground.twilight.rawValue,
@@ -393,7 +391,19 @@ enum BlockingMode: String, CaseIterable, Identifiable {
 
 /// Tidies away what features removed from Hush left behind.
 enum RemovedFeatures {
+    /// Half-written save files left when Hush was force-quit mid-save (older than a day).
+    static func tidyLeftovers() {
+        let fm = FileManager.default
+        let folder = AppPaths.support
+        guard let files = try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        for file in files where file.lastPathComponent.hasPrefix(".dat.nosync") {
+            let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            if Date().timeIntervalSince(modified) > 86_400 { try? fm.removeItem(at: file) }
+        }
+    }
+
     static func cleanUp() {
+        DispatchQueue.global(qos: .utility).async { tidyLeftovers() }
         let d = UserDefaults.standard
         // Ask Hush (0.25.0): its model list, and any API keys it kept in the keychain.
         guard d.object(forKey: "ai.models") != nil || d.object(forKey: "ai.selected") != nil else { return }

@@ -524,7 +524,7 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
 // MARK: - Hush's window and tabs, as extensions see them
 
 @available(macOS 15.4, *)
-extension BrowserModel: @preconcurrency WKWebExtensionWindow {
+extension BrowserModel: WKWebExtensionWindow {
     func tabs(for context: WKWebExtensionContext) -> [any WKWebExtensionTab] { tabs }
     func activeTab(for context: WKWebExtensionContext) -> (any WKWebExtensionTab)? { selectedTab }
     func windowType(for context: WKWebExtensionContext) -> WKWebExtension.WindowType { .normal }
@@ -539,7 +539,7 @@ extension BrowserModel: @preconcurrency WKWebExtensionWindow {
 }
 
 @available(macOS 15.4, *)
-extension BrowserTab: @preconcurrency WKWebExtensionTab {
+extension BrowserTab: WKWebExtensionTab {
     func window(for context: WKWebExtensionContext) -> (any WKWebExtensionWindow)? { model }
     func indexInWindow(for context: WKWebExtensionContext) -> Int { model?.tabs.firstIndex { $0 === self } ?? 0 }
     func webView(for context: WKWebExtensionContext) -> WKWebView? { isAsleep ? nil : webView }

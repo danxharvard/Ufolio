@@ -162,7 +162,7 @@ struct SettingsView: View {
         })
         .frame(width: 900, height: 680)
         .accentColor(AccentChoice(rawValue: accent)?.color)
-        .onChange(of: query) { q in
+        .onChange(of: query) { _, q in
             // Searching jumps straight to the first matching section.
             if !q.isEmpty, let first = visibleTabs.first { selection = first.rawValue }
         }
@@ -742,11 +742,9 @@ private struct AccentDot: View {
 // MARK: - Privacy
 
 private struct PrivacySettings: View {
-    @AppStorage(Prefs.blockThirdPartyCookies) private var thirdPartyCookies = true
     @AppStorage(Prefs.httpsUpgrade) private var https = true
     @AppStorage(Prefs.globalPrivacyControl) private var gpc = true
     @AppStorage(Prefs.cleanLinks) private var cleanLinks = true
-    @AppStorage(Prefs.fingerprintProtection) private var fingerprinting = true
     @AppStorage(Prefs.debounceLinks) private var debounce = true
     @AppStorage(Prefs.deAMP) private var deAMP = true
     @AppStorage(Prefs.lookalikeWarning) private var lookalike = true

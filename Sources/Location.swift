@@ -57,11 +57,6 @@ final class SitePermissions: ObservableObject {
         save()
     }
 
-    func forgetAll() {
-        decisions = [:]
-        save()
-    }
-
     private func save() {
         UserDefaults.standard.set(decisions, forKey: "sitePermissions")
     }

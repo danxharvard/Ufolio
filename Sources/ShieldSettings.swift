@@ -114,11 +114,6 @@ final class ShieldSettings: ObservableObject {
         save()
     }
 
-    func resetAll() {
-        sites = [:]
-        save()
-    }
-
     /// "Scripts: Block all · Cookies: Allow all" for the Settings list.
     func summary(for site: String) -> String {
         guard let o = sites[site] else { return "" }

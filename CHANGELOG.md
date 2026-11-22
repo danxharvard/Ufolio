@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.26.1
+
+A second full review of Hush's code: tidier, faster and sturdier.
+
+**Faster and smoother**
+- The Bookmarks & History sidebar is ready the moment you ask for it. It's built quietly in the
+  background, slides in and out smoothly, and the page makes room in one step instead of
+  redrawing on every frame of the animation.
+- The sidebar's lists open faster, and bookmarks can still be dragged into any order.
+- Resizing the window no longer redraws the whole browser on every frame.
+- Closed Private windows no longer leave timers running in the background.
+
+**Fixed**
+- Clicking into the address bar now selects the whole address, ready to type over (the full
+  address used to replace the site's name a moment later and clear the selection).
+- If a download you chose to try again never started, the next download you made could be
+  filed under its name. That can't happen now.
+- Half-written save files left behind when Hush is force-quit are now cleared away
+  automatically.
+
+**Tidied**
+- Code left over from older features has been removed, and Hush now builds with no warnings,
+  so it's ready for the next versions of Swift and macOS.
+
 ## 0.26.0
 
 **New: Bookmarks & History sidebar**

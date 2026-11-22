@@ -37,7 +37,7 @@ struct SiteColorReader: View {
         Color.clear
             .frame(width: 0, height: 0)
             .onAppear { report(tab.siteColor) }
-            .onChange(of: tab.siteColor) { report($0) }
+            .onChange(of: tab.siteColor) { _, color in report(color) }
     }
 }
 

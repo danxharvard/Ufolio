@@ -20,7 +20,7 @@ struct ReleaseNotes {
 
     static let bundled: ReleaseNotes = {
         guard let url = Bundle.main.url(forResource: "CHANGELOG", withExtension: "md"),
-              let text = try? String(contentsOf: url) else { return ReleaseNotes(versions: []) }
+              let text = try? String(contentsOf: url, encoding: .utf8) else { return ReleaseNotes(versions: []) }
         return parse(text)
     }()
 

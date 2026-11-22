@@ -188,7 +188,7 @@ struct PersonaliseCard: View {
         .frame(width: 460)
         .animation(.easeOut(duration: 0.2), value: error)
         .animation(.easeOut(duration: 0.15), value: search.suggestions)
-        .onChange(of: query) { text in
+        .onChange(of: query) { _, text in
             error = nil
             highlighted = 0
             search.update(text)

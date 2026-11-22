@@ -9,8 +9,6 @@ enum Fingerprinting {
     /// A fresh secret every launch.
     private static let sessionKey = UUID().uuidString
 
-    static var isEnabled: Bool { Prefs.bool(Prefs.fingerprintProtection) }
-
     static let standard = make(strict: false)
     static let strict = make(strict: true)
 
