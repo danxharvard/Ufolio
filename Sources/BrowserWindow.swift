@@ -66,6 +66,7 @@ struct BrowserWindow: View {
                 BookmarkOfferBar(tab: tab).background(VisualEffect(material: .titlebar))
             }
 
+            HStack(spacing: 0) {
             ZStack(alignment: .topLeading) {
                 PageArea(model: model)
                 if let tab = model.selectedTab {
@@ -82,6 +83,14 @@ struct BrowserWindow: View {
                 }
             }
             .animation(.easeOut(duration: 0.12), value: suggestions.isVisible)
+                // Ask Hush, alongside the page.
+                if model.aiOpen {
+                    Divider()
+                    AIPanel(model: model)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.32, dampingFraction: 0.9), value: model.aiOpen)
         }
         .ignoresSafeArea(.container, edges: .top)
         .background(VisualEffect(material: .titlebar, blending: .behindWindow).ignoresSafeArea())
@@ -195,6 +204,7 @@ struct BrowserWindow: View {
                 DownloadsButton()
                 if !model.isPrivate { ExtensionButtons() }   // up to three, right beside Hush Guard
                 SelectedTab(model: model) { ShieldsButton(tab: $0) }
+                AskHushButton(model: model)
                 PrivateWindowButton(isPrivate: model.isPrivate)
             }
         }

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.25.0
+
+**New: Ask Hush, with your own AI model**
+- Click the sparkles button in the toolbar (or press ⌥⌘A) to open Ask Hush beside the page.
+- One click to Summarise this page, get its Key takeaways, Explain it simply, or check Is this
+  trustworthy?, or ask anything. Replies stream in with headings, lists and bold text.
+- Bring your own model in Settings › AI:
+  - **On this Mac:** Ollama or LM Studio. Free, and nothing leaves your Mac.
+  - **Claude:** with your own Anthropic API key.
+  - **Any OpenAI-compatible service:** with your own key.
+- Private by design:
+  - A page is only shared when you ask about it, and you can untick Include this page.
+  - Conversations aren't saved.
+  - API keys live in your Mac's keychain and are only ever sent over https.
+- Web pages are treated as information, never instructions, so text hidden in a page can't
+  take over the assistant.
+
 ## 0.24.0
 
 **New: Hush News**

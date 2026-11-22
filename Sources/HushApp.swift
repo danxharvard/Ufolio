@@ -182,6 +182,8 @@ struct HushCommands: Commands {
             .keyboardShortcut(Shortcuts.get(.splitView))
             Button(browser?.selectedTab?.reader != nil ? "Leave Reader" : "Show Reader") { browser?.selectedTab?.toggleReader() }
                 .keyboardShortcut(Shortcuts.get(.reader))
+            Button("Ask Hush") { browser?.aiOpen.toggle() }
+                .keyboardShortcut(Shortcuts.get(.askHush))
             Button("Picture in Picture") {
                 if let view = browser?.selectedTab?.webView { WebKitExtras.togglePictureInPicture(view) }
             }

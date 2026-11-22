@@ -85,6 +85,9 @@ final class BrowserModel: NSObject, ObservableObject {
     let find = FindModel()
     /// Questions waiting to be shown over this window (one at a time).
     let dialogs = DialogHost()
+    /// Ask Hush: whether the sidebar is open, and this window's conversation.
+    @Published var aiOpen = false
+    @MainActor lazy var aiChat = AIChat()
     /// Split View: the two tabs shown side by side, and how much room the left one gets.
     @Published var splitPair: SplitPair?
     @Published var splitRatio: CGFloat = 0.5
