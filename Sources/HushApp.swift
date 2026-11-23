@@ -83,6 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if !BrowserModel.hasVisibleWindow { WindowOpener.ensureWindow() }
         }
         ContentBlocker.shared.prepare()
+        ContentBlocker.shared.startListUpdates()
         ExtensionEvents.launch()
         PerformanceCenter.shared.start()
         Updater.shared.start()

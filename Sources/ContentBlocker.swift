@@ -69,7 +69,7 @@ final class ContentBlocker: ObservableObject {
         [Prefs.adBlockEnabled, Prefs.trackerBlockEnabled, Prefs.hideCookieBanners, Prefs.collapseAdSpace, Prefs.autoRejectCookies,
          Prefs.autofillPasswords, Prefs.autofillCards, Prefs.autofillContact,
          Prefs.blockThirdPartyCookies, Prefs.httpsUpgrade, Prefs.globalPrivacyControl,
-         Prefs.fingerprintProtection, Prefs.deAMP]
+         Prefs.fingerprintProtection, Prefs.deAMP, Prefs.blockAnnoyances, Prefs.blockChatWidgets]
             .map { Prefs.bool($0) ? "1" : "0" }.joined() + Prefs.string(Prefs.blockingMode)
             + Prefs.string(Prefs.scriptPolicy) + Prefs.string(Prefs.fingerprintMode) + Prefs.string(Prefs.cookiePolicy)
             + Prefs.string(ShieldSettings.sitesKey)
@@ -158,6 +158,8 @@ final class ContentBlocker: ObservableObject {
             if Prefs.bool(Prefs.adBlockEnabled) { ids.append(BuiltInRules.ads.identifier) }
             if Prefs.bool(Prefs.trackerBlockEnabled) { ids.append(BuiltInRules.trackers.identifier) }
             if shields.blocking == .strict { ids.append(BuiltInRules.strict.identifier) }
+            if Prefs.bool(Prefs.blockAnnoyances) { ids.append(BuiltInRules.annoyances.identifier) }
+            if Prefs.bool(Prefs.blockChatWidgets) { ids.append(BuiltInRules.chatWidgets.identifier) }
             ids += lists.filter { $0.enabled && !$0.isOutdated }.map(\.identifier)
         }
         switch shields.cookies {
@@ -286,6 +288,27 @@ final class ContentBlocker: ObservableObject {
         }
     }
 
+    /// Refreshes web lists more than a week old, one at a time, spaced out so nothing slows down.
+    func updateStaleLists() {
+        guard Prefs.bool(Prefs.autoUpdateLists) else { return }
+        let stale = lists.filter { $0.enabled && $0.sourceURL != nil && Date().timeIntervalSince($0.updatedAt) > 7 * 86_400 }
+        for (i, list) in stale.prefix(10).enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 45) { [weak self] in
+                guard let self, Prefs.bool(Prefs.autoUpdateLists), !self.isWorking else { return }
+                self.update(list)
+            }
+        }
+    }
+
+    private var listTimer: Timer?
+
+    /// Checks shortly after launch, then once a day while Hush stays open.
+    func startListUpdates() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 90) { [weak self] in self?.updateStaleLists() }
+        listTimer = Timer.scheduledTimer(withTimeInterval: 86_400, repeats: true) { [weak self] _ in self?.updateStaleLists() }
+        listTimer?.tolerance = 3_600
+    }
+
     func update(_ list: FilterList) {
         guard let source = list.sourceURL else { return }
         importFromWeb(source, name: list.name)
@@ -386,7 +409,7 @@ final class ContentBlocker: ObservableObject {
 // MARK: - Built-in protection
 
 enum BuiltInRules: String, CaseIterable {
-    case ads, trackers, thirdPartyCookies, httpsUpgrade, strict, allCookies, thirdPartyScripts
+    case ads, trackers, thirdPartyCookies, httpsUpgrade, strict, allCookies, thirdPartyScripts, annoyances, chatWidgets
 
     var identifier: String { "hush-\(rawValue)-v2" }
 
@@ -417,6 +440,14 @@ enum BuiltInRules: String, CaseIterable {
                 "trigger": ["url-filter": ".*"] as [String: Any],
                 "action": ["type": "block-cookies"],
             ]]
+        case .annoyances:
+            // "Sign in with Google" pop-ups, push-notification prompts and newsletter pop-ups.
+            rules = Self.annoyanceDomains.map(Self.blockThirdParty) + [[
+                "trigger": ["url-filter": ".*"],
+                "action": ["type": "css-display-none", "selector": Self.annoyanceSelectors.joined(separator: ", ")],
+            ]]
+        case .chatWidgets:
+            rules = Self.chatDomains.map(Self.blockThirdParty)
         case .thirdPartyScripts:
             rules = [[
                 "trigger": ["url-filter": ".*", "resource-type": ["script"], "load-type": ["third-party"]] as [String: Any],
@@ -484,6 +515,24 @@ enum BuiltInRules: String, CaseIterable {
         "s.pinimg.com", "sb.scorecardresearch.com", "cdn.taboola.com", "widgets.outbrain.com",
     ]
 
+    /// Push-notification and newsletter pop-up services. (Google's One Tap is hidden rather than
+    /// blocked, so "Sign in with Google" buttons keep working.)
+    static let annoyanceDomains = [
+        "cdn.onesignal.com", "onesignal.com", "pushcrew.com", "pushengage.com", "izooto.com", "webpushr.com",
+        "aimtell.com", "pushowl.com", "notix.io", "subscribers.com", "truepush.com", "gravitec.net",
+        "widget.privy.com", "load.sumo.com", "a.omappapi.com", "poptin.com", "loader.wisepops.com",
+        "a.mailmunch.co", "my.hellobar.com", "sleeknotecustomerscripts.sleeknote.com", "l.getsitecontrol.com",
+    ]
+    static let annoyanceSelectors = [
+        "#credential_picker_container", "#credential_picker_iframe", "iframe[src*='accounts.google.com/gsi/iframe']",
+        "#onesignal-slidedown-container", "#onesignal-bell-container", "#onesignal-popover-container",
+        ".pushcrew-chrome-style-notification", "#pe-subscribe-popup", ".izooto-optin",
+    ]
+    static let chatDomains = [
+        "widget.intercom.io", "js.intercomcdn.com", "js.driftt.com", "embed.tawk.to", "client.crisp.chat",
+        "wchat.freshchat.com", "cdn.livechatinc.com", "code.tidio.co", "js.usemessages.com", "static.olark.com",
+    ]
+
     static let adSelectors = [
         "ins.adsbygoogle", ".adsbygoogle", "[id^='google_ads_iframe']", "[id^='div-gpt-ad']",
         "[data-google-query-id]", ".ad-slot", ".ad-banner", ".ad-container", ".adsbox",
@@ -495,7 +544,7 @@ enum BuiltInRules: String, CaseIterable {
     enum Category { case ads, trackers, lists, other }
 
     static func category(of identifier: String) -> Category {
-        if identifier.hasPrefix("hush-ads") { return .ads }
+        if identifier.hasPrefix("hush-ads") || identifier.hasPrefix("hush-annoyances") || identifier.hasPrefix("hush-chatWidgets") { return .ads }
         if identifier.hasPrefix("hush-trackers") || identifier.hasPrefix("hush-strict") { return .trackers }
         if identifier.hasPrefix("hush-list-") { return .lists }
         return .other

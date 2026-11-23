@@ -321,6 +321,9 @@ private struct DescribedToggle: View {
     private static let icons: [String: (String, [Color])] = [
         "Show search suggestions": ("magnifyingglass", blue),
         "Suggest favourites": ("star.fill", orange),
+        "Block annoyances": ("bell.slash.fill", orange),
+        "Block chat widgets": ("bubble.left.and.bubble.right.fill", blue),
+        "Keep lists up to date": ("arrow.triangle.2.circlepath", green),
         "Fingerprinting protection": ("touchid", purple),
         "Skip tracking redirects": ("arrow.uturn.right", teal),
         "Open original pages instead of AMP": ("bolt.slash.fill", orange),
@@ -916,6 +919,9 @@ private struct AdBlockerSettings: View {
     @AppStorage(Prefs.collapseAdSpace) private var collapse = true
     @AppStorage(Prefs.autoRejectCookies) private var autoReject = true
     @AppStorage(Prefs.blockingMode) private var mode = BlockingMode.standard.rawValue
+    @AppStorage(Prefs.blockAnnoyances) private var annoyances = true
+    @AppStorage(Prefs.blockChatWidgets) private var chatWidgets = false
+    @AppStorage(Prefs.autoUpdateLists) private var autoUpdateLists = true
     @ObservedObject private var siteShields = ShieldSettings.shared
     @State private var defaultsRevision = 0
     @State private var showWebSheet = false
@@ -978,6 +984,12 @@ private struct AdBlockerSettings: View {
                 DescribedToggle(title: "Hide cookie banners",
                                 detail: "Hides common “accept cookies” pop-ups without accepting anything.",
                                 isOn: $cookieBanners)
+                DescribedToggle(title: "Block annoyances",
+                                detail: "“Sign in with Google” pop-ups, push-notification prompts and newsletter pop-ups.",
+                                isOn: $annoyances)
+                DescribedToggle(title: "Block chat widgets",
+                                detail: "Hides the support-chat bubbles many sites show in the corner.",
+                                isOn: $chatWidgets)
             } header: { SectionTitle("Built-in protection") }
 
             Section {
@@ -1001,6 +1013,9 @@ private struct AdBlockerSettings: View {
                         .font(.system(size: 11.5))
                         .foregroundStyle(blocker.statusIsError ? Color.orange : Color.secondary)
                 }
+                DescribedToggle(title: "Keep lists up to date",
+                                detail: "Refreshes lists added from the web once a week, quietly in the background.",
+                                isOn: $autoUpdateLists)
             } header: { SectionTitle("Your filter lists") } footer: {
                 Text("Works with Adblock Plus and uBlock Origin lists, hosts files and Safari content-blocker JSON. Advanced rules WebKit can’t run are skipped.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)

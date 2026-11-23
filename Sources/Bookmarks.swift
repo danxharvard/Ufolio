@@ -5,6 +5,8 @@ struct Bookmark: Codable, Identifiable, Equatable {
     var id = UUID()
     var title: String
     var url: URL
+    /// The folder it's in (nil = not in a folder).
+    var folder: String?
 }
 
 /// Bookmarks, saved to ~/Library/Application Support/Hush Browser/bookmarks.json.
@@ -57,6 +59,152 @@ final class BookmarkStore: ObservableObject {
         guard !trimmed.isEmpty else { return }
         items[i].title = trimmed
         save()
+    }
+
+    // MARK: Folders and editing
+
+    /// Folders, in the order their first bookmark appears.
+    var folders: [String] {
+        var seen = Set<String>(), result: [String] = []
+        for f in items.compactMap(\.folder) where seen.insert(f).inserted { result.append(f) }
+        return result + emptyFolders.filter { !seen.contains($0) }
+    }
+    /// Folders made in the sidebar that don't have a bookmark yet.
+    @Published private(set) var emptyFolders: [String] = []
+
+    func items(in folder: String?) -> [Bookmark] { items.filter { $0.folder == folder } }
+
+    func makeFolder(_ name: String) {
+        let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty, !folders.contains(clean) else { return }
+        emptyFolders.append(clean)
+    }
+
+    func setFolder(_ bookmark: Bookmark, _ folder: String?) {
+        guard let i = items.firstIndex(where: { $0.id == bookmark.id }) else { return }
+        items[i].folder = folder
+        if let folder { emptyFolders.removeAll { $0 == folder } }
+        save()
+    }
+
+    func setAddress(_ bookmark: Bookmark, _ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let i = items.firstIndex(where: { $0.id == bookmark.id }),
+              let url = URL(string: trimmed.contains("://") ? trimmed : "https://" + trimmed),
+              ["http", "https"].contains(url.scheme?.lowercased() ?? ""), url.host != nil else { return }
+        items[i].url = url
+        save()
+    }
+
+    func renameFolder(_ old: String, to new: String) {
+        let clean = new.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty, clean != old else { return }
+        for i in items.indices where items[i].folder == old { items[i].folder = clean }
+        emptyFolders = emptyFolders.map { $0 == old ? clean : $0 }
+        save()
+    }
+
+    /// Removes a folder; its bookmarks stay, outside any folder.
+    func removeFolder(_ name: String) {
+        for i in items.indices where items[i].folder == name { items[i].folder = nil }
+        emptyFolders.removeAll { $0 == name }
+        save()
+    }
+
+    // MARK: Import and export (the bookmarks file format every browser uses)
+
+    /// Reads an exported bookmarks file (Chrome, Safari, Firefox, Edge, Brave…). Returns how many
+    /// new bookmarks were added.
+    func importHTML(_ html: String) -> Int {
+        var folderStack: [String] = []
+        var pendingFolder: String?
+        var found: [Bookmark] = []
+        let pattern = try! NSRegularExpression(pattern: #"<H3[^>]*>(.*?)</H3>|<DL>|</DL>|<A\s[^>]*HREF="([^"]*)"[^>]*>(.*?)</A>"#,
+                                               options: [.caseInsensitive, .dotMatchesLineSeparators])
+        let ns = html as NSString
+        // Top-level containers browsers add; their bookmarks count as "not in a folder".
+        let roots: Set<String> = ["bookmarks bar", "bookmarks toolbar", "favorites", "favourites", "bookmarks menu",
+                                  "other bookmarks", "mobile bookmarks", "bookmarks"]
+        for match in pattern.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
+            let token = ns.substring(with: match.range).uppercased()
+            if match.range(at: 1).location != NSNotFound {
+                pendingFolder = Self.plain(ns.substring(with: match.range(at: 1)))
+            } else if token == "<DL>" {
+                folderStack.append(pendingFolder ?? "")
+                pendingFolder = nil
+            } else if token == "</DL>" {
+                if !folderStack.isEmpty { folderStack.removeLast() }
+            } else if match.range(at: 2).location != NSNotFound {
+                let href = Self.plain(ns.substring(with: match.range(at: 2)))
+                guard let url = URL(string: href), ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { continue }
+                let path = folderStack.filter { !$0.isEmpty && !roots.contains($0.lowercased()) }
+                let title = Self.plain(ns.substring(with: match.range(at: 3)))
+                found.append(Bookmark(title: title.isEmpty ? (url.host ?? href) : String(title.prefix(200)), url: url,
+                                      folder: path.isEmpty ? nil : path.suffix(2).joined(separator: " › ")))
+            }
+            if found.count >= 5000 { break }
+        }
+        var added = 0
+        for bookmark in found where !items.contains(where: { Self.same($0.url, bookmark.url) }) {
+            items.append(bookmark)
+            added += 1
+        }
+        if added > 0 { save() }
+        return added
+    }
+
+    func exportHTML() -> String {
+        func esc(_ s: String) -> String {
+            s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
+                .replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;")
+        }
+        func line(_ b: Bookmark, indent: String) -> String {
+            "\(indent)<DT><A HREF=\"\(esc(b.url.absoluteString))\">\(esc(b.title))</A>\n"
+        }
+        var html = """
+        <!DOCTYPE NETSCAPE-Bookmark-file-1>
+        <!-- Exported from Hush Browser -->
+        <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+        <TITLE>Bookmarks</TITLE>
+        <H1>Bookmarks</H1>
+        <DL><p>
+
+        """
+        for b in items(in: nil) { html += line(b, indent: "    ") }
+        for folder in folders {
+            html += "    <DT><H3>\(esc(folder))</H3>\n    <DL><p>\n"
+            for b in items(in: folder) { html += line(b, indent: "        ") }
+            html += "    </DL><p>\n"
+        }
+        return html + "</DL><p>\n"
+    }
+
+    private static func plain(_ s: String) -> String {
+        var t = s.replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
+        for (k, v) in ["&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", "&#39;": "'", "&#x27;": "'", "&nbsp;": " "] {
+            t = t.replacingOccurrences(of: k, with: v)
+        }
+        return t.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Asks where to save, and writes the bookmarks file.
+    @MainActor func exportWithPanel() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.html]
+        panel.nameFieldStringValue = "Hush Bookmarks.html"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? exportHTML().write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    /// Asks for a bookmarks file and brings its bookmarks in. Returns a message to show.
+    @MainActor func importWithPanel() -> String? {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.html]
+        panel.message = "Choose a bookmarks file exported from another browser."
+        guard panel.runModal() == .OK, let url = panel.url,
+              let text = (try? String(contentsOf: url, encoding: .utf8)) ?? (try? String(contentsOf: url, encoding: .isoLatin1)) else { return nil }
+        let added = importHTML(text)
+        return added == 0 ? "No new bookmarks in that file." : "Added \(added) bookmark\(added == 1 ? "" : "s")."
     }
 
     /// Drag to reorder (the sidebar).
@@ -121,13 +269,47 @@ struct BookmarkBar: View {
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, 8)
                 }
-                ForEach(store.items) { bookmark in
+                ForEach(store.items(in: nil)) { bookmark in
                     BookmarkChip(model: model, bookmark: bookmark)
+                }
+                ForEach(store.folders, id: \.self) { folder in
+                    FolderChip(model: model, folder: folder)
                 }
             }
             .padding(.horizontal, 10)
         }
         .frame(height: 30)
+    }
+}
+
+/// A folder in the bookmarks bar: a menu of its bookmarks.
+private struct FolderChip: View {
+    @ObservedObject var model: BrowserModel
+    let folder: String
+    @ObservedObject private var store = BookmarkStore.shared
+
+    var body: some View {
+        Menu {
+            let marks = store.items(in: folder)
+            ForEach(marks) { bookmark in
+                Button(bookmark.title) { model.open(bookmark.url, inNewTab: NSEvent.modifierFlags.contains(.command)) }
+            }
+            if marks.isEmpty { Text("Empty") }
+            if marks.count > 1 {
+                Divider()
+                Button("Open All in Tabs") { for b in marks { model.open(b.url, inNewTab: true) } }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "folder.fill").font(.system(size: 11)).foregroundStyle(Color.accentColor)
+                Text(folder).font(.system(size: 12)).lineLimit(1)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.visible)
+        .fixedSize()
+        .padding(.horizontal, 6)
+        .frame(height: 24)
     }
 }
 

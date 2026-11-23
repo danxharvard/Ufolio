@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.28.0
+
+**New: bookmark folders**
+- Organise bookmarks into folders. In the bookmarks bar, folders open as menus (with Open All
+  in Tabs); in the sidebar, they expand and collapse.
+- Right-click a bookmark to Rename it, Edit its Address or Move it to a Folder. Make a new
+  folder from the sidebar's ⋯ menu.
+
+**New: import and export bookmarks**
+- From the sidebar's ⋯ menu, import the bookmarks file any browser can export (Chrome, Safari,
+  Firefox, Edge, Brave…), folders included, or export yours to use anywhere. Bookmarks you
+  already have are skipped.
+
+**New in Hush Guard**
+- Block annoyances (on by default): "Sign in with Google" pop-ups, push-notification prompts
+  and newsletter pop-ups. Sign in with Google buttons on pages still work.
+- Block chat widgets (off by default): hides the support-chat bubbles in the corner of many
+  sites.
+- Filter lists you've added from the web now keep themselves up to date, refreshing quietly
+  once a week.
+
 ## 0.27.0
 
 **New: Memory Saver** (on by default, Settings › Performance)

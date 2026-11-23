@@ -63,6 +63,9 @@ enum Prefs {
     static let offerBookmarks = "offerBookmarks"
     static let powerMode = "powerMode"
     static let memorySaver = "memorySaver"
+    static let blockAnnoyances = "blockAnnoyances"
+    static let blockChatWidgets = "blockChatWidgets"
+    static let autoUpdateLists = "autoUpdateLists"
     static let memoryLimitGB = "memoryLimitGB"
     static let magicTheme = "magicTheme"
     static let fingerprintProtection = "fingerprintProtection"
@@ -128,6 +131,9 @@ enum Prefs {
         offerBookmarks: true,
         powerMode: PowerMode.automatic.rawValue,
         memorySaver: true,
+        blockAnnoyances: true,
+        blockChatWidgets: false,
+        autoUpdateLists: true,
         memoryLimitGB: 0.0,
         magicTheme: false,
         fingerprintProtection: true,

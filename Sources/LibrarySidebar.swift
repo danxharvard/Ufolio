@@ -74,65 +74,130 @@ private struct BookmarksList: View {
     @ObservedObject var model: BrowserModel
     let query: String
     @ObservedObject private var store = BookmarkStore.shared
-    @State private var renaming: UUID?
-    @State private var newTitle = ""
+    @State private var editing: (id: UUID, field: Field)?
+    @State private var draft = ""
     @State private var dragging: UUID?
+    @State private var collapsed: Set<String> = []
+    @State private var newFolder: String?
+    @State private var message: String?
+
+    enum Field { case title, address }
 
     private var filtered: [Bookmark] {
         let q = query.lowercased()
-        return q.isEmpty ? store.items : store.items.filter { $0.title.lowercased().contains(q) || $0.url.absoluteString.lowercased().contains(q) }
+        return store.items.filter { $0.title.lowercased().contains(q) || $0.url.absoluteString.lowercased().contains(q) }
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            if filtered.isEmpty {
-                EmptyNote(symbol: "star", text: query.isEmpty ? "No bookmarks yet. Press ⌘D on any page to add one." : "No bookmarks match “\(query)”.")
-            } else {
-                // A light scrolling stack (much quicker to open than a full list view), with
-                // drag and drop to reorder.
-                ScrollView {
-                    LazyVStack(spacing: 1) {
-                        ForEach(filtered) { bookmark in
-                            row(bookmark)
-                                .opacity(dragging == bookmark.id ? 0.4 : 1)
-                                .onDrag {
-                                    dragging = bookmark.id
-                                    return NSItemProvider(object: bookmark.url.absoluteString as NSString)
-                                }
-                                .onDrop(of: [.text], delegate: BookmarkDrop(target: bookmark, dragging: $dragging, enabled: query.isEmpty))
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 1) {
+                    if let name = newFolder {
+                        HStack(spacing: 8) {
+                            Image(systemName: "folder.badge.plus").foregroundStyle(Color.accentColor)
+                            TextField("Folder name", text: Binding(get: { name }, set: { newFolder = $0 }))
+                                .textFieldStyle(.roundedBorder)
+                                .onSubmit { store.makeFolder(name); newFolder = nil }
+                                .onExitCommand { newFolder = nil }
+                        }
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                    }
+                    if !query.isEmpty {
+                        ForEach(filtered) { row($0) }
+                        if filtered.isEmpty { EmptyNote(symbol: "star", text: "No bookmarks match “\(query)”.") }
+                    } else if store.items.isEmpty && store.folders.isEmpty {
+                        EmptyNote(symbol: "star", text: "No bookmarks yet. Press ⌘D on any page to add one, or import them from another browser.")
+                    } else {
+                        ForEach(store.items(in: nil)) { row($0) }
+                        ForEach(store.folders, id: \.self) { folder in
+                            folderHeader(folder)
+                            if !collapsed.contains(folder) {
+                                ForEach(store.items(in: folder)) { row($0).padding(.leading, 14) }
+                            }
                         }
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 6)
                 }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 6)
+            }
+            if let message {
+                Text(message).font(.system(size: 11)).foregroundStyle(.secondary)
+                    .padding(.horizontal, 14).padding(.bottom, 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             footer
         }
     }
 
     @ViewBuilder private func row(_ bookmark: Bookmark) -> some View {
-        if renaming == bookmark.id {
-            TextField("Name", text: $newTitle)
+        if let editing, editing.id == bookmark.id {
+            TextField(editing.field == .title ? "Name" : "Address", text: $draft)
                 .textFieldStyle(.roundedBorder)
-                .onSubmit { store.rename(bookmark, to: newTitle); renaming = nil }
-                .onExitCommand { renaming = nil }
+                .onSubmit {
+                    if editing.field == .title { store.rename(bookmark, to: draft) } else { store.setAddress(bookmark, draft) }
+                    self.editing = nil
+                }
+                .onExitCommand { self.editing = nil }
+                .padding(.vertical, 2)
         } else {
             LibraryRow(url: bookmark.url, title: bookmark.title, detail: bookmark.url.host?.strippingWWW ?? "",
                        current: model.selectedTab?.url.map { $0.host == bookmark.url.host && $0.path == bookmark.url.path } ?? false) {
                 model.open(bookmark.url, inNewTab: NSEvent.modifierFlags.contains(.command))
             }
+            .opacity(dragging == bookmark.id ? 0.4 : 1)
+            .onDrag {
+                dragging = bookmark.id
+                return NSItemProvider(object: bookmark.url.absoluteString as NSString)
+            }
+            .onDrop(of: [.text], delegate: BookmarkDrop(target: bookmark, dragging: $dragging, enabled: query.isEmpty))
             .contextMenu {
                 Button("Open in New Tab") { model.open(bookmark.url, inNewTab: true) }
                 Button("Copy Address") { copy(bookmark.url) }
                 Divider()
-                Button("Rename…") { newTitle = bookmark.title; renaming = bookmark.id }
+                Button("Rename…") { draft = bookmark.title; editing = (bookmark.id, .title) }
+                Button("Edit Address…") { draft = bookmark.url.absoluteString; editing = (bookmark.id, .address) }
+                Menu("Move to Folder") {
+                    Button("No Folder") { store.setFolder(bookmark, nil) }.disabled(bookmark.folder == nil)
+                    if !store.folders.isEmpty { Divider() }
+                    ForEach(store.folders, id: \.self) { folder in
+                        Button(folder) { store.setFolder(bookmark, folder) }.disabled(bookmark.folder == folder)
+                    }
+                    Divider()
+                    Button("New Folder…") { newFolder = "" }
+                }
+                Divider()
                 Button("Remove", role: .destructive) { store.remove(bookmark) }
             }
         }
     }
 
+    private func folderHeader(_ folder: String) -> some View {
+        let open = !collapsed.contains(folder)
+        return Button {
+            withAnimation(.easeOut(duration: 0.15)) { if open { collapsed.insert(folder) } else { collapsed.remove(folder) } }
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(open ? 90 : 0))
+                Image(systemName: open ? "folder.fill" : "folder").font(.system(size: 12)).foregroundStyle(Color.accentColor)
+                Text(folder).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
+                Spacer()
+                Text("\(store.items(in: folder).count)").font(.system(size: 10.5)).foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 8).padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            let marks = store.items(in: folder)
+            Button("Open All in Tabs") { for b in marks { model.open(b.url, inNewTab: true) } }.disabled(marks.isEmpty)
+            Divider()
+            Button("Remove Folder (Keep Bookmarks)") { store.removeFolder(folder) }
+        }
+    }
+
     private var footer: some View {
-        HStack {
+        HStack(spacing: 10) {
             if let tab = model.selectedTab, let url = tab.url {
                 let saved = store.contains(url)
                 Button {
@@ -145,7 +210,16 @@ private struct BookmarksList: View {
                 .buttonStyle(.plain)
             }
             Spacer()
-            Text("\(store.items.count)").font(.system(size: 11)).foregroundStyle(.tertiary)
+            Menu {
+                Button("New Folder") { newFolder = "" }
+                Divider()
+                Button("Import Bookmarks…") { message = store.importWithPanel() }
+                Button("Export Bookmarks…") { store.exportWithPanel() }
+            } label: {
+                Image(systemName: "ellipsis.circle").font(.system(size: 13))
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help("New folder, import and export")
         }
         .padding(.horizontal, 14).frame(height: 36)
         .overlay(alignment: .top) { Divider() }
