@@ -175,6 +175,7 @@ struct BrowserWindow: View {
                 break
             }
         }
+        .environment(\.isPrivateWindow, model.isPrivate)
         .focusedSceneObject(model)
         .navigationTitle(model.selectedTab?.displayTitle ?? "Hush")
         .frame(minWidth: 640, minHeight: 420)

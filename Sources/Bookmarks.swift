@@ -380,11 +380,22 @@ private struct BookmarkChip: View {
     }
 }
 
+private struct PrivateWindowKey: EnvironmentKey { static let defaultValue = false }
+
+extension EnvironmentValues {
+    /// True inside a private window (so nothing it shows is saved to disk).
+    var isPrivateWindow: Bool {
+        get { self[PrivateWindowKey.self] }
+        set { self[PrivateWindowKey.self] = newValue }
+    }
+}
+
 /// A site's icon, loaded from the site itself; falls back to a coloured letter.
 struct Favicon: View {
     let url: URL?
     let size: CGFloat
     @State private var image: NSImage?
+    @Environment(\.isPrivateWindow) private var isPrivateWindow
 
     var body: some View {
         Group {
@@ -400,7 +411,7 @@ struct Favicon: View {
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
         .task(id: url?.host) {
-            image = await FaviconCache.shared.icon(for: url)
+            image = await FaviconCache.shared.icon(for: url, saveToDisk: !isPrivateWindow)
         }
     }
 }
@@ -449,12 +460,13 @@ actor FaviconCache {
     private var misses: Set<String> = []
     private var inFlight: [String: Task<SiteIcon?, Never>] = [:]
 
-    func icon(for url: URL?) async -> NSImage? {
-        await info(for: url)?.image
+    func icon(for url: URL?, saveToDisk: Bool = true) async -> NSImage? {
+        await info(for: url, saveToDisk: saveToDisk)?.image
     }
 
     /// Fetches each site's icon once, even when many views ask at the same moment.
-    func info(for url: URL?) async -> SiteIcon? {
+    /// `saveToDisk` is false in private windows: their icons stay in memory, leaving no trace.
+    func info(for url: URL?, saveToDisk: Bool = true) async -> SiteIcon? {
         guard let url, let host = url.host, let scheme = url.scheme, scheme.hasPrefix("http") else { return nil }
         if let hit = cache.object(forKey: host as NSString) { return hit.icon }
         if misses.contains(host) { return nil }
@@ -467,10 +479,8 @@ actor FaviconCache {
                 guard let iconURL = URL(string: "https://\(host)\(path)") else { continue }
                 var request = URLRequest(url: iconURL)
                 request.timeoutInterval = 5
-                if let (data, response) = try? await Self.session.data(for: request),
-                   (response as? HTTPURLResponse)?.statusCode == 200, data.count < 1_000_000,
-                   let icon = Self.makeIcon(data) {
-                    Self.store(data, for: host)
+                if let data = await Self.fetchSmall(request), let icon = Self.makeIcon(data) {
+                    if saveToDisk { Self.store(data, for: host) }
                     return icon
                 }
             }
@@ -483,6 +493,22 @@ actor FaviconCache {
             cache.setObject(IconBox(result), forKey: host as NSString, cost: max(1, result.pixels * result.pixels * 4))
         } else { misses.insert(host) }
         return result
+    }
+
+    /// Fetches at most 1 MB: a site sending more (or lying about the size) is cut off, so an
+    /// icon can never use up memory.
+    private static func fetchSmall(_ request: URLRequest) async -> Data? {
+        let limit = 1_000_000
+        guard let (bytes, response) = try? await session.bytes(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200, response.expectedContentLength < Int64(limit) else { return nil }
+        var data = Data()
+        do {
+            for try await byte in bytes {
+                data.append(byte)
+                if data.count >= limit { return nil }
+            }
+        } catch { return nil }
+        return data
     }
 
     /// Icons are fetched without cookies, so sites can't recognise you from them.

@@ -15,6 +15,8 @@ final class DownloadItem: ObservableObject, Identifiable {
     /// Where the file came from (to retry), and the data needed to pick up where it stopped.
     var sourceURL: URL?
     var resumeData: Data?
+    /// From a private window: listed while Hush is open, but never saved.
+    var isPrivate = false
     weak var download: WKDownload?
     private var observation: NSKeyValueObservation?
 
@@ -123,6 +125,19 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
             completionHandler(item.destination)
             return
         }
+        // A site starting lots of downloads in a row (filling your Downloads folder) must ask first.
+        let site = (download.webView?.url ?? download.originalRequest?.url)?.host.map(Domains.site) ?? ""
+        if !site.isEmpty, !burstAllowed.contains(site) {
+            let now = Date()
+            let recent = (recentStarts[site] ?? []).filter { now.timeIntervalSince($0) < 30 }
+            if recent.count >= 3 {
+                recentStarts[site] = recent
+                completionHandler(nil)
+                askToAllowMany(from: site, window: download.webView?.window)
+                return
+            }
+            recentStarts[site] = recent + [now]
+        }
         let name = Self.safeFilename(suggestedFilename)
 
         let begin: (URL?) -> Void = { url in
@@ -130,6 +145,7 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
             let item = DownloadItem(filename: url.lastPathComponent, download: download)
             item.destination = url
             item.sourceURL = download.originalRequest?.url
+            item.isPrivate = download.webView.map { !$0.configuration.websiteDataStore.isPersistent } ?? false
             item.watch(download.progress)
             self.byDownload[ObjectIdentifier(download)] = item
             self.items.insert(item, at: 0)
@@ -163,6 +179,26 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
             n += 1
         }
         begin(candidate)
+    }
+
+    /// Sites allowed (until Hush quits) to download several files at once, and when each site's
+    /// recent downloads started.
+    private var burstAllowed: Set<String> = []
+    private var recentStarts: [String: [Date]] = [:]
+    private var askingSites: Set<String> = []
+
+    private func askToAllowMany(from site: String, window: NSWindow?) {
+        guard !askingSites.contains(site), !DialogHost.isBusy(window) else { return }
+        askingSites.insert(site)
+        DialogHost.show(HushDialog(
+            art: .symbol("square.and.arrow.down.on.square.fill"), theme: .caution, motion: .rise,
+            title: "Allow \(site) to download several files?",
+            message: "This site is trying to download lots of files one after another. Hush stopped the rest until you say so.",
+            choices: [.init(title: "Don’t Allow", role: .cancel), .init(title: "Allow", role: .primary)],
+            completion: { [weak self] choice, _ in
+                self?.askingSites.remove(site)
+                if choice == 1 { self?.burstAllowed.insert(site); self?.recentStarts[site] = nil }
+            }), in: window)
     }
 
     /// Never let a site choose a path or disguise a file: keep only the name, drop invisible
@@ -288,7 +324,8 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
     }
 
     private func save() {
-        let saved = items.filter { $0.state != .downloading }.map(\.saved)
+        // Private windows' downloads are never written down (the files themselves stay, as in Safari).
+        let saved = items.filter { $0.state != .downloading && !$0.isPrivate }.map(\.saved)
         UserDefaults.standard.set(try? JSONEncoder().encode(saved), forKey: "downloadList")
     }
 }

@@ -5,14 +5,18 @@ import CryptoKit
 ///
 /// 1. Asks GitHub for the latest release of `repo`.
 /// 2. If its tag (v0.3.0) is newer than this copy, downloads `HushBrowser-<version>.zip`.
-/// 3. Checks the download against GitHub's SHA-256 digest, unzips it, and confirms it's
-///    a valid, signed Hush of the expected version.
+/// 3. Checks the download's signature against Hush's own public key (only the holder of the
+///    private key can sign an update), then its SHA-256, unzips it, and confirms it's a valid
+///    Hush of the expected version.
 /// 4. Swaps it in when you restart (or the next time you quit).
 ///
 /// Apple's own update mechanisms need a paid Developer ID, so Hush swaps the app itself.
 final class Updater: ObservableObject {
     static let shared = Updater()
     static let repo = "danxharvard/hushbrowser"
+    /// Every update must be signed with the matching private key (kept off GitHub's code, as a
+    /// release secret). Even someone who could publish a release can't make Hush install it.
+    static let updatePublicKey = "FKLwuCcTXRyR9HdUM16PNY49xl0lftz0B4qAoWgHkVY="
 
     enum State: Equatable {
         case idle
@@ -30,6 +34,7 @@ final class Updater: ObservableObject {
     @Published private(set) var releasePage: URL?
 
     private var latest: (version: String, asset: URL, digest: String?)?
+    private var signatureURL: URL?
     private var pending: (version: String, newApp: URL, workDir: URL)?
     private var timer: Timer?
 
@@ -93,7 +98,13 @@ final class Updater: ObservableObject {
                   Self.isTrustedDownload(link) else {
                 throw UpdateError("Version \(version) is out, but its download isn’t ready yet.")
             }
+            guard let sigAsset = assets.first(where: { ($0["name"] as? String) == "HushBrowser-\(version).zip.sig" }),
+                  let sigLink = (sigAsset["browser_download_url"] as? String).flatMap(URL.init(string:)),
+                  Self.isTrustedDownload(sigLink) else {
+                throw UpdateError("Version \(version) is out, but it isn’t signed, so Hush won’t install it.")
+            }
             latest = (version, link, asset["digest"] as? String)
+            signatureURL = sigLink
             releaseNotes = (json["body"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             releasePage = (json["html_url"] as? String).flatMap(URL.init(string:))
             state = .available(version: version)
@@ -130,6 +141,20 @@ final class Updater: ObservableObject {
                     }
                 }
             }
+            // The signature: made with Hush's private key, or it isn't installed. Ever.
+            guard let sigURL = signatureURL else { throw UpdateError("This update isn’t signed.") }
+            var sigRequest = URLRequest(url: sigURL)
+            sigRequest.timeoutInterval = 20
+            let (sigData, sigResponse) = try await URLSession.shared.data(for: sigRequest)
+            guard (sigResponse as? HTTPURLResponse)?.statusCode == 200, sigData.count < 1024,
+                  let sigText = String(data: sigData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  let signature = Data(base64Encoded: sigText) else { throw UpdateError("This update’s signature couldn’t be read.") }
+            let genuine = try await Task.detached(priority: .utility) {
+                let data = try Data(contentsOf: zip, options: .mappedIfSafe)
+                return Updater.isSigned(data, signature: signature)
+            }.value
+            guard genuine else { throw UpdateError("This update isn’t signed by Hush, so it wasn’t installed.") }
+
             // GitHub publishes a SHA-256 for every release file; refuse anything that doesn't match.
             // (Hashed off the main thread, so the window never stalls.)
             if let digest = latest.digest, digest.hasPrefix("sha256:") {
@@ -248,6 +273,13 @@ final class Updater: ObservableObject {
     }
 
     // MARK: Helpers
+
+    /// True when `signature` is Hush's own signature for `data`.
+    static func isSigned(_ data: Data, signature: Data) -> Bool {
+        guard let raw = Data(base64Encoded: updatePublicKey),
+              let key = try? Curve25519.Signing.PublicKey(rawRepresentation: raw) else { return false }
+        return key.isValidSignature(signature, for: data)
+    }
 
     /// "0.10.0" > "0.9.2"; pre-release suffixes are ignored.
     static func isNewer(_ a: String, than b: String) -> Bool {

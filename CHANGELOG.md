@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.33.0
+
+**Stability and security release**
+
+**Safer updates**
+- Every update is now signed with Hush's own private key, and Hush checks that signature before
+  installing anything. Even someone who managed to publish a release on GitHub couldn't make
+  Hush install it.
+
+**No more freezes on some websites**
+- Sites that store encryption keys (common on messaging and banking sites) could make macOS ask
+  for keychain access, freezing the window until you answered, and again after every update.
+  Hush now looks after that key itself, so the question never comes up.
+
+**Privacy**
+- Site icons from private windows are no longer saved to disk.
+- Page titles from private windows no longer reach your history.
+- Downloads from private windows are no longer kept in the downloads list after Hush quits.
+
+**Security**
+- A site trying to download lots of files in a row now has to ask first.
+- Hide Elements only reacts to your own clicks, never to clicks a page fakes.
+- Extensions containing links to other places on your Mac are refused before anything is unpacked.
+- Filter lists are always fetched over a secure connection.
+- Site icons are limited to 1 MB while downloading, not after.
+
+**Tested**
+- Stress-tested with 25 busy websites, rapid tab switching, Split View, Spaces, Tab Sleep and
+  closing everything: no crashes, and every closed tab's memory is given back.
 ## 0.32.2
 
 **Fixes**

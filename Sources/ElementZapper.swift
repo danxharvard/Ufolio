@@ -35,11 +35,14 @@ final class ElementZapper: NSObject, ObservableObject, WKScriptMessageHandler {
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.frameInfo.isMainFrame,
               let body = message.body as? [String: Any], body["type"] as? String == "zap",
-              let selector = body["selector"] as? String, !selector.isEmpty, selector.count < 500 else { return }
+              let selector = body["selector"] as? String, !selector.isEmpty, selector.count < 500,
+              // A selector can't end the rule or start another one.
+              !selector.contains(where: { "{};\n\r".contains($0) }) else { return }
         let site = ContentBlocker.normalize(message.frameInfo.securityOrigin.host)
         guard !site.isEmpty else { return }
         var list = hidden[site] ?? []
-        guard !list.contains(selector) else { return }
+        // Kept to a sensible size, so the rules stay quick to build.
+        guard !list.contains(selector), list.count < 200, hidden[site] != nil || hidden.count < 1000 else { return }
         list.append(selector)
         hidden[site] = list
         saveAndApply()
@@ -115,6 +118,7 @@ final class ElementZapper: NSObject, ObservableObject, WKScriptMessageHandler {
       return parts.join(' > ');
     }
     function over(e) {
+      if (!e.isTrusted) return;   // only the real pointer, never events a page script makes up
       if (bar.contains(e.target)) { box.style.display = 'none'; current = null; return; }
       current = e.target;
       var r = current.getBoundingClientRect();
@@ -126,6 +130,7 @@ final class ElementZapper: NSObject, ObservableObject, WKScriptMessageHandler {
     function pick(e) {
       if (bar.contains(e.target)) return;
       e.preventDefault(); e.stopPropagation();
+      if (!e.isTrusted) return;   // a page can fake clicks; only your own click hides something
       if (!current || current === document.body || current === document.documentElement) return;
       var sel = selectorFor(current);
       try { document.querySelectorAll(sel); } catch (err) { return; }
@@ -135,7 +140,7 @@ final class ElementZapper: NSObject, ObservableObject, WKScriptMessageHandler {
       label.textContent = count + (count === 1 ? ' element hidden' : ' elements hidden') + ' · click more, or Done';
       webkit.messageHandlers.hushZapper.postMessage({ type: 'zap', selector: sel });
     }
-    function key(e) { if (e.key === 'Escape') { e.preventDefault(); finish(); } }
+    function key(e) { if (e.isTrusted && e.key === 'Escape') { e.preventDefault(); finish(); } }
     function finish() {
       document.removeEventListener('mouseover', over, true);
       document.removeEventListener('mousedown', swallow, true);

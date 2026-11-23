@@ -42,6 +42,15 @@ jobs:
       - name: Build app, update zip and installer
         run: ./scripts/build-app.sh
 
+      # Installed copies of Hush only accept updates signed with this key. If the secret isn't
+      # set (Settings › Secrets and variables › Actions › HUSH_UPDATE_KEY), nothing is released.
+      - name: Sign the update
+        env:
+          HUSH_UPDATE_KEY: ${{ secrets.HUSH_UPDATE_KEY }}
+        run: |
+          V="$(cat VERSION)"
+          swift scripts/sign-update.swift "build/HushBrowser-$V.zip" > "build/HushBrowser-$V.zip.sig"
+
       # The release notes start with this version's "What's new" from CHANGELOG.md, exactly as
       # Hush shows it after updating, followed by install instructions.
       - name: Publish the release
@@ -52,5 +61,6 @@ jobs:
           gh release create "v$V" \
             "build/HushBrowser-$V.dmg" \
             "build/HushBrowser-$V.zip" \
+            "build/HushBrowser-$V.zip.sig" \
             --title "Hush Browser $V" \
             --notes "$(awk -v v="## $V" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md | sed '1{/^$/d}'; echo; sed "s/VERSION/$V/g" .github/release-notes.md)"

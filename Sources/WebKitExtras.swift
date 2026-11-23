@@ -31,3 +31,31 @@ enum WebKitExtras {
     static func canPictureInPicture(_ webView: WKWebView) -> Bool { bool(webView, "_canTogglePictureInPicture") }
     static func togglePictureInPicture(_ webView: WKWebView) { call(webView, "_togglePictureInPicture") }
 }
+
+/// The key WebKit uses to protect encryption keys that websites store (WebCrypto). Left to
+/// itself, WebKit fetches it from your keychain on the main thread, and because Hush isn't
+/// signed with an Apple Developer ID, macOS asks permission again after every update, freezing
+/// the window until you answer. Hush keeps its own key instead: a private file only you can read.
+/// Private windows get a throwaway key that's never saved.
+enum WebCryptoKey {
+    private static let sessionKey = random()
+
+    private static let saved: Data = {
+        let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Hush Browser", isDirectory: true)
+        let file = folder.appendingPathComponent("WebCrypto.key")
+        if let data = try? Data(contentsOf: file), data.count == 16 { return data }
+        let key = random()
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: file.path, contents: key, attributes: [.posixPermissions: 0o600])
+        return key
+    }()
+
+    static func key(privately: Bool) -> Data { privately ? sessionKey : saved }
+
+    private static func random() -> Data {
+        var bytes = [UInt8](repeating: 0, count: 16)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        return Data(bytes)
+    }
+}

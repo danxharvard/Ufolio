@@ -265,7 +265,18 @@ final class ContentBlocker: ObservableObject {
         }
     }
 
-    func importFromWeb(_ url: URL, name: String? = nil) {
+    func importFromWeb(_ address: URL, name: String? = nil) {
+        // Always over HTTPS: a list fetched in the clear could be swapped on the way to switch
+        // blocking off (or hide parts of pages).
+        var url = address
+        if url.scheme?.lowercased() == "http", var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            parts.scheme = "https"
+            url = parts.url ?? url
+        }
+        guard url.scheme?.lowercased() == "https", url.host != nil else {
+            Task { await report("Filter lists must come from a secure (https) web address.", error: true) }
+            return
+        }
         Task {
             await MainActor.run { self.isWorking = true; self.statusIsError = false; self.status = "Downloading…" }
             do {

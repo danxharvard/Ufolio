@@ -254,6 +254,12 @@ final class ExtensionStore: ObservableObject {
         guard names.count < 50_000, !names.contains(where: { name in
             name.hasPrefix("/") || name.hasPrefix("~") || name.split(separator: "/").contains("..") || name.contains("\\")
         }) else { throw ExtensionError("This extension’s files are packed in an unsafe way, so Hush didn’t add it.") }
+        // Nor links: a link to somewhere else on your Mac, followed by a file "inside" it, would
+        // write outside the folder too. Extensions never need them.
+        let details = try await ProcessRunner.run("/usr/bin/zipinfo", [zipFile.path])
+        guard details.succeeded, !details.output.split(whereSeparator: \.isNewline).contains(where: { $0.hasPrefix("l") }) else {
+            throw ExtensionError("This extension’s files are packed in an unsafe way, so Hush didn’t add it.")
+        }
         let unzip = try await ProcessRunner.run("/usr/bin/ditto", ["-x", "-k", zipFile.path, temp.path])
         guard unzip.succeeded else { throw ExtensionError("The extension couldn’t be unpacked.") }
         // Chrome's signature metadata isn't used by WebKit.

@@ -155,7 +155,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             // A sleeping or lazily restored tab's empty web view has no title yet; keep the saved one.
             if (tab.waking || tab.isAsleep) && (title ?? "").isEmpty { return }
             tab.title = title ?? ""
-            if let url = tab.url, let title, !title.isEmpty { HistoryStore.shared.updateTitle(url, title: title) }
+            if !tab.isPrivate, let url = tab.url, let title, !title.isEmpty { HistoryStore.shared.updateTitle(url, title: title) }
         }
         bind(\.url) { tab, url in
             // While waking from sleep the new web view briefly has no address; keep the old one.
@@ -431,6 +431,18 @@ extension BrowserTab: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
         download.delegate = Downloads.shared
+    }
+
+    /// WebKit asks for the WebCrypto key here (part of its private delegate API); answering
+    /// means it never goes to the keychain, so no permission prompt can freeze the window.
+    @objc(_webCryptoMasterKeyForWebView:)
+    func hush_webCryptoMasterKey(_ webView: WKWebView) -> Data? {
+        WebCryptoKey.key(privately: !webView.configuration.websiteDataStore.isPersistent)
+    }
+
+    @objc(_webCryptoMasterKeyForWebView:completionHandler:)
+    func hush_webCryptoMasterKey(_ webView: WKWebView, completionHandler: @escaping (Data?) -> Void) {
+        completionHandler(WebCryptoKey.key(privately: !webView.configuration.websiteDataStore.isPersistent))
     }
 
     /// WebKit reports each blocked request here. This is part of WebKit's
