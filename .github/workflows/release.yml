@@ -9,6 +9,9 @@ name: Release
 on:
   push:
     tags: ['v*']
+  # Lets a release be run again from GitHub (Actions › Release › Run workflow), e.g. if
+  # GitHub's Mac machines were too busy to pick the job up. Choose the version's tag to run it on.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,6 +19,8 @@ permissions:
 jobs:
   release:
     runs-on: macos-latest
+    # Wait longer for a Mac when GitHub is busy, rather than giving up after a few minutes.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
