@@ -19,7 +19,7 @@ permissions:
 jobs:
   release:
     runs-on: macos-latest
-    # Wait longer for a Mac when GitHub is busy, rather than giving up after a few minutes.
+    # The most the build itself may take once a Mac picks it up.
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
