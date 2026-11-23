@@ -269,6 +269,14 @@ final class PaletteModel: ObservableObject {
                 let key = Prefs.showBookmarkBar
                 UserDefaults.standard.set(!(UserDefaults.standard.object(forKey: key) as? Bool ?? true), forKey: key)
             },
+            .init(title: "Show Tabs Down the Side", symbol: "sidebar.left", keywords: "vertical layout",
+                  available: { _ in Prefs.string(Prefs.tabLayout) != TabLayout.side.rawValue }) { _, _ in
+                UserDefaults.standard.set(TabLayout.side.rawValue, forKey: Prefs.tabLayout)
+            },
+            .init(title: "Show Tabs Along the Top", symbol: "rectangle.topthird.inset.filled", keywords: "horizontal layout",
+                  available: { _ in Prefs.string(Prefs.tabLayout) == TabLayout.side.rawValue }) { _, _ in
+                UserDefaults.standard.set(TabLayout.top.rawValue, forKey: Prefs.tabLayout)
+            },
             .init(title: "Show All History", symbol: "clock", shortcut: .history) { _, open in open(id: "history") },
             .init(title: "Import Bookmarks", symbol: "square.and.arrow.down.on.square", keywords: "html chrome safari firefox") { _, _ in
                 _ = BookmarkStore.shared.importWithPanel()
@@ -311,6 +319,7 @@ struct CommandPaletteOverlay: View {
                 Color.black.opacity(0.12)
                     .contentShape(Rectangle())
                     .onTapGesture { model.paletteOpen = false }
+                    .ignoresSafeArea()
                     .transition(.opacity)
                 CommandPalette(model: model)
                     .padding(.top, 70)

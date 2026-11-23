@@ -103,6 +103,7 @@ struct HushCommands: Commands {
     @ObservedObject private var bookmarks = BookmarkStore.shared
     @ObservedObject private var spaces = SpaceStore.shared
     @AppStorage(Prefs.showBookmarkBar) private var showBookmarkBar = true
+    @AppStorage(Prefs.tabLayout) private var tabLayout = TabLayout.top.rawValue
     @AppStorage(Prefs.adBlockEnabled) private var adBlockEnabled = true
     @AppStorage(Prefs.appearance) private var appearance = AppearanceMode.system.rawValue
 
@@ -204,6 +205,9 @@ struct HushCommands: Commands {
             Divider()
             Toggle("Show Bookmarks Bar", isOn: $showBookmarkBar)
                 .keyboardShortcut(Shortcuts.get(.bookmarksBar))
+            Toggle("Show Tabs Down the Side", isOn: Binding(
+                get: { tabLayout == TabLayout.side.rawValue },
+                set: { tabLayout = ($0 ? TabLayout.side : TabLayout.top).rawValue }))
             Toggle("Block Ads", isOn: $adBlockEnabled)
             Picker("Appearance", selection: $appearance) {
                 ForEach(AppearanceMode.allCases) { Text($0.label).tag($0.rawValue) }

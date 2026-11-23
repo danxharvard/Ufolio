@@ -278,7 +278,7 @@ struct BookmarkBar: View {
             }
             .padding(.horizontal, 10)
         }
-        .frame(height: 30)
+        .frame(height: 28)
     }
 }
 
@@ -326,15 +326,15 @@ private struct BookmarkChip: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Favicon(url: bookmark.url, size: 14)
+            Favicon(url: bookmark.url, size: 13)
             Text(bookmark.title)
-                .font(.system(size: 12))
+                .font(.system(size: 11.5))
                 .lineLimit(1)
                 .frame(maxWidth: 140, alignment: .leading)
                 .fixedSize(horizontal: true, vertical: false)
         }
-        .padding(.horizontal, 8)
-        .frame(height: 24)
+        .padding(.horizontal, 7)
+        .frame(height: 22)
         .background(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(Color.primary.opacity(hovering ? 0.08 : 0))

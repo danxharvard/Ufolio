@@ -309,6 +309,11 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
         webView.removeFromSuperview()
+        // End the page now, and let go of the sleeping picture and saved page state, so a
+        // closed tab costs (almost) nothing, even if a view somewhere still refers to it.
+        WebKitExtras.close(webView)
+        snapshotData = nil
+        sleepState = nil
     }
 }
 

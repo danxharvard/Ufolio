@@ -25,7 +25,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var keywords: String {
         switch self {
         case .general: return "default browser homepage startup new tab window search engine suggestions history import downloads safe files favourites"
-        case .appearance: return "theme dark light night day accent colour color start page background aurora twilight translucent motion animation zoom bookmarks bar tab bar address magic theme colours site colour"
+        case .appearance: return "tabs vertical side sidebar layout theme dark light night day accent colour color start page background aurora twilight translucent motion animation zoom bookmarks bar tab bar address magic theme colours site colour"
         case .spaces: return "spaces profiles workspaces work personal accounts sign in cookies separate containers"
         case .performance: return "performance speed fast power battery saver eco carbon energy green memory ram tab sleep graphics 120hz smooth frame rate video pause"
         case .adBlocker: return "blocking mode strict standard off ads ad blocker trackers block filter list easylist cookie banners collapse zapper hidden elements counter statistics"
@@ -546,6 +546,22 @@ private struct GeneralSettings: View {
             } header: { SectionTitle("Default browser") }
 
             Section {
+                HStack(spacing: 10) {
+                    IconTile(symbol: "sparkles", colors: [Color(red: 0.62, green: 0.48, blue: 1.0), Color(red: 0.42, green: 0.30, blue: 0.88)], size: 26)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Setup guide")
+                        Text("Go through the first-run questions again: importing, search, Hush Guard, tabs and look.")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Run Again…") {
+                        NotificationCenter.default.post(name: SetupGuide.showAgain, object: nil)
+                        NSApp.keyWindow?.close()   // close Settings so the guide is in view
+                    }
+                }
+            }
+
+            Section {
                 LabeledContent("Hush opens with") { Picker("", selection: $launch) {
                     ForEach(LaunchBehavior.allCases) { Text($0.label).tag($0.rawValue) }
                 }.labelsHidden().fixedSize() }
@@ -655,6 +671,7 @@ private struct GeneralSettings: View {
 
 private struct AppearanceSettings: View {
     @AppStorage(Prefs.appearance) private var appearance = AppearanceMode.system.rawValue
+    @AppStorage(Prefs.tabLayout) private var tabLayout = TabLayout.top.rawValue
     @AppStorage(Prefs.accent) private var accent = AccentChoice.system.rawValue
     @AppStorage(Prefs.startBackground) private var background = StartBackground.twilight.rawValue
     @AppStorage(Prefs.startGreeting) private var greeting = true
@@ -693,6 +710,30 @@ private struct AppearanceSettings: View {
                     }
                 }
             } header: { SectionTitle("Theme") }
+
+            Section {
+                HStack(spacing: 18) {
+                    ForEach(TabLayout.allCases) { option in
+                        Button { withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) { tabLayout = option.rawValue } } label: {
+                            VStack(spacing: 7) {
+                                LayoutPreview(side: option == .side)
+                                    .scaleEffect(0.8)
+                                    .frame(width: 144, height: 96)
+                                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                        .strokeBorder(tabLayout == option.rawValue ? Color.accentColor : Color.primary.opacity(0.1),
+                                                      lineWidth: tabLayout == option.rawValue ? 2.5 : 1))
+                                Text(option.label).font(.system(size: 12, weight: tabLayout == option.rawValue ? .semibold : .regular))
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+            } header: { SectionTitle("Tabs") } footer: {
+                Footnote("Down the side, drag the column’s edge to resize it, or double-click the edge for icons only.")
+            }
 
             Section {
                 LabeledContent("Background") { Picker("", selection: $background) {

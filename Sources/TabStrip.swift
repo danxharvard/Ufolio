@@ -259,44 +259,56 @@ private struct ChromeTab: View {
             if inside { hoveredID = tab.id } else if hoveredID == tab.id { hoveredID = nil }
         }
         .help(tab.url?.host?.strippingWWW ?? tab.displayTitle)
-        .contextMenu {
-            Button { model.newTab(focus: true) } label: { Label("New Tab", systemImage: "plus.square") }
-            Divider()
-            if model.isInSplit(tab) {
-                Button { model.closeSplit(keeping: tab.id) } label: { Label("Close Split View", systemImage: "rectangle") }
-            } else if tab.id == model.selectedTab?.id {
-                Button { model.openSplit() } label: { Label("Open Split View with New Tab", systemImage: "rectangle.split.2x1") }
-            } else {
-                Button { model.openSplit(with: tab) } label: { Label("Open in Split View", systemImage: "rectangle.split.2x1") }
-            }
-            Button { model.togglePin(tab) } label: { Label(tab.isPinned ? "Unpin Tab" : "Pin Tab", systemImage: tab.isPinned ? "pin.slash" : "pin") }
-            if !model.isPrivate && SpaceStore.shared.spaces.count > 1 {
-                Menu {
-                    ForEach(SpaceStore.shared.spaces.filter { $0.id != tab.spaceID }) { space in
-                        Button { model.move(tab, toSpace: space.id) } label: { Label(space.name, systemImage: space.symbol) }
-                    }
-                } label: { Label("Move to Space", systemImage: "square.stack.3d.up") }
-            }
-            Button { tab.toggleMute() } label: { Label(tab.isMuted ? "Unmute Tab" : "Mute Tab", systemImage: tab.isMuted ? "speaker.wave.2" : "speaker.slash") }
-            Button { tab.toggleJavaScript() } label: { Label(tab.javaScriptOff ? "Turn On JavaScript in This Tab" : "Turn Off JavaScript in This Tab", systemImage: "curlybraces") }
-            if tab.url != nil {
-                Divider()
-                Button { SiteForgetter.confirmAndForget(tab) } label: { Label("Forget This Site…", systemImage: "eraser") }
-            }
-            Divider()
-            Button { model.close(tab) } label: { Label("Close Tab", systemImage: "xmark") }
-            Button {
-                for other in model.visibleTabs where other !== tab { model.close(other) }
-            } label: { Label("Close Other Tabs", systemImage: "xmark.square") }
-            Button {
-                let mine = model.visibleTabs
-                if let i = mine.firstIndex(where: { $0 === tab }) {
-                    for other in mine.suffix(from: i + 1) { model.close(other) }
-                }
-            } label: { Label("Close Tabs to the Right", systemImage: "arrow.right.to.line") }
-        }
+        .contextMenu { TabMenuItems(model: model, tab: tab) }
         .animation(.easeOut(duration: 0.12), value: hovering)
     }
+}
+
+/// A tab's right-click menu (the same for tabs along the top and down the side).
+struct TabMenuItems: View {
+    // Plain references, not observed: macOS can keep a menu's contents after the row redraws,
+    // and an observing menu would keep closed tabs (and their pages) in memory. The tab row
+    // itself observes the tab, so the menu is rebuilt whenever anything it shows changes.
+    let model: BrowserModel
+    let tab: BrowserTab
+    var vertical = false
+
+    var body: some View {
+        Button { model.newTab(focus: true) } label: { Label("New Tab", systemImage: "plus.square") }
+        Divider()
+        if model.isInSplit(tab) {
+            Button { model.closeSplit(keeping: tab.id) } label: { Label("Close Split View", systemImage: "rectangle") }
+        } else if tab.id == model.selectedTab?.id {
+            Button { model.openSplit() } label: { Label("Open Split View with New Tab", systemImage: "rectangle.split.2x1") }
+        } else {
+            Button { model.openSplit(with: tab) } label: { Label("Open in Split View", systemImage: "rectangle.split.2x1") }
+        }
+        Button { model.togglePin(tab) } label: { Label(tab.isPinned ? "Unpin Tab" : "Pin Tab", systemImage: tab.isPinned ? "pin.slash" : "pin") }
+        if !model.isPrivate && SpaceStore.shared.spaces.count > 1 {
+            Menu {
+                ForEach(SpaceStore.shared.spaces.filter { $0.id != tab.spaceID }) { space in
+                    Button { model.move(tab, toSpace: space.id) } label: { Label(space.name, systemImage: space.symbol) }
+                }
+            } label: { Label("Move to Space", systemImage: "square.stack.3d.up") }
+        }
+        Button { tab.toggleMute() } label: { Label(tab.isMuted ? "Unmute Tab" : "Mute Tab", systemImage: tab.isMuted ? "speaker.wave.2" : "speaker.slash") }
+        Button { tab.toggleJavaScript() } label: { Label(tab.javaScriptOff ? "Turn On JavaScript in This Tab" : "Turn Off JavaScript in This Tab", systemImage: "curlybraces") }
+        if tab.url != nil {
+            Divider()
+            Button { SiteForgetter.confirmAndForget(tab) } label: { Label("Forget This Site…", systemImage: "eraser") }
+        }
+        Divider()
+        Button { model.close(tab) } label: { Label("Close Tab", systemImage: "xmark") }
+        Button {
+            for other in model.visibleTabs where other !== tab { model.close(other) }
+        } label: { Label("Close Other Tabs", systemImage: "xmark.square") }
+        Button {
+            let mine = model.visibleTabs
+            if let i = mine.firstIndex(where: { $0 === tab }) {
+                for other in mine.suffix(from: i + 1) { model.close(other) }
+            }
+        } label: { Label(vertical ? "Close Tabs Below" : "Close Tabs to the Right", systemImage: vertical ? "arrow.down.to.line" : "arrow.right.to.line") }
+        }
 }
 
 private struct NewTabButton: View {

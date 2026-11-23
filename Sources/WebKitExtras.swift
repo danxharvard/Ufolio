@@ -30,6 +30,9 @@ enum WebKitExtras {
 
     static func canPictureInPicture(_ webView: WKWebView) -> Bool { bool(webView, "_canTogglePictureInPicture") }
     static func togglePictureInPicture(_ webView: WKWebView) { call(webView, "_togglePictureInPicture") }
+    /// Ends the page straight away (what Safari does when a tab closes): its memory and web
+    /// process are given back even if something still holds on to the web view.
+    static func close(_ webView: WKWebView) { call(webView, "_close") }
 }
 
 /// The key WebKit uses to protect encryption keys that websites store (WebCrypto). Left to

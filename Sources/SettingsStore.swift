@@ -30,6 +30,8 @@ enum Prefs {
     static let openSafeFiles = "openSafeFiles"
     static let askDefaultBrowser = "askDefaultBrowser"
     static let hasOnboarded = "hasOnboarded"
+    static let tabLayout = "tabLayout"
+    static let sideTabsWidth = "sideTabsWidth"
     // AutoFill
     static let autofillPasswords = "autofillPasswords"
     static let autofillCards = "autofillCards"
@@ -152,6 +154,16 @@ enum Prefs {
     static func bool(_ key: String) -> Bool { UserDefaults.standard.bool(forKey: key) }
     static func string(_ key: String) -> String { UserDefaults.standard.string(forKey: key) ?? "" }
     static func double(_ key: String) -> Double { UserDefaults.standard.double(forKey: key) }
+}
+
+/// Tabs along the top of the window, or in a column down the side.
+enum TabLayout: String, CaseIterable, Identifiable {
+    case top, side
+    var id: String { rawValue }
+    var label: String { self == .top ? "Tabs along the top" : "Tabs down the side" }
+    var detail: String {
+        self == .top ? "The classic layout, like Safari." : "A tidy column with room for long titles, like Arc and Zen."
+    }
 }
 
 enum AppearanceMode: String, CaseIterable, Identifiable {

@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.34.0
+
+**New: setup guide**
+- The first time Hush opens, a short guide walks you through it one question at a time:
+  bring your bookmarks and favourite sites over from another browser, pick a search engine,
+  choose how much Hush Guard blocks, put your tabs along the top or down the side, choose Day
+  or Night and an accent colour, and make Hush your default browser. Every screen has a Back
+  button, and each answer is saved as you go.
+- Run it again any time from Settings › General › Setup guide.
+
+**New: tabs down the side**
+- Choose Tabs down the side in Settings › Appearance, the setup guide, the View menu or the
+  Command Palette. A frosted column holds the window buttons, back and forward, the address
+  bar, your Space, pinned tabs as icons and the tab list.
+- Drag its edge to resize it, or double-click the edge for a slim, icons-only column.
+- Drag tabs up and down to reorder them. Right-click for the same options as tabs along the top.
+
+**A cleaner, more compact look**
+- The page now sits as a rounded card inside the frosted window.
+- A slimmer toolbar and bookmarks bar, and a new ⋯ menu with the everyday commands.
+- Address suggestions line up under the address bar wherever it is.
+
+**Speed and memory**
+- Closing a tab now ends its page straight away, so its memory and web process are given back
+  at once.
+
+**Fixes**
+- The tab row is dimmed along with the rest of the window behind What's New, dialogs and the
+  Command Palette, instead of staying bright above a dimmed toolbar.
 ## 0.33.0
 
 **Stability and security release**

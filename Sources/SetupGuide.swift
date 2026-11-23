@@ -1,0 +1,563 @@
+import SwiftUI
+
+/// The setup guide shown the first time Hush opens (and again from Settings › General):
+/// one question per screen, each answer saved as you go, so Back always shows what you picked.
+struct SetupGuide: View {
+    let onDone: () -> Void
+    static let showAgain = Notification.Name("HushShowSetupGuide")
+
+    enum Step: Int, CaseIterable {
+        case welcome, bringStuff, search, guardMode, tabs, look, defaultBrowser, done
+    }
+
+    @State private var step: Step = .welcome
+    @State private var forward = true
+    @State private var appeared = false
+
+    // Answers (each starts from the current setting).
+    @State private var sources = BrowserImporter.available()
+    @State private var importChoice: String? = nil          // nil = start fresh
+    @State private var importing = false
+    @State private var importResult: String?
+    @AppStorage(Prefs.searchEngine) private var engine = SearchEngine.google.rawValue
+    @AppStorage(Prefs.blockingMode) private var blocking = BlockingMode.standard.rawValue
+    @AppStorage(Prefs.tabLayout) private var tabLayout = TabLayout.top.rawValue
+    @AppStorage(Prefs.appearance) private var appearance = AppearanceMode.system.rawValue
+    @AppStorage(Prefs.accent) private var accent = AccentChoice.system.rawValue
+    @State private var makeDefault = !DefaultBrowser.isDefault
+    @State private var isDefault = DefaultBrowser.isDefault
+
+    var body: some View {
+        ZStack {
+            SetupBackdrop(hue: step.hue).ignoresSafeArea()
+            HStack(spacing: 0) {
+                leftPanel
+                    .frame(width: 330)
+                    .background(.regularMaterial)
+                rightPanel
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.ultraThinMaterial.opacity(0.6))
+            }
+            .frame(width: 860, height: 540)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Color.white.opacity(0.12)))
+            .shadow(color: .black.opacity(0.35), radius: 40, y: 18)
+            .scaleEffect(appeared ? 1 : 0.96)
+            .opacity(appeared ? 1 : 0)
+        }
+        .onAppear { withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true } }
+    }
+
+    // MARK: Left: the question
+
+    private var leftPanel: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Group {
+                if step != .welcome && step != .done {
+                    Button { go(-1) } label: {
+                        Label("Back", systemImage: "arrow.left").font(.system(size: 13, weight: .medium))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.accentColor)
+                    .keyboardShortcut(.leftArrow, modifiers: [])
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(height: 20)
+            .padding(.bottom, 26)
+
+            VStack(alignment: .leading, spacing: 14) {
+                Text(step.title)
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(step.detail)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .id(step)
+            .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 8)), removal: .opacity))
+
+            Spacer()
+
+            ProgressDots(count: Step.allCases.count, current: step.rawValue)
+                .padding(.bottom, 18)
+
+            Button(action: next) {
+                HStack(spacing: 8) {
+                    if importing { ProgressView().controlSize(.small).tint(.white) }
+                    Text(importing ? "Importing…" : step.buttonTitle)
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 40)
+                .foregroundStyle(.white)
+                .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.accentColor.gradient))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(importing)
+            .keyboardShortcut(.defaultAction)
+        }
+        .padding(36)
+    }
+
+    // MARK: Right: the choices
+
+    @ViewBuilder private var rightPanel: some View {
+        ZStack {
+            switch step {
+            case .welcome: welcomeArt
+            case .bringStuff: bringStuffChoices
+            case .search: searchChoices
+            case .guardMode: guardChoices
+            case .tabs: tabChoices
+            case .look: lookChoices
+            case .defaultBrowser: defaultChoices
+            case .done: summary
+            }
+        }
+        .id(step)
+        .transition(.asymmetric(insertion: .opacity.combined(with: .offset(x: forward ? 24 : -24)),
+                                removal: .opacity.combined(with: .offset(x: forward ? -24 : 24))))
+        .padding(36)
+    }
+
+    private var welcomeArt: some View {
+        VStack(spacing: 22) {
+            AnimatedHushLogo(size: 120)
+            VStack(alignment: .leading, spacing: 14) {
+                Highlight(symbol: "shield.lefthalf.filled", color: .purple, text: "Ads and trackers blocked before they load")
+                Highlight(symbol: "hand.raised.fill", color: .blue, text: "No account, no tracking: your data stays on this Mac")
+                Highlight(symbol: "leaf.fill", color: .green, text: "Native, light on memory and battery")
+            }
+        }
+    }
+
+    private var bringStuffChoices: some View {
+        VStack(spacing: 12) {
+            ChoiceCard(title: "No, start fresh", selected: importChoice == nil) { importChoice = nil }
+            ForEach(sources.prefix(5)) { source in
+                ChoiceCard(title: source.name, subtitle: "Bookmarks and the sites you visit most",
+                           selected: importChoice == source.name,
+                           art: AnyView(Image(nsImage: NSWorkspace.shared.icon(forFile: source.appPath)).resizable().frame(width: 34, height: 34))) {
+                    importChoice = source.name
+                }
+            }
+            if let importResult {
+                Label(importResult, systemImage: "exclamationmark.circle").font(.system(size: 12)).foregroundStyle(.orange)
+            }
+        }
+        .frame(maxWidth: 380)
+    }
+
+    private var searchChoices: some View {
+        VStack(spacing: 10) {
+            ForEach(SearchEngine.allCases) { option in
+                ChoiceCard(title: option.name, subtitle: option.setupNote, selected: engine == option.rawValue,
+                           art: AnyView(Favicon(url: option.homepage, size: 26))) {
+                    engine = option.rawValue
+                }
+            }
+        }
+        .frame(maxWidth: 380)
+    }
+
+    private var guardChoices: some View {
+        VStack(spacing: 12) {
+            ForEach(BlockingMode.allCases) { option in
+                ChoiceCard(title: option.label + (option == .standard ? " (recommended)" : ""), subtitle: option.detail,
+                           selected: blocking == option.rawValue,
+                           art: AnyView(IconTile(symbol: option.symbol, colors: option.colors, size: 34))) {
+                    blocking = option.rawValue
+                }
+            }
+        }
+        .frame(maxWidth: 400)
+    }
+
+    private var tabChoices: some View {
+        HStack(alignment: .top, spacing: 18) {
+            ForEach(TabLayout.allCases) { option in
+                PreviewCard(title: option.label, subtitle: option.detail, selected: tabLayout == option.rawValue) {
+                    LayoutPreview(side: option == .side)
+                } action: { tabLayout = option.rawValue }
+            }
+        }
+    }
+
+    private var lookChoices: some View {
+        VStack(spacing: 26) {
+            HStack(alignment: .top, spacing: 14) {
+                ForEach(AppearanceMode.allCases) { option in
+                    PreviewCard(title: option.label, subtitle: nil, selected: appearance == option.rawValue) {
+                        ThemePreview(mode: option)
+                    } action: { appearance = option.rawValue }
+                }
+            }
+            VStack(spacing: 10) {
+                Text("Accent colour").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(.secondary)
+                HStack(spacing: 12) {
+                    ForEach(AccentChoice.allCases) { option in
+                        Button { accent = option.rawValue } label: {
+                            Circle()
+                                .fill(option.color.map { AnyShapeStyle($0.gradient) }
+                                      ?? AnyShapeStyle(AngularGradient(colors: [.red, .orange, .yellow, .green, .blue, .purple, .red], center: .center)))
+                                .frame(width: 22, height: 22)
+                                .overlay(Circle().strokeBorder(Color.primary.opacity(accent == option.rawValue ? 0.75 : 0), lineWidth: 2).padding(-4))
+                        }
+                        .buttonStyle(.plain)
+                        .help(option.label)
+                    }
+                }
+            }
+        }
+    }
+
+    private var defaultChoices: some View {
+        VStack(spacing: 12) {
+            if isDefault {
+                ChoiceCard(title: "Hush is already your default browser", selected: true,
+                           art: AnyView(Image(systemName: "checkmark.seal.fill").font(.system(size: 24)).foregroundStyle(.green))) {}
+            } else {
+                ChoiceCard(title: "Yes, make Hush my default", subtitle: "macOS will ask you to confirm.", selected: makeDefault) { makeDefault = true }
+                ChoiceCard(title: "Not yet, I'm still exploring", selected: !makeDefault) { makeDefault = false }
+            }
+        }
+        .frame(maxWidth: 380)
+    }
+
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SummaryRow(symbol: "magnifyingglass", text: "Searching with \((SearchEngine(rawValue: engine) ?? .google).name)")
+            SummaryRow(symbol: "shield.lefthalf.filled", text: "Hush Guard: \((BlockingMode(rawValue: blocking) ?? .standard).label)")
+            SummaryRow(symbol: tabLayout == TabLayout.side.rawValue ? "sidebar.left" : "rectangle.topthird.inset.filled",
+                       text: (TabLayout(rawValue: tabLayout) ?? .top).label)
+            SummaryRow(symbol: "paintbrush.fill", text: "\((AppearanceMode(rawValue: appearance) ?? .system).label) theme")
+            if let importResult { SummaryRow(symbol: "square.and.arrow.down", text: importResult) }
+            if isDefault { SummaryRow(symbol: "checkmark.seal.fill", text: "Hush is your default browser") }
+            Text("You can change any of these in Settings (⌘,).")
+                .font(.system(size: 12)).foregroundStyle(.secondary).padding(.top, 6)
+        }
+        .frame(maxWidth: 380, alignment: .leading)
+    }
+
+    // MARK: Moving between steps
+
+    private func go(_ delta: Int) {
+        guard let target = Step(rawValue: step.rawValue + delta) else { return }
+        forward = delta > 0
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) { step = target }
+    }
+
+    private func next() {
+        switch step {
+        case .bringStuff:
+            guard let name = importChoice, let source = sources.first(where: { $0.name == name }) else { importResult = nil; go(1); return }
+            importing = true
+            DispatchQueue.global(qos: .userInitiated).async {
+                let message: String
+                do {
+                    let pages = try BrowserImporter.importTopSites(from: source)
+                    let marks = (try? BrowserImporter.importBookmarks(from: source)) ?? 0
+                    message = "Brought over \(marks) bookmarks and \(pages) favourite sites from \(source.name)"
+                } catch {
+                    message = error.localizedDescription
+                }
+                DispatchQueue.main.async {
+                    importing = false
+                    importResult = message
+                    go(1)
+                }
+            }
+        case .defaultBrowser:
+            if makeDefault && !isDefault {
+                DefaultBrowser.makeDefault { isDefault = $0 }
+            }
+            go(1)
+        case .done:
+            UserDefaults.standard.set(true, forKey: Prefs.hasOnboarded)
+            onDone()
+        default:
+            go(1)
+        }
+    }
+}
+
+// MARK: - Steps
+
+extension SetupGuide.Step {
+    var title: String {
+        switch self {
+        case .welcome: return "Welcome to Hush."
+        case .bringStuff: return "Bring your stuff along."
+        case .search: return "Pick your search engine."
+        case .guardMode: return "How much should Hush block?"
+        case .tabs: return "Where should your tabs go?"
+        case .look: return "Make it yours."
+        case .defaultBrowser: return "Make Hush your default?"
+        case .done: return "You're all set."
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .welcome: return "A calm, private browser for your Mac. Let's set it up. It takes less than a minute."
+        case .bringStuff: return "Pick a browser to bring over your bookmarks and favourite sites, and pick up right where you left off."
+        case .search: return "Used when you type in the address bar. You can change it any time."
+        case .guardMode: return "Hush Guard blocks ads and trackers before they load, so pages are cleaner and faster."
+        case .tabs: return "Tabs along the top, or down the side where long titles have room. Switch any time in Settings."
+        case .look: return "Day, Night, or follow your Mac. Then pick an accent colour."
+        case .defaultBrowser: return "Links from other apps will open in Hush. You can always change this later."
+        case .done: return "Enjoy the quiet. Here's how Hush is set up."
+        }
+    }
+
+    var buttonTitle: String {
+        switch self {
+        case .welcome: return "Get Started"
+        case .done: return "Start Browsing"
+        default: return "Next"
+        }
+    }
+
+    /// Each step tints the backdrop its own colour.
+    var hue: Double {
+        [0.74, 0.58, 0.52, 0.76, 0.62, 0.92, 0.44, 0.33][rawValue]
+    }
+}
+
+extension SearchEngine {
+    var homepage: URL {
+        switch self {
+        case .google: return URL(string: "https://www.google.com")!
+        case .duckduckgo: return URL(string: "https://duckduckgo.com")!
+        case .bing: return URL(string: "https://www.bing.com")!
+        case .brave: return URL(string: "https://search.brave.com")!
+        case .ecosia: return URL(string: "https://www.ecosia.org")!
+        }
+    }
+
+    var setupNote: String? {
+        switch self {
+        case .duckduckgo: return "Doesn't track your searches"
+        case .brave: return "Its own private index"
+        case .ecosia: return "Plants trees with its profits"
+        default: return nil
+        }
+    }
+}
+
+// MARK: - Pieces
+
+/// A slowly shifting wash of colour behind the guide, tinted for each step.
+private struct SetupBackdrop: View {
+    let hue: Double
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        ZStack {
+            VisualEffect(material: .fullScreenUI, blending: .withinWindow)
+            RadialGradient(colors: [Color(hue: hue, saturation: 0.55, brightness: 0.85).opacity(scheme == .dark ? 0.45 : 0.55), .clear],
+                           center: .topLeading, startRadius: 0, endRadius: 900)
+            RadialGradient(colors: [Color(hue: (hue + 0.12).truncatingRemainder(dividingBy: 1), saturation: 0.5, brightness: 0.8)
+                                        .opacity(scheme == .dark ? 0.35 : 0.45), .clear],
+                           center: .bottomTrailing, startRadius: 0, endRadius: 800)
+        }
+        .animation(.easeInOut(duration: 0.8), value: hue)
+        .contentShape(Rectangle())
+        .onTapGesture {}   // clicks around the guide do nothing
+    }
+}
+
+private struct ChoiceCard: View {
+    let title: String
+    var subtitle: String? = nil
+    let selected: Bool
+    var art: AnyView? = nil
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle().strokeBorder(selected ? Color.accentColor : Color.secondary.opacity(0.5), lineWidth: 1.5)
+                    if selected { Circle().fill(Color.accentColor).padding(4) }
+                }
+                .frame(width: 20, height: 20)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(selected ? Color.accentColor : .primary)
+                    if let subtitle {
+                        Text(subtitle).font(.system(size: 11.5)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 8)
+                if let art { art }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, subtitle == nil ? 15 : 12)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.primary.opacity(selected ? 0.09 : hovering ? 0.07 : 0.045)))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(selected ? Color.accentColor.opacity(0.85) : Color.primary.opacity(0.08), lineWidth: selected ? 1.5 : 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
+        .animation(.easeOut(duration: 0.15), value: selected)
+    }
+}
+
+private struct PreviewCard<Preview: View>: View {
+    let title: String
+    let subtitle: String?
+    let selected: Bool
+    @ViewBuilder let preview: Preview
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 10) {
+                preview
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(selected ? Color.accentColor : Color.primary.opacity(0.1), lineWidth: selected ? 2.5 : 1))
+                    .shadow(color: .black.opacity(hovering ? 0.25 : 0.12), radius: hovering ? 10 : 5, y: 3)
+                Text(title).font(.system(size: 13, weight: selected ? .semibold : .medium))
+                    .foregroundStyle(selected ? Color.accentColor : .primary)
+                if let subtitle {
+                    Text(subtitle).font(.system(size: 11)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        .frame(width: 180)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: hovering)
+    }
+}
+
+/// A tiny drawing of the window with tabs along the top or down the side.
+struct LayoutPreview: View {
+    let side: Bool
+
+    var body: some View {
+        let frame = Color.primary.opacity(0.08)
+        let page = Color(nsColor: .textBackgroundColor)
+        let line = Color.primary.opacity(0.18)
+        ZStack(alignment: .topLeading) {
+            frame
+            if side {
+                HStack(spacing: 5) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 3) { ForEach(0..<3) { _ in Circle().fill(line).frame(width: 5, height: 5) } }
+                        RoundedRectangle(cornerRadius: 3).fill(line).frame(height: 9)
+                        RoundedRectangle(cornerRadius: 3).fill(Color.accentColor.opacity(0.55)).frame(height: 9)
+                        ForEach(0..<4) { _ in RoundedRectangle(cornerRadius: 3).fill(line).frame(height: 7) }
+                        Spacer()
+                    }
+                    .frame(width: 52)
+                    RoundedRectangle(cornerRadius: 5).fill(page)
+                }
+                .padding(6)
+            } else {
+                VStack(spacing: 5) {
+                    HStack(spacing: 4) {
+                        HStack(spacing: 3) { ForEach(0..<3) { _ in Circle().fill(line).frame(width: 5, height: 5) } }
+                        RoundedRectangle(cornerRadius: 3).fill(Color.accentColor.opacity(0.55)).frame(width: 34, height: 9)
+                        ForEach(0..<2) { _ in RoundedRectangle(cornerRadius: 3).fill(line).frame(width: 28, height: 7) }
+                        Spacer()
+                    }
+                    RoundedRectangle(cornerRadius: 3).fill(line).frame(height: 9)
+                    RoundedRectangle(cornerRadius: 5).fill(page)
+                }
+                .padding(6)
+            }
+        }
+        .frame(width: 180, height: 120)
+    }
+}
+
+private struct ThemePreview: View {
+    let mode: AppearanceMode
+
+    var body: some View {
+        ZStack {
+            switch mode {
+            case .light: mini(dark: false)
+            case .dark: mini(dark: true)
+            case .system:
+                mini(dark: false)
+                mini(dark: true).mask(LinearGradient(stops: [.init(color: .clear, location: 0.5), .init(color: .black, location: 0.5)],
+                                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+            }
+        }
+        .frame(width: 120, height: 80)
+    }
+
+    private func mini(dark: Bool) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 3) {
+                ForEach([Color.red, .yellow, .green], id: \.self) { Circle().fill($0.opacity(0.8)).frame(width: 5, height: 5) }
+                Spacer()
+            }
+            .padding(6)
+            .background(dark ? Color(white: 0.2) : Color(white: 0.9))
+            (dark ? Color(white: 0.12) : Color.white)
+                .overlay(Text("Hush").font(.system(size: 13, weight: .light, design: .rounded))
+                    .foregroundStyle(dark ? Color.white.opacity(0.8) : Color.black.opacity(0.7)))
+        }
+    }
+}
+
+private struct Highlight: View {
+    let symbol: String
+    let color: Color
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol).font(.system(size: 15, weight: .semibold)).foregroundStyle(color)
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(color.opacity(0.15)))
+            Text(text).font(.system(size: 13.5))
+        }
+    }
+}
+
+private struct SummaryRow: View {
+    let symbol: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill").font(.system(size: 16)).foregroundStyle(.green)
+            Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(.secondary).frame(width: 18)
+            Text(text).font(.system(size: 13.5)).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+private struct ProgressDots: View {
+    let count: Int
+    let current: Int
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<count, id: \.self) { i in
+                Capsule()
+                    .fill(i == current ? Color.accentColor : Color.primary.opacity(0.18))
+                    .frame(width: i == current ? 18 : 6, height: 6)
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: current)
+    }
+}

@@ -26,7 +26,122 @@ struct BrowserWindow: View {
     @State private var whatsNew: ReleaseNotes.Version?
 
 
+    @AppStorage(Prefs.tabLayout) private var tabLayout = TabLayout.top.rawValue
+    private var sideTabs: Bool { tabLayout == TabLayout.side.rawValue }
+
     var body: some View {
+        Group {
+            if sideTabs { sideLayout } else { topLayout }
+        }
+        .ignoresSafeArea(.container, edges: .top)
+        .background(VisualEffect(material: .titlebar, blending: .behindWindow).ignoresSafeArea())
+        .coordinateSpace(name: "window")
+        // Address suggestions float over everything, lined up under the address bar wherever it is.
+        .overlay(alignment: .topLeading) {
+            if suggestions.isVisible {
+                SuggestionList(suggestions: suggestions) { choice in go(choice.text) }
+                    .frame(width: min(max(380, addressFrame.width), 680))
+                    .offset(x: addressFrame.minX, y: addressFrame.maxY + 6)
+                    .transition(.opacity.combined(with: .offset(y: -4)))
+            }
+        }
+        .animation(.easeOut(duration: 0.12), value: suggestions.isVisible)
+        .onPreferenceChange(AddressFrameKey.self) { addressFrame = $0 }
+        .background(WindowReader { window in
+            // Remember the window's size and position between launches.
+            if let window, model.window !== window, !model.isPrivate {
+                window.setFrameUsingName("HushBrowserWindow")
+                window.setFrameAutosaveName("HushBrowserWindow")
+            }
+            model.window = window
+            TrafficLights.align(in: window)
+        })
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResizeNotification)) { note in
+            if (note.object as? NSWindow) === model.window { TrafficLights.align(in: model.window) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { note in
+            if (note.object as? NSWindow) === model.window { isFullScreen = true }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { note in
+            if (note.object as? NSWindow) === model.window {
+                isFullScreen = false
+                TrafficLights.align(in: model.window)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
+            if (note.object as? NSWindow) === model.window {
+                TrafficLights.align(in: model.window)
+                model.ensureTab()
+            }
+        }
+        // The welcome screen and default-browser question are drawn inside the window,
+        // over a dimmed backdrop (SwiftUI sheets could end up off-screen and lock the window).
+        .overlay {
+            if let notes = whatsNew {
+                LaunchCardOverlay {
+                    WhatsNewView(notes: notes) { whatsNew = nil }
+                }
+                .transition(.opacity)
+            }
+            if showWelcome {
+                SetupGuide {
+                    showWelcome = false
+                    model.focusAddressBar()
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: showWelcome)
+        .animation(.easeOut(duration: 0.25), value: whatsNew?.version)
+        // Links opened from other apps (when Hush is the default browser) arrive here.
+        .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
+        .onOpenURL { url in
+            guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return }
+            if let tab = model.selectedTab, tab.isBlank {
+                tab.load(url)
+            } else {
+                model.newTab(url: url)
+            }
+            // Give the page focus, not the (empty) address bar.
+            if let tab = model.selectedTab { DispatchQueue.main.async { tab.webView.window?.makeFirstResponder(tab.webView) } }
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        .overlay { CommandPaletteOverlay(model: model) }
+        .hushDialogs(model.dialogs)
+        // Settings › General › Run Setup Guide Again.
+        .onReceive(NotificationCenter.default.publisher(for: SetupGuide.showAgain)) { _ in
+            guard !model.isPrivate, model.window?.isVisible == true, BrowserModel.frontmostNormal === model else { return }
+            model.window?.makeKeyAndOrderFront(nil)
+            showWelcome = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: QuitHelper.closeSheets)) { _ in
+            showWelcome = false
+            showDefaultBanner = false
+            whatsNew = nil
+        }
+        .onAppear {
+            guard !model.isPrivate else { return }
+            switch LaunchPrompts.next() {
+            case .welcome:
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showWelcome = true }
+            case .whatsNew(let notes):
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { whatsNew = notes }
+            case .defaultBrowser:
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showDefaultBanner = true }
+                }
+            case nil:
+                break
+            }
+        }
+        .environment(\.isPrivateWindow, model.isPrivate)
+        .focusedSceneObject(model)
+        .navigationTitle(model.selectedTab?.displayTitle ?? "Hush")
+        .frame(minWidth: 640, minHeight: 420)
+    }
+
+    /// Tabs along the top: the tab row in the title bar, the toolbar, then the page.
+    private var topLayout: some View {
         VStack(spacing: 0) {
             // Tabs in the title bar, beside the window buttons.
             VStack(spacing: 0) {
@@ -69,116 +184,64 @@ struct BrowserWindow: View {
             HStack(spacing: 0) {
             // Bookmarks & History, beside the page (⇧⌘L).
             SidebarSlot(model: model)
+            // The page: a rounded card set into the frosted window.
             ZStack(alignment: .topLeading) {
                 PageArea(model: model)
                 if let tab = model.selectedTab {
                     ProgressLine(tab: tab)
                 }
-                if suggestions.isVisible {
-                    SuggestionList(suggestions: suggestions) { choice in
-                        go(choice.text)
-                    }
-                    .frame(width: min(max(380, addressFrame.width), 680))
-                    .offset(x: addressFrame.minX)
-                    .padding(.top, 6)
-                    .transition(.opacity.combined(with: .offset(y: -4)))
-                }
             }
-            .animation(.easeOut(duration: 0.12), value: suggestions.isVisible)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
+            .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
             }
+            .padding([.horizontal, .bottom], 6)
+            .padding(.top, 6)
         }
-        .ignoresSafeArea(.container, edges: .top)
-        .background(VisualEffect(material: .titlebar, blending: .behindWindow).ignoresSafeArea())
-        .coordinateSpace(name: "window")
-        .onPreferenceChange(AddressFrameKey.self) { addressFrame = $0 }
-        .background(WindowReader { window in
-            // Remember the window's size and position between launches.
-            if let window, model.window !== window, !model.isPrivate {
-                window.setFrameUsingName("HushBrowserWindow")
-                window.setFrameAutosaveName("HushBrowserWindow")
+    }
+
+    /// Tabs down the side: a frosted column with the window buttons, address bar, Spaces and
+    /// tabs; the page sits beside it as a rounded card.
+    private var sideLayout: some View {
+        HStack(spacing: 0) {
+            SideTabBar(model: model, suggestions: suggestions, onGo: go)
+                .background(tint?.frame ?? .clear)
+                .environment(\.colorScheme, tint?.scheme ?? systemScheme)
+            VStack(spacing: 0) {
+                if showBookmarkBar {
+                    BookmarkBar(model: model)
+                        .frame(height: 34)
+                }
+                if showDefaultBanner {
+                    DefaultBrowserBanner {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { showDefaultBanner = false }
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+                FindBarHost(model: model)
+                TranslationHost()
+                SelectedTab(model: model) { tab in WebStoreBar(tab: tab) }
+                SelectedTab(model: model) { tab in BookmarkOfferBar(tab: tab) }
+                HStack(spacing: 0) {
+                    SidebarSlot(model: model)
+                    ZStack(alignment: .topLeading) {
+                        PageArea(model: model)
+                        if let tab = model.selectedTab { ProgressLine(tab: tab) }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
+                    .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+                }
+                .padding(.top, showBookmarkBar ? 0 : 8)
+                .padding(.trailing, 8)
+                .padding(.bottom, 8)
             }
-            model.window = window
-            TrafficLights.align(in: window)
+            .padding(.top, showBookmarkBar ? 4 : 0)
+        }
+        .background(SelectedTab(model: model) { tab in
+            SiteColorReader(tab: tab) { color in if color != siteColor { siteColor = color } }
+                .id(tab.id)
         })
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResizeNotification)) { note in
-            if (note.object as? NSWindow) === model.window { TrafficLights.align(in: model.window) }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { note in
-            if (note.object as? NSWindow) === model.window { isFullScreen = true }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { note in
-            if (note.object as? NSWindow) === model.window {
-                isFullScreen = false
-                TrafficLights.align(in: model.window)
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
-            if (note.object as? NSWindow) === model.window {
-                TrafficLights.align(in: model.window)
-                model.ensureTab()
-            }
-        }
-        // The welcome screen and default-browser question are drawn inside the window,
-        // over a dimmed backdrop (SwiftUI sheets could end up off-screen and lock the window).
-        .overlay {
-            if let notes = whatsNew {
-                LaunchCardOverlay {
-                    WhatsNewView(notes: notes) { whatsNew = nil }
-                }
-                .transition(.opacity)
-            }
-            if showWelcome {
-                LaunchCardOverlay {
-                    WelcomeView {
-                        UserDefaults.standard.set(true, forKey: Prefs.hasOnboarded)
-                        showWelcome = false
-                        model.focusAddressBar()
-                    }
-                }
-                .transition(.opacity)
-            }
-        }
-        .animation(.easeOut(duration: 0.25), value: showWelcome)
-        .animation(.easeOut(duration: 0.25), value: whatsNew?.version)
-        // Links opened from other apps (when Hush is the default browser) arrive here.
-        .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
-        .onOpenURL { url in
-            guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return }
-            if let tab = model.selectedTab, tab.isBlank {
-                tab.load(url)
-            } else {
-                model.newTab(url: url)
-            }
-            // Give the page focus, not the (empty) address bar.
-            if let tab = model.selectedTab { DispatchQueue.main.async { tab.webView.window?.makeFirstResponder(tab.webView) } }
-            NSApp.activate(ignoringOtherApps: true)
-        }
-        .overlay { CommandPaletteOverlay(model: model) }
-        .hushDialogs(model.dialogs)
-        .onReceive(NotificationCenter.default.publisher(for: QuitHelper.closeSheets)) { _ in
-            showWelcome = false
-            showDefaultBanner = false
-            whatsNew = nil
-        }
-        .onAppear {
-            guard !model.isPrivate else { return }
-            switch LaunchPrompts.next() {
-            case .welcome:
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { showWelcome = true }
-            case .whatsNew(let notes):
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { whatsNew = notes }
-            case .defaultBrowser:
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showDefaultBanner = true }
-                }
-            case nil:
-                break
-            }
-        }
-        .environment(\.isPrivateWindow, model.isPrivate)
-        .focusedSceneObject(model)
-        .navigationTitle(model.selectedTab?.displayTitle ?? "Hush")
-        .frame(minWidth: 640, minHeight: 420)
     }
 
     /// Back, forward and reload; the address bar across the middle; then the tools.
@@ -199,10 +262,11 @@ struct BrowserWindow: View {
                 if !model.isPrivate { ExtensionButtons() }   // up to three, right beside Hush Guard
                 SelectedTab(model: model) { ShieldsButton(tab: $0) }
                 PrivateWindowButton(isPrivate: model.isPrivate)
+                MoreMenuButton(model: model)
             }
         }
         .padding(.horizontal, 10)
-        .frame(height: 44)
+        .frame(height: 40)
     }
 
     private func go(_ text: String) {
@@ -212,6 +276,51 @@ struct BrowserWindow: View {
         if let tab = model.selectedTab {
             DispatchQueue.main.async { tab.webView.window?.makeFirstResponder(tab.webView) }
         }
+    }
+}
+
+/// "⋯" at the end of the toolbar: the everyday commands, one click away.
+struct MoreMenuButton: View {
+    @ObservedObject var model: BrowserModel
+    @Environment(\.openWindow) private var openWindow
+    @AppStorage(Prefs.tabLayout) private var tabLayout = TabLayout.top.rawValue
+    @AppStorage(Prefs.showBookmarkBar) private var showBookmarkBar = true
+    @State private var hovering = false
+
+    var body: some View {
+        Menu {
+            Button { model.newTab(focus: true) } label: { Label("New Tab", systemImage: "plus.square") }
+            Button { openWindow(id: "private") } label: { Label("New Private Window", systemImage: "eyeglasses") }
+            Button { model.paletteOpen = true } label: { Label("Command Palette…", systemImage: "command") }
+            Divider()
+            Button { model.find.show() } label: { Label("Find on Page…", systemImage: "text.magnifyingglass") }
+            Button { model.selectedTab?.zoom(by: 0.1) } label: { Label("Zoom In", systemImage: "plus.magnifyingglass") }
+            Button { model.selectedTab?.zoom(by: -0.1) } label: { Label("Zoom Out", systemImage: "minus.magnifyingglass") }
+            Button { model.selectedTab?.printPage() } label: { Label("Print…", systemImage: "printer") }
+            Divider()
+            Button { model.sidebarOpen.toggle() } label: { Label("Bookmarks & History", systemImage: "sidebar.left") }
+            Button { openWindow(id: "history") } label: { Label("Show All History", systemImage: "clock") }
+            Toggle(isOn: $showBookmarkBar) { Label("Show Bookmarks Bar", systemImage: "menubar.rectangle") }
+            Toggle(isOn: Binding(get: { tabLayout == TabLayout.side.rawValue },
+                                 set: { tabLayout = ($0 ? TabLayout.side : TabLayout.top).rawValue })) {
+                Label("Tabs Down the Side", systemImage: "sidebar.squares.left")
+            }
+            Divider()
+            Button { SettingsOpener.open() } label: { Label("Settings…", systemImage: "gearshape") }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 26)
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(hovering ? 0.08 : 0)))
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .onHover { hovering = $0 }
+        .help("More")
     }
 }
 
@@ -284,7 +393,7 @@ struct WebViewHost: NSViewRepresentable {
     func updateNSView(_ nsView: WKWebView, context: Context) {}
 }
 
-private struct NavButtons: View {
+struct NavButtons: View {
     @ObservedObject var tab: BrowserTab
 
     var body: some View {
@@ -328,7 +437,7 @@ struct ToolbarIconButton: View {
 }
 
 /// Hush Guard in the toolbar: how much was blocked on this page, and per-site on/off.
-private struct ShieldsButton: View {
+struct ShieldsButton: View {
     @ObservedObject var tab: BrowserTab
     @ObservedObject private var blocker = ContentBlocker.shared
     @AppStorage(Prefs.adBlockEnabled) private var adsOn = true
@@ -818,7 +927,7 @@ private struct TrackerBead: View {
 }
 
 /// Thin loading bar along the top of the page.
-private struct ProgressLine: View {
+struct ProgressLine: View {
     @ObservedObject var tab: BrowserTab
 
     var body: some View {
@@ -963,7 +1072,7 @@ private struct FindBarHost: View {
     }
 }
 
-private struct AddressFrameKey: PreferenceKey {
+struct AddressFrameKey: PreferenceKey {
     static let defaultValue: CGRect = .zero
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
         let next = nextValue()
@@ -996,6 +1105,7 @@ struct LaunchCardOverlay<Card: View>: View {
                     .fill(Color.black.opacity(0.3))
                     .contentShape(Rectangle())
                     .onTapGesture {} // clicks outside the card do nothing
+                    .ignoresSafeArea()   // dim the tab row too, so it matches the toolbar below
                 card
                     .background(
                         GeometryReader { inner in
