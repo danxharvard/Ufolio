@@ -348,17 +348,17 @@ private struct BookmarkChip: View {
         }
         .help(bookmark.url.absoluteString)
         .contextMenu {
-            Button("Open in New Tab") { model.open(bookmark.url, inNewTab: true) }
+            Button { model.open(bookmark.url, inNewTab: true) } label: { Label("Open in New Tab", systemImage: "plus.square.on.square") }
             Button("Copy Address") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(bookmark.url.absoluteString, forType: .string)
             }
             Divider()
-            Button("Rename…") { newTitle = bookmark.title; renaming = true }
-            Button("Move Left") { BookmarkStore.shared.move(bookmark, by: -1) }
-            Button("Move Right") { BookmarkStore.shared.move(bookmark, by: 1) }
+            Button { newTitle = bookmark.title; renaming = true } label: { Label("Rename…", systemImage: "pencil") }
+            Button { BookmarkStore.shared.move(bookmark, by: -1) } label: { Label("Move Left", systemImage: "arrow.left") }
+            Button { BookmarkStore.shared.move(bookmark, by: 1) } label: { Label("Move Right", systemImage: "arrow.right") }
             Divider()
-            Button("Remove") { BookmarkStore.shared.remove(bookmark) }
+            Button { BookmarkStore.shared.remove(bookmark) } label: { Label("Remove", systemImage: "trash") }
         }
         .popover(isPresented: $renaming, arrowEdge: .bottom) {
             HStack {

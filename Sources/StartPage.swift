@@ -242,9 +242,9 @@ private struct FavouriteTile: View {
             loaded = true
         }
         .contextMenu {
-            Button("Open in New Tab") { model.open(bookmark.url, inNewTab: true) }
+            Button { model.open(bookmark.url, inNewTab: true) } label: { Label("Open in New Tab", systemImage: "plus.square.on.square") }
             Divider()
-            Button("Remove from Favourites") { BookmarkStore.shared.remove(bookmark) }
+            Button { BookmarkStore.shared.remove(bookmark) } label: { Label("Remove from Favourites", systemImage: "star.slash") }
         }
     }
 
@@ -345,10 +345,10 @@ private struct SuggestionCard: View {
         .help(site.url.absoluteString)
         .task(id: site.host) { icon = await FaviconCache.shared.info(for: site.url) }
         .contextMenu {
-            Button("Open in New Tab") { model.open(site.url, inNewTab: true) }
-            Button("Add to Favourites") { BookmarkStore.shared.toggle(url: site.url, title: site.title) }
+            Button { model.open(site.url, inNewTab: true) } label: { Label("Open in New Tab", systemImage: "plus.square.on.square") }
+            Button { BookmarkStore.shared.toggle(url: site.url, title: site.title) } label: { Label("Add to Favourites", systemImage: "star") }
             Divider()
-            Button("Remove from Suggestions") { HistoryStore.shared.hideFromStartPage(site.host) }
+            Button { HistoryStore.shared.hideFromStartPage(site.host) } label: { Label("Remove from Suggestions", systemImage: "eye.slash") }
         }
     }
 

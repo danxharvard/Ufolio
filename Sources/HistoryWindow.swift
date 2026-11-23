@@ -89,14 +89,14 @@ private struct HistoryRow: View {
         .onHover { hovering = $0 }
         .onTapGesture(count: 2) { open(newTab: false) }
         .contextMenu {
-            Button("Open") { open(newTab: false) }
-            Button("Open in New Tab") { open(newTab: true) }
+            Button { open(newTab: false) } label: { Label("Open", systemImage: "arrow.up.forward.square") }
+            Button { open(newTab: true) } label: { Label("Open in New Tab", systemImage: "plus.square.on.square") }
             Button("Copy Address") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(entry.url.absoluteString, forType: .string)
             }
             Divider()
-            Button("Remove from History") { HistoryStore.shared.remove(entry) }
+            Button { HistoryStore.shared.remove(entry) } label: { Label("Remove from History", systemImage: "trash") }
         }
     }
 

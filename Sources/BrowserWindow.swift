@@ -113,7 +113,10 @@ struct BrowserWindow: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
-            if (note.object as? NSWindow) === model.window { TrafficLights.align(in: model.window) }
+            if (note.object as? NSWindow) === model.window {
+                TrafficLights.align(in: model.window)
+                model.ensureTab()
+            }
         }
         // The welcome screen and default-browser question are drawn inside the window,
         // over a dimmed backdrop (SwiftUI sheets could end up off-screen and lock the window).

@@ -427,10 +427,10 @@ private struct DownloadRow: View {
             return NSItemProvider(contentsOf: url) ?? NSItemProvider()
         }
         .contextMenu {
-            Button("Open") { Downloads.shared.open(item) }.disabled(item.state != .finished)
-            Button("Show in Finder") { Downloads.shared.reveal(item) }.disabled(item.state != .finished)
+            Button { Downloads.shared.open(item) } label: { Label("Open", systemImage: "arrow.up.forward.square") }.disabled(item.state != .finished)
+            Button { Downloads.shared.reveal(item) } label: { Label("Show in Finder", systemImage: "folder") }.disabled(item.state != .finished)
             Divider()
-            Button("Remove from List") { Downloads.shared.remove(item) }
+            Button { Downloads.shared.remove(item) } label: { Label("Remove from List", systemImage: "minus.circle") }
         }
     }
 

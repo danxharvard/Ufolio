@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.32.0
+
+**Frosted all the way down**
+- The toolbar and bookmarks bar are now frosted glass, like the tab row, so your desktop shows
+  softly through the whole top of the window. The selected tab uses exactly the same frosted
+  fill, so it always matches the toolbar.
+
+**Menus**
+- Every right-click menu has icons: tabs, bookmarks, the sidebar, history, downloads, news and
+  the start page.
+
+**Fixes**
+- The selected tab sits flush on the toolbar again (since 0.29.0 it floated a few points above it).
+- A window can no longer end up with no tabs and a missing address bar; it opens a new tab instead.
 ## 0.31.0
 
 **A more beautiful window and toolbar**

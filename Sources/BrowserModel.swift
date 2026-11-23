@@ -381,6 +381,8 @@ final class BrowserModel: NSObject, ObservableObject {
         tabs.remove(at: index)
         scheduleSessionSave()
         if tabs.isEmpty {
+            // Keep a fresh tab ready in case the window is shown again (it should never be empty).
+            newTab(usePreferredPage: false)
             (window ?? NSApp.keyWindow)?.performClose(nil)
             return
         }
@@ -405,6 +407,12 @@ final class BrowserModel: NSObject, ObservableObject {
         } else {
             newTab(url: tab.url)
         }
+    }
+
+    /// A window always has a tab in the Space it's showing; adds a new one if it somehow hasn't.
+    func ensureTab() {
+        if visibleTabs.isEmpty { newTab(focus: true) }
+        else if !visibleTabs.contains(where: { $0.id == selectedID }) { selectedID = visibleTabs.first?.id }
     }
 
     func closeSelectedTab() {

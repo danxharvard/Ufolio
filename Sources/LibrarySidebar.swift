@@ -153,19 +153,19 @@ private struct BookmarksList: View {
             }
             .onDrop(of: [.text], delegate: BookmarkDrop(target: bookmark, dragging: $dragging, enabled: query.isEmpty))
             .contextMenu {
-                Button("Open in New Tab") { model.open(bookmark.url, inNewTab: true) }
-                Button("Copy Address") { copy(bookmark.url) }
+                Button { model.open(bookmark.url, inNewTab: true) } label: { Label("Open in New Tab", systemImage: "plus.square.on.square") }
+                Button { copy(bookmark.url) } label: { Label("Copy Address", systemImage: "doc.on.doc") }
                 Divider()
-                Button("Rename…") { draft = bookmark.title; editing = (bookmark.id, .title) }
-                Button("Edit Address…") { draft = bookmark.url.absoluteString; editing = (bookmark.id, .address) }
+                Button { draft = bookmark.title; editing = (bookmark.id, .title) } label: { Label("Rename…", systemImage: "pencil") }
+                Button { draft = bookmark.url.absoluteString; editing = (bookmark.id, .address) } label: { Label("Edit Address…", systemImage: "pencil.line") }
                 Menu("Move to Folder") {
-                    Button("No Folder") { store.setFolder(bookmark, nil) }.disabled(bookmark.folder == nil)
+                    Button { store.setFolder(bookmark, nil) } label: { Label("No Folder", systemImage: "tray") }.disabled(bookmark.folder == nil)
                     if !store.folders.isEmpty { Divider() }
                     ForEach(store.folders, id: \.self) { folder in
                         Button(folder) { store.setFolder(bookmark, folder) }.disabled(bookmark.folder == folder)
                     }
                     Divider()
-                    Button("New Folder…") { newFolder = "" }
+                    Button { newFolder = "" } label: { Label("New Folder…", systemImage: "folder.badge.plus") }
                 }
                 Divider()
                 Button("Remove", role: .destructive) { store.remove(bookmark) }
@@ -210,10 +210,10 @@ private struct BookmarksList: View {
         .buttonStyle(.plain)
         .contextMenu {
             let marks = store.items(in: folder)
-            Button("Open All in Tabs") { for b in marks { model.open(b.url, inNewTab: true) } }.disabled(marks.isEmpty)
+            Button { for b in marks { model.open(b.url, inNewTab: true) } } label: { Label("Open All in Tabs", systemImage: "square.stack") }.disabled(marks.isEmpty)
             Divider()
-            Button("Rename Folder…") { folderDraft = folder; renamingFolder = folder }
-            Button("Remove Folder (Keep Bookmarks)") { store.removeFolder(folder) }
+            Button { folderDraft = folder; renamingFolder = folder } label: { Label("Rename Folder…", systemImage: "pencil") }
+            Button { store.removeFolder(folder) } label: { Label("Remove Folder (Keep Bookmarks)", systemImage: "folder.badge.minus") }
         }
     }
 
@@ -288,10 +288,10 @@ private struct HistoryList: View {
                                     model.open(entry.url, inNewTab: NSEvent.modifierFlags.contains(.command))
                                 }
                                 .contextMenu {
-                                    Button("Open in New Tab") { model.open(entry.url, inNewTab: true) }
-                                    Button("Copy Address") { copy(entry.url) }
+                                    Button { model.open(entry.url, inNewTab: true) } label: { Label("Open in New Tab", systemImage: "plus.square.on.square") }
+                                    Button { copy(entry.url) } label: { Label("Copy Address", systemImage: "doc.on.doc") }
                                     Divider()
-                                    Button("Remove from History") { history.remove(entry) }
+                                    Button { history.remove(entry) } label: { Label("Remove from History", systemImage: "trash") }
                                 }
                             }
                         } header: {

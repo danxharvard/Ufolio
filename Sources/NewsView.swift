@@ -234,8 +234,8 @@ private struct StoryButton<Label: View>: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: hovering)
         .help(article.title)
         .contextMenu {
-            Button("Open") { NewsStore.shared.markRead(article); model.open(article.link) }
-            Button("Open in New Tab") { NewsStore.shared.markRead(article); model.open(article.link, inNewTab: true) }
+            Button { NewsStore.shared.markRead(article); model.open(article.link) } label: { SwiftUI.Label("Open", systemImage: "arrow.up.forward.square") }
+            Button { NewsStore.shared.markRead(article); model.open(article.link, inNewTab: true) } label: { SwiftUI.Label("Open in New Tab", systemImage: "plus.square.on.square") }
             Button("Copy Link") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(CleanLinks.clean(article.link).absoluteString, forType: .string)

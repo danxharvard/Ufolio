@@ -4,9 +4,11 @@ import AppKit
 /// The window's two shades: the frame the tabs sit on, and the toolbar the selected tab
 /// flows into. Magic Theme can tint the toolbar with the website's own colour.
 enum Chrome {
+    /// Frosted: a light veil over the window's translucent backdrop, so the desktop shows
+    /// softly through. The selected tab uses exactly the same veil, so the two always match.
     static let toolbar = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? NSColor(white: 0.19, alpha: 1) : NSColor(white: 1, alpha: 1)
+            ? NSColor(white: 1, alpha: 0.075) : NSColor(white: 1, alpha: 0.62)
     })
     static let tabBarHeight: CGFloat = 38
 
@@ -64,7 +66,8 @@ struct WindowTabBar: View {
             let room = geo.size.width - leadingInset - 44 - 24 - spaceWidth - CGFloat(pinnedCount) * Self.pinnedWidth
             let sizes = Self.widths(room: room, count: tabs.count - pinnedCount)
             let width = sizes.other
-            HStack(spacing: 0) {
+            // Bottom-aligned, so every tab sits right on the toolbar below it.
+            HStack(alignment: .bottom, spacing: 0) {
                 Color.clear.frame(width: leadingInset, height: 1)
                 if !model.isPrivate {
                     SpaceButton(model: model)
@@ -229,9 +232,11 @@ private struct ChromeTab: View {
         .frame(width: width, height: 31)
         .background {
             if isSelected {
+                // No drop shadow: under a frosted (see-through) fill it would show through and
+                // make the tab darker than the toolbar. A fine edge outlines it instead.
                 TabShape(foot: 8, radius: 10)
                     .fill(fill)
-                    .shadow(color: .black.opacity(0.14), radius: 1.2, y: -0.3)
+                    .overlay(TabEdge(foot: 8, radius: 10).stroke(Color.primary.opacity(0.1), lineWidth: 0.5))
                     .padding(.horizontal, -8)
             } else if hovering {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -255,40 +260,40 @@ private struct ChromeTab: View {
         }
         .help(tab.url?.host?.strippingWWW ?? tab.displayTitle)
         .contextMenu {
-            Button("New Tab") { model.newTab(focus: true) }
+            Button { model.newTab(focus: true) } label: { Label("New Tab", systemImage: "plus.square") }
             Divider()
             if model.isInSplit(tab) {
-                Button("Close Split View") { model.closeSplit(keeping: tab.id) }
+                Button { model.closeSplit(keeping: tab.id) } label: { Label("Close Split View", systemImage: "rectangle") }
             } else if tab.id == model.selectedTab?.id {
-                Button("Open Split View with New Tab") { model.openSplit() }
+                Button { model.openSplit() } label: { Label("Open Split View with New Tab", systemImage: "rectangle.split.2x1") }
             } else {
-                Button("Open in Split View") { model.openSplit(with: tab) }
+                Button { model.openSplit(with: tab) } label: { Label("Open in Split View", systemImage: "rectangle.split.2x1") }
             }
-            Button(tab.isPinned ? "Unpin Tab" : "Pin Tab") { model.togglePin(tab) }
+            Button { model.togglePin(tab) } label: { Label(tab.isPinned ? "Unpin Tab" : "Pin Tab", systemImage: tab.isPinned ? "pin.slash" : "pin") }
             if !model.isPrivate && SpaceStore.shared.spaces.count > 1 {
-                Menu("Move to Space") {
+                Menu {
                     ForEach(SpaceStore.shared.spaces.filter { $0.id != tab.spaceID }) { space in
                         Button { model.move(tab, toSpace: space.id) } label: { Label(space.name, systemImage: space.symbol) }
                     }
-                }
+                } label: { Label("Move to Space", systemImage: "square.stack.3d.up") }
             }
-            Button(tab.isMuted ? "Unmute Tab" : "Mute Tab") { tab.toggleMute() }
-            Button(tab.javaScriptOff ? "Turn On JavaScript in This Tab" : "Turn Off JavaScript in This Tab") { tab.toggleJavaScript() }
+            Button { tab.toggleMute() } label: { Label(tab.isMuted ? "Unmute Tab" : "Mute Tab", systemImage: tab.isMuted ? "speaker.wave.2" : "speaker.slash") }
+            Button { tab.toggleJavaScript() } label: { Label(tab.javaScriptOff ? "Turn On JavaScript in This Tab" : "Turn Off JavaScript in This Tab", systemImage: "curlybraces") }
             if tab.url != nil {
                 Divider()
-                Button("Forget This Site…") { SiteForgetter.confirmAndForget(tab) }
+                Button { SiteForgetter.confirmAndForget(tab) } label: { Label("Forget This Site…", systemImage: "eraser") }
             }
             Divider()
-            Button("Close Tab") { model.close(tab) }
-            Button("Close Other Tabs") {
+            Button { model.close(tab) } label: { Label("Close Tab", systemImage: "xmark") }
+            Button {
                 for other in model.visibleTabs where other !== tab { model.close(other) }
-            }
-            Button("Close Tabs to the Right") {
+            } label: { Label("Close Other Tabs", systemImage: "xmark.square") }
+            Button {
                 let mine = model.visibleTabs
                 if let i = mine.firstIndex(where: { $0 === tab }) {
                     for other in mine.suffix(from: i + 1) { model.close(other) }
                 }
-            }
+            } label: { Label("Close Tabs to the Right", systemImage: "arrow.right.to.line") }
         }
         .animation(.easeOut(duration: 0.12), value: hovering)
     }
@@ -331,6 +336,26 @@ struct TabShape: Shape {
         p.addLine(to: CGPoint(x: rect.maxX - f, y: rect.maxY - f))
         p.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.maxY), control: CGPoint(x: rect.maxX - f, y: rect.maxY))
         p.closeSubpath()
+        return p
+    }
+}
+
+/// The selected tab's outline: its sides and top only, so no line is drawn where it meets the toolbar.
+struct TabEdge: Shape {
+    var foot: CGFloat
+    var radius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let f = foot, r = radius
+        p.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        p.addQuadCurve(to: CGPoint(x: rect.minX + f, y: rect.maxY - f), control: CGPoint(x: rect.minX + f, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX + f, y: rect.minY + r))
+        p.addQuadCurve(to: CGPoint(x: rect.minX + f + r, y: rect.minY), control: CGPoint(x: rect.minX + f, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX - f - r, y: rect.minY))
+        p.addQuadCurve(to: CGPoint(x: rect.maxX - f, y: rect.minY + r), control: CGPoint(x: rect.maxX - f, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX - f, y: rect.maxY - f))
+        p.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.maxY), control: CGPoint(x: rect.maxX - f, y: rect.maxY))
         return p
     }
 }
