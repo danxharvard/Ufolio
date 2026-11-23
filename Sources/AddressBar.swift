@@ -221,9 +221,11 @@ struct AddressTextField: NSViewRepresentable {
 
 final class FocusTextField: NSTextField {
     var onFocus: (() -> Void)?
-    /// While true, the whole address stays selected, even as the full address replaces the
-    /// short site name a moment after focusing. Typing, or clicking again, ends it.
+    /// While true, the whole address stays selected, whatever else redraws or updates the
+    /// field. It ends when you type, press a key or click inside the field again.
     var keepAllSelected = false
+    private var selectionObserver: NSObjectProtocol?
+    private var eventMonitor: Any?
 
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()
@@ -231,18 +233,13 @@ final class FocusTextField: NSTextField {
             keepAllSelected = true
             onFocus?()
             selectEverything()
-            // Whatever arrives in the next moment (the full address, a redraw) is selected too.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-                guard let self, self.keepAllSelected else { return }
-                self.selectEverything()
-                self.keepAllSelected = false
-            }
+            startGuarding()
         }
         return ok
     }
 
     // The first click into the field selects the whole address, like Safari, so you can copy
-    // it or type over it. Once you're in the field, clicks place the cursor as usual.
+    // it or type over it. A second click places the cursor as usual.
     override func mouseDown(with event: NSEvent) {
         if currentEditor() == nil {
             window?.makeFirstResponder(self)
@@ -253,15 +250,60 @@ final class FocusTextField: NSTextField {
         super.mouseDown(with: event)
     }
 
+    override func textDidEndEditing(_ notification: Notification) {
+        stopGuarding()
+        super.textDidEndEditing(notification)
+    }
+
     func selectEverything() {
         guard let editor = currentEditor() else { return }
-        editor.selectedRange = NSRange(location: 0, length: (editor.string as NSString).length)
+        let all = NSRange(location: 0, length: (editor.string as NSString).length)
+        if editor.selectedRange != all { editor.selectedRange = all }
     }
 
     /// Puts in new text, keeping everything selected if the field has just been focused.
     func setText(_ text: String) {
         stringValue = text
         if keepAllSelected { selectEverything() }
+    }
+
+    /// Keeps the address selected until you do something with it.
+    private func startGuarding() {
+        stopGuarding()
+        if let editor = currentEditor() {
+            selectionObserver = NotificationCenter.default.addObserver(
+                forName: NSTextView.didChangeSelectionNotification, object: editor, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.keepAllSelected else { return }
+                    // Something moved the selection on its own: select everything again.
+                    DispatchQueue.main.async { if self.keepAllSelected { self.selectEverything() } }
+                }
+            }
+        }
+        // Your own typing, keys or a click inside the field end it (seen before they're handled).
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let self, self.keepAllSelected, event.window === self.window else { return event }
+            if event.type == .keyDown {
+                self.keepAllSelected = false
+            } else {
+                let point = self.convert(event.locationInWindow, from: nil)
+                if self.bounds.contains(point), self.currentEditor() != nil { self.keepAllSelected = false }
+            }
+            return event
+        }
+    }
+
+    private func stopGuarding() {
+        keepAllSelected = false
+        if let selectionObserver { NotificationCenter.default.removeObserver(selectionObserver) }
+        selectionObserver = nil
+        if let eventMonitor { NSEvent.removeMonitor(eventMonitor) }
+        eventMonitor = nil
+    }
+
+    deinit {
+        if let selectionObserver { NotificationCenter.default.removeObserver(selectionObserver) }
+        if let eventMonitor { NSEvent.removeMonitor(eventMonitor) }
     }
 }
 

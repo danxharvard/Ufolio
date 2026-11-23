@@ -49,8 +49,10 @@ struct HistoryWindowView: View {
                     }
                 }
                 .listStyle(.inset)
+                .scrollContentBackground(.hidden)
             }
         }
+        .background(VisualEffect(material: .underWindowBackground, blending: .behindWindow).ignoresSafeArea())
         .frame(minWidth: 520, minHeight: 420)
         .hushDialogs(DialogHost.history)
     }

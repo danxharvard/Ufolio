@@ -150,6 +150,8 @@ struct SettingsView: View {
                 .transition(.opacity.combined(with: .offset(y: 6)))
             }
             .animation(.easeOut(duration: 0.18), value: tab)
+            // Frosted glass behind every section, like the browser window.
+            .background(VisualEffect(material: .underWindowBackground, blending: .behindWindow).ignoresSafeArea())
         }
         // The section's name, centred in the title bar. It belongs to the whole window (not the
         // changing section), so SwiftUI keeps one copy instead of leaving old ones on the left.
@@ -248,7 +250,6 @@ struct SafariFormStyle: FormStyle {
             .frame(maxWidth: .infinity)
         }
         .scrollContentBackground(.hidden)
-        .background(SettingsColors.page)
     }
 }
 
@@ -282,12 +283,9 @@ extension View {
 }
 
 enum SettingsColors {
-    /// The page behind the cards, and the cards themselves (light: white on grey; dark: a lift).
-    static let page = Color(nsColor: NSColor(name: nil) { a in
-        a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 0.13, alpha: 1) : NSColor(white: 0.955, alpha: 1)
-    })
+    /// The cards: frosted, a soft veil over the window's see-through backdrop.
     static let card = Color(nsColor: NSColor(name: nil) { a in
-        a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 0.18, alpha: 1) : NSColor(white: 1, alpha: 1)
+        a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.07) : NSColor(white: 1, alpha: 0.6)
     })
     static let stroke = Color(nsColor: NSColor(name: nil) { a in
         a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.06) : NSColor(white: 0, alpha: 0.07)

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.32.2
+
+**Fixes**
+- Clicking into the address bar selects the whole address and now keeps it selected until you
+  type, press a key or click again. Before, it could let go after half a second.
+
+**Frosted everywhere**
+- Settings and History are now frosted glass too, like the browser window, with see-through
+  cards in Settings.
+
 ## 0.32.1
 
 **Fixes**
