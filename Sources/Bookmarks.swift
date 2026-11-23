@@ -97,7 +97,7 @@ final class BookmarkStore: ObservableObject {
     }
 
     func renameFolder(_ old: String, to new: String) {
-        let clean = new.trimmingCharacters(in: .whitespacesAndNewlines)
+        let clean = String(new.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60))
         guard !clean.isEmpty, clean != old else { return }
         for i in items.indices where items[i].folder == old { items[i].folder = clean }
         emptyFolders = emptyFolders.map { $0 == old ? clean : $0 }

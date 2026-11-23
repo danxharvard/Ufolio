@@ -75,8 +75,9 @@ struct StartPage: View {
             AnimatedHushLogo(size: 54)
                 .padding(.bottom, 4)
             Text("Hush")
-                .font(.system(size: 50, weight: .thin, design: .rounded))
-                .tracking(2)
+                .font(.system(size: 50, weight: .light, design: .rounded))
+                .tracking(1.5)
+                .foregroundStyle(LinearGradient(colors: [.primary, .primary.opacity(0.7)], startPoint: .top, endPoint: .bottom))
             if showGreeting || weather.temperature != nil {
                 HStack(spacing: 8) {
                     if showGreeting { Text(greeting) }
@@ -221,7 +222,7 @@ private struct FavouriteTile: View {
                 tile
                     .frame(width: 66, height: 66)
                     .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).strokeBorder(Color.black.opacity(0.08)))
+                    .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).strokeBorder(Color.primary.opacity(0.09)))
                     .shadow(color: .black.opacity(hovering ? 0.25 : 0.12), radius: hovering ? 10 : 4, y: hovering ? 5 : 2)
                     .scaleEffect(hovering ? 1.05 : 1)
                 Text(bookmark.title)
@@ -252,7 +253,7 @@ private struct FavouriteTile: View {
             Image(nsImage: icon.image).resizable().interpolation(.high).aspectRatio(contentMode: .fill)
         } else if let icon {
             ZStack {
-                Color(nsColor: .controlBackgroundColor)
+                StartColors.tile
                 Image(nsImage: icon.image).resizable().interpolation(.high).aspectRatio(contentMode: .fit)
                     .frame(width: 34, height: 34)
             }
@@ -262,6 +263,13 @@ private struct FavouriteTile: View {
     }
 }
 
+enum StartColors {
+    /// Behind small site icons: white in light mode, a soft lift in dark mode.
+    static let tile = Color(nsColor: NSColor(name: nil) { a in
+        a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 0.26, alpha: 1) : NSColor(white: 1, alpha: 1)
+    })
+}
+
 /// A suggestion: a card tinted with the site's own colour.
 private struct SuggestionCard: View {
     let site: FrequentSite
@@ -269,13 +277,17 @@ private struct SuggestionCard: View {
     @State private var icon: SiteIcon?
     @State private var hovering = false
 
-    private var tint: Color {
+    /// The site's colour, kept rich but dark enough for white text: (hue, saturation, brightness).
+    private var tone: (Double, Double, Double) {
         if let c = icon?.tint?.usingColorSpace(.deviceRGB) {
-            // Darken a little so white text always reads well.
-            return Color(red: c.redComponent * 0.72, green: c.greenComponent * 0.72, blue: c.blueComponent * 0.72)
+            var h: CGFloat = 0, sat: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            c.getHue(&h, saturation: &sat, brightness: &b, alpha: &a)
+            // Near-grey icons stay a calm grey; colourful ones get a clean, even tone.
+            let saturation = sat < 0.12 ? sat * 0.5 : min(max(sat * 1.05, 0.38), 0.72)
+            return (Double(h), Double(saturation), Double(min(max(b, 0.46), 0.6)))
         }
         let hue = Double(site.host.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) % 360 }) / 360
-        return Color(hue: hue, saturation: 0.5, brightness: 0.5)
+        return (hue, 0.5, 0.52)
     }
 
     var body: some View {
@@ -311,8 +323,16 @@ private struct SuggestionCard: View {
             .foregroundStyle(.white)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(LinearGradient(colors: [tint.opacity(0.92), tint], startPoint: .top, endPoint: .bottom))
+                    .fill(LinearGradient(colors: [Color(hue: tone.0, saturation: tone.1 * 0.9, brightness: min(tone.2 + 0.1, 0.72)),
+                                                  Color(hue: tone.0, saturation: tone.1, brightness: tone.2 - 0.08)],
+                                         startPoint: .topLeading, endPoint: .bottomTrailing))
             )
+            .overlay(alignment: .top) {
+                // A soft sheen across the top, like light on glass.
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(LinearGradient(colors: [.white.opacity(0.14), .clear], startPoint: .top, endPoint: .center))
+                    .allowsHitTesting(false)
+            }
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.white.opacity(0.08)))
             .shadow(color: .black.opacity(hovering ? 0.3 : 0.14), radius: hovering ? 14 : 6, y: hovering ? 7 : 3)
             .scaleEffect(hovering ? 1.025 : 1)

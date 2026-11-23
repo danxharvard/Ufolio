@@ -328,16 +328,19 @@ struct SpacesSettings: View {
                     HStack(spacing: 10) {
                         ZStack {
                             Circle().fill(SpacePalette.color(space.color).gradient)
-                            Image(systemName: space.symbol).font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
+                            Image(systemName: space.symbol).font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
                         }
-                        .frame(width: 22, height: 22)
+                        .frame(width: 28, height: 28)
+                        .shadow(color: SpacePalette.color(space.color).opacity(0.35), radius: 3, y: 1)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(space.name)
                             Text("Profile: \(store.profile(space.profile)?.name ?? "Default")")
                                 .font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button("Edit…") { editing = space }
+                        Button { editing = space } label: { Image(systemName: "slider.horizontal.3") }
+                            .buttonStyle(.borderless)
+                            .help("Edit name, icon, colour and profile")
                             .popover(isPresented: Binding(get: { editing?.id == space.id }, set: { if !$0 { editing = nil } })) {
                                 SpaceEditor(space: space, isNew: false) { result in
                                     if let result { store.update(result) }
@@ -351,19 +354,29 @@ struct SpacesSettings: View {
                     }
                 }
                 .onMove { store.moveSpace(fromOffsets: $0, toOffset: $1) }
-                Button("Add Space") {
+                Button {
                     store.addSpace(name: "", symbol: SpacePalette.symbols[store.spaces.count % SpacePalette.symbols.count],
                                    color: store.spaces.count % SpacePalette.colors.count)
+                } label: {
+                    Label("Add Space", systemImage: "plus.circle.fill").foregroundStyle(Color.accentColor)
                 }
+                .buttonStyle(.borderless)
                 .disabled(store.spaces.count >= SpaceStore.maxSpaces)
             } header: { SectionTitle("Spaces") } footer: {
                 Footnote("Switch Spaces with the button left of your tabs, ⌃1 to ⌃9, or the Command Palette (⌘K). Drag to reorder.")
             }
             Section {
-                LabeledContent("Default") { Text("Used by Spaces without their own profile").foregroundStyle(.secondary) }
+                HStack {
+                    Image(systemName: "person.crop.circle.fill").font(.system(size: 18)).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Default")
+                        Text("Used by Spaces without their own profile").font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                }
                 ForEach(store.profiles) { profile in
                     HStack {
-                        Circle().fill(SpacePalette.color(profile.color).gradient).frame(width: 12, height: 12)
+                        Image(systemName: "person.crop.circle.fill").font(.system(size: 18))
+                        .foregroundStyle(SpacePalette.color(profile.color).gradient)
                         if renaming?.id == profile.id {
                             TextField("Name", text: Binding(get: { renaming?.name ?? "" }, set: { renaming?.name = $0 }))
                                 .textFieldStyle(.roundedBorder)
@@ -375,7 +388,8 @@ struct SpacesSettings: View {
                         let users = store.spaces.filter { $0.profile == profile.id }.count
                         Text(users == 0 ? "Not used" : users == 1 ? "1 Space" : "\(users) Spaces")
                             .font(.system(size: 11)).foregroundStyle(.secondary)
-                        Button("Rename") { renaming = profile }.buttonStyle(.borderless)
+                        Button { renaming = profile } label: { Image(systemName: "pencil") }
+                            .buttonStyle(.borderless).help("Rename")
                         Button(role: .destructive) { confirmDelete(profile) } label: { Image(systemName: "trash") }
                             .buttonStyle(.borderless)
                     }

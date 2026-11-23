@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.30.0
+
+**A more beautiful Hush**
+- Settings is redesigned in the style of macOS System Settings: every section is a rounded
+  card with fine lines between rows, and on/off settings are now switches.
+- The Hush Guard mode cards line up neatly at the same height.
+- Spaces & Profiles settings have larger Space icons, a profile picture for each profile, and
+  tidy icon buttons for editing.
+- The start page has a crisper Hush title and softer tiles behind favourite icons in Night mode.
+  Suggestion cards use cleaner, richer colours with a gentle sheen.
+- The Hush Guard panel's Ads, Trackers and Fingerprint tiles are more polished, and their
+  numbers animate as they change.
+- New tabs grow in smoothly from the tab bar, and closed tabs fade away.
+
+**Improvements**
+- Rename bookmark folders: right-click a folder in the sidebar.
+- Removed leftover code.
 ## 0.29.0
 
 **New: Command Palette (⌘K)**

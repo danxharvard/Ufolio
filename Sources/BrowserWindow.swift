@@ -643,13 +643,17 @@ private struct GuardStat: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            Image(systemName: symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(tint)
+            Image(systemName: symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(tint)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(tint.opacity(0.16)))
             Text(value).font(.system(size: 15, weight: .bold, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+                .contentTransitionIfAvailable()
             Text(label).font(.system(size: 10)).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 9)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(tint.opacity(0.10)))
+        .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(tint.opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(tint.opacity(0.14)))
     }
 }
 

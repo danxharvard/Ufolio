@@ -144,7 +144,6 @@ final class ContentBlocker: ObservableObject {
     }
 
     #if SNAPSHOT
-    var debugCompiled: String { compiled.keys.sorted().joined(separator: ",") }
     #endif
 
     func refresh() {

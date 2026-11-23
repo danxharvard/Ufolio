@@ -218,17 +218,103 @@ private struct SidebarCard: View {
 struct SafariFormStyle: FormStyle {
     func makeBody(configuration: Configuration) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 11) {
-                configuration.content
+            VStack(alignment: .leading, spacing: 6) {
+                // Each section is a rounded card (like System Settings), with its title above
+                // and any note below. The page header and "bare" sections are drawn as they are.
+                Group(sections: configuration.content) { sections in
+                    ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
+                        if index == 0 && section.header.isEmpty || section.containerValues.bareSection {
+                            section.header
+                            section.content
+                            section.footer
+                        } else {
+                            if !section.header.isEmpty {
+                                section.header.padding(.leading, 4)
+                            }
+                            SettingsCard { section.content }
+                            if !section.footer.isEmpty {
+                                section.footer.padding(.horizontal, 6).padding(.top, 2).padding(.bottom, 6)
+                            }
+                        }
+                    }
+                }
             }
-            .toggleStyle(.checkbox)
+            .toggleStyle(SettingsSwitchStyle())
             .labeledContentStyle(SafariLabeledStyle())
-            .padding(.horizontal, 40)
+            .padding(.horizontal, 32)
             .padding(.top, 8)
             .padding(.bottom, 36)
-            .frame(maxWidth: 660, alignment: .leading)
+            .frame(maxWidth: 680, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+        .scrollContentBackground(.hidden)
+        .background(SettingsColors.page)
+    }
+}
+
+/// Settings toggles: the label on the left and a small switch on the right, like System Settings.
+struct SettingsSwitchStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            configuration.label
+            Spacer(minLength: 16)
+            Toggle("", isOn: configuration.$isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+        }
+    }
+}
+
+private struct BareSectionKey: ContainerValueKey { static let defaultValue = false }
+
+extension ContainerValues {
+    /// A Settings section drawn without a card (for content that has its own cards).
+    var bareSection: Bool {
+        get { self[BareSectionKey.self] }
+        set { self[BareSectionKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Draws this Settings section without a card around it.
+    func bareSection() -> some View { containerValue(\.bareSection, true) }
+}
+
+enum SettingsColors {
+    /// The page behind the cards, and the cards themselves (light: white on grey; dark: a lift).
+    static let page = Color(nsColor: NSColor(name: nil) { a in
+        a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 0.13, alpha: 1) : NSColor(white: 0.955, alpha: 1)
+    })
+    static let card = Color(nsColor: NSColor(name: nil) { a in
+        a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 0.18, alpha: 1) : NSColor(white: 1, alpha: 1)
+    })
+    static let stroke = Color(nsColor: NSColor(name: nil) { a in
+        a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.06) : NSColor(white: 0, alpha: 0.07)
+    })
+}
+
+/// A rounded group of rows with hairlines between them.
+struct SettingsCard<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Group(subviews: content) { rows in
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                    if index > 0 {
+                        Rectangle().fill(SettingsColors.stroke).frame(height: 1).padding(.leading, 12)
+                    }
+                    row
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .background(SettingsColors.card, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(SettingsColors.stroke))
+        .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
     }
 }
 
@@ -250,9 +336,9 @@ struct SectionTitle: View {
     var body: some View {
         Text(text)
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(.secondary)
-            .padding(.top, 18)
-            .padding(.bottom, 2)
+            .foregroundStyle(.primary.opacity(0.85))
+            .padding(.top, 16)
+            .padding(.bottom, 1)
     }
 }
 
@@ -914,7 +1000,7 @@ struct BlockingModeCard: View {
                 }
             }
             .padding(compact ? 9 : 11)
-            .frame(maxWidth: .infinity, minHeight: compact ? 0 : 108, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: compact ? 0 : 108, maxHeight: .infinity, alignment: .topLeading)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.primary.opacity(selected ? 0.08 : hovering ? 0.05 : 0.03)))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -963,13 +1049,14 @@ private struct AdBlockerSettings: View {
             }
 
             Section {
-                HStack(spacing: 10) {
+                HStack(alignment: .top, spacing: 10) {
                     ForEach(BlockingMode.allCases) { option in
                         BlockingModeCard(mode: option, selected: mode == option.rawValue) {
                             withAnimation(.easeOut(duration: 0.15)) { mode = option.rawValue }
                         }
                     }
                 }
+                .fixedSize(horizontal: false, vertical: true)
                 LabeledContent("Scripts") {
                     Picker("", selection: defaultBinding(Prefs.scriptPolicy, ShieldSettings.defaults.scripts.rawValue)) {
                         ForEach(ScriptPolicy.allCases) { Text($0.label).tag($0.rawValue) }

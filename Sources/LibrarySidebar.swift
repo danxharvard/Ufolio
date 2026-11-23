@@ -79,6 +79,8 @@ private struct BookmarksList: View {
     @State private var dragging: UUID?
     @State private var collapsed: Set<String> = []
     @State private var newFolder: String?
+    @State private var renamingFolder: String?
+    @State private var folderDraft = ""
     @State private var message: String?
 
     enum Field { case title, address }
@@ -171,7 +173,25 @@ private struct BookmarksList: View {
         }
     }
 
-    private func folderHeader(_ folder: String) -> some View {
+    @ViewBuilder private func folderHeader(_ folder: String) -> some View {
+        if renamingFolder == folder {
+            HStack(spacing: 8) {
+                Image(systemName: "folder.fill").font(.system(size: 12)).foregroundStyle(Color.accentColor)
+                TextField("Folder name", text: $folderDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit {
+                        store.renameFolder(folder, to: folderDraft)
+                        renamingFolder = nil
+                    }
+                    .onExitCommand { renamingFolder = nil }
+            }
+            .padding(.horizontal, 8).padding(.vertical, 4)
+        } else {
+            folderButton(folder)
+        }
+    }
+
+    private func folderButton(_ folder: String) -> some View {
         let open = !collapsed.contains(folder)
         return Button {
             withAnimation(.easeOut(duration: 0.15)) { if open { collapsed.insert(folder) } else { collapsed.remove(folder) } }
@@ -192,6 +212,7 @@ private struct BookmarksList: View {
             let marks = store.items(in: folder)
             Button("Open All in Tabs") { for b in marks { model.open(b.url, inNewTab: true) } }.disabled(marks.isEmpty)
             Divider()
+            Button("Rename Folder…") { folderDraft = folder; renamingFolder = folder }
             Button("Remove Folder (Keep Bookmarks)") { store.removeFolder(folder) }
         }
     }

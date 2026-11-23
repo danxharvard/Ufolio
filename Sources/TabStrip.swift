@@ -82,6 +82,9 @@ struct WindowTabBar: View {
                         // The dragged tab follows the pointer exactly; the others slide out of its way.
                         .transaction { if dragging { $0.animation = nil } }
                         .zIndex(dragging ? 2 : tab.id == selectedID ? 1 : 0)
+                        // New tabs grow in from the tab row; closed ones shrink away.
+                        .transition(.asymmetric(insertion: .scale(scale: 0.85, anchor: .bottom).combined(with: .opacity),
+                                                removal: .opacity.animation(.easeOut(duration: 0.12))))
                         .gesture(reorderGesture(for: tab, width: width))
                 }
                 NewTabButton { model.newTab(focus: true) }
