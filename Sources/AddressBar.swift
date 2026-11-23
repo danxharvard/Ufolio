@@ -161,7 +161,8 @@ struct AddressTextField: NSViewRepresentable {
         let look = NSAppearance(named: context.environment.colorScheme == .dark ? .darkAqua : .aqua)
         if field.appearance?.name != look?.name { field.appearance = look }
         if field.stringValue != text { field.setText(text) }
-        field.alignment = centered ? .center : .left
+        let alignment: NSTextAlignment = centered ? .center : .left
+        if field.alignment != alignment { field.alignment = alignment }   // re-setting it can drop the selection
         if context.coordinator.lastFocusToken != focusToken {
             context.coordinator.lastFocusToken = focusToken
             DispatchQueue.main.async { field.window?.makeFirstResponder(field) }
@@ -181,12 +182,13 @@ struct AddressTextField: NSViewRepresentable {
             guard !parent.isEditing else { return }
             parent.isEditing = true
             parent.onBeginEditing()
-            field.alignment = .left
-            DispatchQueue.main.async { field.currentEditor()?.selectAll(nil) }
+            if field.alignment != .left { field.alignment = .left }
+            DispatchQueue.main.async { (field as? FocusTextField)?.selectEverything() }
         }
 
         func controlTextDidChange(_ note: Notification) {
             guard let field = note.object as? NSTextField else { return }
+            (field as? FocusTextField)?.keepAllSelected = false   // you're typing now
             parent.text = field.stringValue
             parent.onChange(field.stringValue)
         }
@@ -219,41 +221,47 @@ struct AddressTextField: NSViewRepresentable {
 
 final class FocusTextField: NSTextField {
     var onFocus: (() -> Void)?
-    /// Set when the field gains focus: once the full address replaces the short site name,
-    /// it's all selected, ready to type over.
-    var selectAllAfterUpdate = false
+    /// While true, the whole address stays selected, even as the full address replaces the
+    /// short site name a moment after focusing. Typing, or clicking again, ends it.
+    var keepAllSelected = false
 
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()
         if ok {
-            selectAllAfterUpdate = true
+            keepAllSelected = true
             onFocus?()
+            selectEverything()
+            // Whatever arrives in the next moment (the full address, a redraw) is selected too.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+                guard let self, self.keepAllSelected else { return }
+                self.selectEverything()
+                self.keepAllSelected = false
+            }
         }
         return ok
     }
 
-    // Clicking into the field selects everything, like Safari.
+    // The first click into the field selects the whole address, like Safari, so you can copy
+    // it or type over it. Once you're in the field, clicks place the cursor as usual.
     override func mouseDown(with event: NSEvent) {
-        let wasEditing = currentEditor() != nil
-        super.mouseDown(with: event)
-        if !wasEditing {
-            currentEditor()?.selectAll(nil)
-            // The address is swapped in a moment later; select it again then.
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.selectAllAfterUpdate else { return }
-                self.selectAllAfterUpdate = false
-                self.currentEditor()?.selectAll(nil)
-            }
+        if currentEditor() == nil {
+            window?.makeFirstResponder(self)
+            selectEverything()
+            return
         }
+        keepAllSelected = false
+        super.mouseDown(with: event)
+    }
+
+    func selectEverything() {
+        guard let editor = currentEditor() else { return }
+        editor.selectedRange = NSRange(location: 0, length: (editor.string as NSString).length)
     }
 
     /// Puts in new text, keeping everything selected if the field has just been focused.
     func setText(_ text: String) {
         stringValue = text
-        if selectAllAfterUpdate, let editor = currentEditor() {
-            selectAllAfterUpdate = false
-            editor.selectAll(nil)
-        }
+        if keepAllSelected { selectEverything() }
     }
 }
 

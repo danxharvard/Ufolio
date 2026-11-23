@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.32.1
+
+**Fixes**
+- Clicking into the address bar now always selects the whole address, ready to copy or type
+  over. Before, the full address could arrive a moment after the click and leave just a cursor.
+  Click again to place the cursor where you want it.
+
 ## 0.32.0
 
 **Frosted all the way down**
