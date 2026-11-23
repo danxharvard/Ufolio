@@ -62,7 +62,8 @@ struct WindowTabBar: View {
             // Pinned tabs are small fixed icons; the rest share what's left.
             let pinnedCount = tabs.filter(\.isPinned).count
             let room = geo.size.width - leadingInset - 44 - 24 - spaceWidth - CGFloat(pinnedCount) * Self.pinnedWidth
-            let width = max(48, min(240, room / CGFloat(max(tabs.count - pinnedCount, 1))))
+            let sizes = Self.widths(room: room, count: tabs.count - pinnedCount)
+            let width = sizes.other
             HStack(spacing: 0) {
                 Color.clear.frame(width: leadingInset, height: 1)
                 if !model.isPrivate {
@@ -76,7 +77,8 @@ struct WindowTabBar: View {
                     let divider = next != nil && tab.id != selectedID && next?.id != selectedID
                         && hoveredID != tab.id && hoveredID != next?.id
                     let dragging = draggingID == tab.id
-                    ChromeTab(model: model, tab: tab, isSelected: tab.id == selectedID, width: tab.isPinned ? Self.pinnedWidth : width,
+                    ChromeTab(model: model, tab: tab, isSelected: tab.id == selectedID,
+                              width: tab.isPinned ? Self.pinnedWidth : tab.id == selectedID ? sizes.selected : width,
                               showsDivider: divider && draggingID == nil, fill: toolbarColor, hoveredID: $hoveredID)
                         .offset(x: dragging ? dragOffset : 0)
                         // The dragged tab follows the pointer exactly; the others slide out of its way.
@@ -103,6 +105,17 @@ struct WindowTabBar: View {
                 .simultaneousGesture(TapGesture(count: 2).onEnded { model.window?.performZoom(nil) })
         )
         .animation(.spring(response: 0.28, dampingFraction: 0.88), value: model.visibleTabs.map(\.id))
+    }
+
+    /// Tab widths: shared equally while there's room; when crowded, the selected tab keeps
+    /// enough room for its title and the others shrink towards icons.
+    static func widths(room: CGFloat, count: Int) -> (selected: CGFloat, other: CGFloat) {
+        guard count > 0 else { return (0, 0) }
+        let even = min(240, room / CGFloat(count))
+        guard even < 150, count > 1 else { return (max(even, 40), max(even, 40)) }
+        let selected = min(180, max(even, room - CGFloat(count - 1) * 40))
+        let other = max(36, (room - selected) / CGFloat(count - 1))
+        return (selected, other)
     }
 
     private func reorderGesture(for tab: BrowserTab, width: CGFloat) -> some Gesture {
@@ -149,8 +162,9 @@ private struct ChromeTab: View {
     @Binding var hoveredID: UUID?
 
     private var hovering: Bool { hoveredID == tab.id }
-    private var showsClose: Bool { (isSelected || hovering) && width > 72 && !tab.isPinned }
-    private var showsTitle: Bool { width > 64 && !tab.isPinned }
+    private var showsClose: Bool { (isSelected || hovering) && width > 96 && !tab.isPinned }
+    /// Narrow tabs show just their icon, rather than a couple of letters and "…".
+    private var showsTitle: Bool { width > 84 && !tab.isPinned }
 
     var body: some View {
         HStack(spacing: 7) {

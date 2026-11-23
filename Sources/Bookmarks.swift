@@ -287,6 +287,7 @@ private struct FolderChip: View {
     @ObservedObject var model: BrowserModel
     let folder: String
     @ObservedObject private var store = BookmarkStore.shared
+    @State private var hovering = false
 
     var body: some View {
         Menu {
@@ -310,6 +311,9 @@ private struct FolderChip: View {
         .fixedSize()
         .padding(.horizontal, 6)
         .frame(height: 24)
+        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(hovering ? 0.08 : 0)))
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.1), value: hovering)
     }
 }
 
@@ -337,6 +341,7 @@ private struct BookmarkChip: View {
         )
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.1), value: hovering)
         .onTapGesture {
             let newTab = NSEvent.modifierFlags.contains(.command)
             model.open(bookmark.url, inNewTab: newTab)

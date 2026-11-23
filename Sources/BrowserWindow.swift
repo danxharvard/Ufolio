@@ -78,7 +78,7 @@ struct BrowserWindow: View {
                     SuggestionList(suggestions: suggestions) { choice in
                         go(choice.text)
                     }
-                    .frame(width: max(260, addressFrame.width))
+                    .frame(width: min(max(380, addressFrame.width), 680))
                     .offset(x: addressFrame.minX)
                     .padding(.top, 6)
                     .transition(.opacity.combined(with: .offset(y: -4)))

@@ -81,16 +81,21 @@ final class SuggestionsModel: ObservableObject {
             result.append(Suggestion(kind: .website, title: q, detail: "Go to website", text: q))
         }
         let lower = q.lowercased()
+        // The same page counts once, however it was written (www, trailing slash, http/https).
+        var seen = Set<String>()
+        func key(_ url: URL) -> String {
+            (url.host?.lowercased().strippingWWW ?? "") + url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + (url.query ?? "")
+        }
         let marks = BookmarkStore.shared.items.filter {
             $0.title.lowercased().contains(lower) || $0.url.absoluteString.lowercased().contains(lower)
         }
-        for mark in marks.prefix(3) {
+        for mark in marks.prefix(3) where seen.insert(key(mark.url)).inserted {
             result.append(Suggestion(kind: .bookmark, title: mark.title,
                                      detail: mark.url.host?.strippingWWW, text: mark.url.absoluteString))
         }
         // Pages you've visited before, best match first.
         let taken = Set(result.map { $0.text })
-        for entry in HistoryStore.shared.search(q, limit: 6) where !taken.contains(entry.url.absoluteString) {
+        for entry in HistoryStore.shared.search(q, limit: 8) where !taken.contains(entry.url.absoluteString) && seen.insert(key(entry.url)).inserted {
             guard result.count < 5 else { break }
             result.append(Suggestion(kind: .history, title: entry.title.isEmpty ? (entry.url.host ?? "") : entry.title,
                                      detail: entry.url.host?.strippingWWW, text: entry.url.absoluteString))
@@ -134,14 +139,14 @@ struct SuggestionList: View {
         }
         .padding(6)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(.regularMaterial)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.08))
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.1))
         )
-        .shadow(color: .black.opacity(0.18), radius: 20, y: 10)
+        .shadow(color: .black.opacity(0.22), radius: 24, y: 12)
     }
 }
 
@@ -154,15 +159,25 @@ private struct SuggestionRow: View {
     var body: some View {
         HStack(spacing: 10) {
             icon
-                .frame(width: 18)
+                .frame(width: 22, height: 22)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(isSelected ? Color.white.opacity(0.18) : Color.primary.opacity(0.06)))
             highlighted
                 .lineLimit(1)
+                .layoutPriority(1)
             if let detail = item.detail {
-                Text("— \(detail)")
+                Text(detail)
+                    .font(.system(size: 12))
                     .foregroundStyle(isSelected ? Color.white.opacity(0.75) : Color.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
+            if let badge {
+                Image(systemName: badge)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(isSelected ? Color.white.opacity(0.8) : Color.secondary.opacity(0.7))
+                    .help(item.kind == .bookmark ? "Bookmark" : "From your history")
+            }
             if isSelected {
                 Image(systemName: "return")
                     .font(.system(size: 10, weight: .semibold))
@@ -170,15 +185,23 @@ private struct SuggestionRow: View {
             }
         }
         .font(.system(size: 13))
-        .padding(.horizontal, 10)
-        .frame(height: 30)
+        .padding(.horizontal, 8)
+        .frame(height: 34)
         .background(
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(isSelected ? Color.accentColor : Color.primary.opacity(hovering ? 0.06 : 0))
         )
         .foregroundStyle(isSelected ? Color.white : Color.primary)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
+    }
+
+    private var badge: String? {
+        switch item.kind {
+        case .bookmark: return "star.fill"
+        case .history: return "clock"
+        default: return nil
+        }
     }
 
     @ViewBuilder private var icon: some View {

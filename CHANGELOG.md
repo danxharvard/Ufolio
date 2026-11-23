@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.31.0
+
+**A more beautiful window and toolbar**
+- Address bar suggestions are redesigned: a neater panel sized to fit, site icons on soft tiles,
+  the address beside each title, and a star or clock to show whether it's a bookmark or from
+  your history.
+- The same page no longer shows up twice in suggestions (for example with and without "www").
+- With lots of tabs open, the tab you're on keeps room for its title while the others shrink to
+  tidy icons, instead of every tab showing a couple of letters and "…".
+- Bookmark folders in the bookmarks bar highlight when you point at them, like bookmarks do,
+  and hover highlights fade in smoothly.
 ## 0.30.0
 
 **A more beautiful Hush**
