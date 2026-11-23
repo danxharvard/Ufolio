@@ -256,7 +256,7 @@ private struct HeroCard: View {
     var body: some View {
         StoryButton(model: model, article: article) { hovering in
             ZStack(alignment: .bottomLeading) {
-                NewsPicture(url: article.image, channel: article.channel, site: article.site, maxPixels: 1800, zoomed: hovering)
+                NewsPicture(url: article.image, channel: article.channel, site: article.site, maxPixels: 1400, zoomed: hovering)
                     .frame(height: 360)
                 LinearGradient(colors: [.clear, .black.opacity(0.25), .black.opacity(0.82)], startPoint: .center, endPoint: .bottom)
                 VStack(alignment: .leading, spacing: 10) {
@@ -295,7 +295,7 @@ private struct StoryCard: View {
     var body: some View {
         StoryButton(model: model, article: article) { hovering in
             VStack(alignment: .leading, spacing: 0) {
-                NewsPicture(url: article.image, channel: article.channel, site: article.site, maxPixels: 1000, zoomed: hovering)
+                NewsPicture(url: article.image, channel: article.channel, site: article.site, maxPixels: 800, zoomed: hovering)
                     .frame(height: imageHeight)
                     .clipped()
                 VStack(alignment: .leading, spacing: 7) {
@@ -327,7 +327,7 @@ private struct WideCard: View {
     var body: some View {
         StoryButton(model: model, article: article) { hovering in
             HStack(spacing: 0) {
-                NewsPicture(url: article.image, channel: article.channel, site: article.site, maxPixels: 1100, zoomed: hovering)
+                NewsPicture(url: article.image, channel: article.channel, site: article.site, maxPixels: 700, zoomed: hovering)
                     .frame(width: 330, height: 190)
                     .clipped()
                 VStack(alignment: .leading, spacing: 9) {

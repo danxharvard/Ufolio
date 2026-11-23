@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.27.0
+
+**New: Memory Saver** (on by default, Settings › Performance)
+- Hush now keeps itself within a memory limit: a quarter of your Mac's memory, or a limit you
+  choose. When it's over, the tabs you used least recently go to sleep. The tab you're on,
+  either side of Split View, and tabs playing sound or using the camera always stay awake.
+  In testing, seven busy news tabs went from 989 MB to 309 MB.
+- Old pages are no longer kept alive in memory just to make Back instant. Back reloads the
+  page from the cache instead, which is still quick.
+- Sleeping tabs keep a small, compressed preview instead of a full-size picture, often 15 times
+  less memory each.
+- Site icons and news pictures held in memory now have firm limits, and are let go as soon as
+  macOS says memory is tight.
+
+**New in Hush Guard: see who was tracking you**
+- The Hush Guard panel has a "What was blocked" list showing the companies behind the ads and
+  trackers stopped on the page (Google, Meta, Amazon, Criteo and so on), with how many each
+  tried.
+
+**Faster**
+- Fingerprinting protection leaves large canvases (maps, photo editors, games, video) alone,
+  so those pages stay quick. Fingerprinting uses small ones, which are still protected.
+- The hidden Bookmarks & History sidebar no longer draws anything while it's closed.
+
 ## 0.26.1
 
 A second full review of Hush's code: tidier, faster and sturdier.

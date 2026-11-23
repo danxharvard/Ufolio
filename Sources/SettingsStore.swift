@@ -62,6 +62,8 @@ enum Prefs {
     static let locationPolicy = "locationPolicy"
     static let offerBookmarks = "offerBookmarks"
     static let powerMode = "powerMode"
+    static let memorySaver = "memorySaver"
+    static let memoryLimitGB = "memoryLimitGB"
     static let magicTheme = "magicTheme"
     static let fingerprintProtection = "fingerprintProtection"
     static let debounceLinks = "debounceLinks"
@@ -125,6 +127,8 @@ enum Prefs {
         locationPolicy: PermissionPolicy.ask.rawValue,
         offerBookmarks: true,
         powerMode: PowerMode.automatic.rawValue,
+        memorySaver: true,
+        memoryLimitGB: 0.0,
         magicTheme: false,
         fingerprintProtection: true,
         debounceLinks: true,

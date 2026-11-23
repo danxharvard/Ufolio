@@ -420,7 +420,12 @@ actor NewsImages {
     private let cache = NSCache<NSURL, NSImage>()
     private var inFlight: [URL: Task<NSImage?, Never>] = [:]
 
-    init() { cache.countLimit = 160 }
+    init() {
+        cache.countLimit = 80
+        cache.totalCostLimit = 48_000_000   // about 48 MB of decoded pictures at most
+    }
+
+    func purgeMemory() { cache.removeAllObjects() }
 
     func image(_ url: URL, maxPixels: Int) async -> NSImage? {
         if let hit = cache.object(forKey: url as NSURL) { return hit }
@@ -438,7 +443,10 @@ actor NewsImages {
         inFlight[url] = task
         let image = await task.value
         inFlight[url] = nil
-        if let image { cache.setObject(image, forKey: url as NSURL) }
+        if let image {
+            let cost = image.representations.first.map { $0.pixelsWide * $0.pixelsHigh * 4 } ?? 1_000_000
+            cache.setObject(image, forKey: url as NSURL, cost: cost)
+        }
         return image
     }
 }

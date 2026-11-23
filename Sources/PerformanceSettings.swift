@@ -5,6 +5,8 @@ struct PerformanceSettings: View {
     @AppStorage(Prefs.powerMode) private var mode = PowerMode.automatic.rawValue
     @AppStorage(Prefs.tabSleepMinutes) private var tabSleep = 15.0
     @AppStorage(Prefs.freeMemoryAutomatically) private var freeMemory = true
+    @AppStorage(Prefs.memorySaver) private var memorySaver = true
+    @AppStorage(Prefs.memoryLimitGB) private var memoryLimitGB = 0.0
     @AppStorage(Prefs.pauseBackgroundMedia) private var pauseMedia = false
     @ObservedObject private var center = PerformanceCenter.shared
     @State private var usage = PerformanceCenter.Usage()
@@ -69,6 +71,18 @@ struct PerformanceSettings: View {
                                 }
                             }
                         }
+                    }
+                }
+                SettingsSwitch(title: "Memory Saver",
+                               detail: "Keeps Hush under its memory limit by putting the tabs you used least recently to sleep, and doesn’t keep old pages in memory just to make Back instant.",
+                               symbol: "memorychip", colors: PowerMode.eco.colors, isOn: $memorySaver)
+                if memorySaver {
+                    LabeledContent("Memory limit") {
+                        Picker("", selection: $memoryLimitGB) {
+                            Text("Automatic (\(PerformanceCenter.format(max(1_073_741_824, ProcessInfo.processInfo.physicalMemory / 4))))").tag(0.0)
+                            ForEach([1.0, 2.0, 3.0, 4.0, 6.0, 8.0], id: \.self) { gb in Text("\(Int(gb)) GB").tag(gb) }
+                        }
+                        .labelsHidden().fixedSize()
                     }
                 }
                 LabeledContent("Sleep inactive tabs") { Picker("", selection: $tabSleep) {

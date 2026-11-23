@@ -10,6 +10,7 @@ struct LibrarySidebar: View {
     }
 
     @ObservedObject var model: BrowserModel
+    var active = true
     @AppStorage("sidebar.section") private var sectionName = Section.bookmarks.rawValue
     @State private var query = ""
 
@@ -24,7 +25,7 @@ struct LibrarySidebar: View {
             }
         }
         .frame(width: 280)
-        .background(VisualEffect(material: .sidebar))
+        .background { if active { VisualEffect(material: .sidebar) } }
     }
 
     private var header: some View {
@@ -203,7 +204,7 @@ private struct HistoryList: View {
                                 .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 8).padding(.top, 8).padding(.bottom, 3)
-                                .background(VisualEffect(material: .sidebar))
+                                .background(Color(nsColor: .windowBackgroundColor).opacity(0.92))
                         }
                     }
                     }

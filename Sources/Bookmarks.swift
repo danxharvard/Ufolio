@@ -251,7 +251,14 @@ struct SiteIcon {
 
 actor FaviconCache {
     static let shared = FaviconCache()
-    private var cache: [String: SiteIcon] = [:]
+    /// Bounded: a few hundred icons at most, and macOS can take the memory back when it needs it.
+    private let cache: NSCache<NSString, IconBox> = {
+        let c = NSCache<NSString, IconBox>()
+        c.countLimit = 300
+        c.totalCostLimit = 24_000_000
+        return c
+    }()
+    private final class IconBox { let icon: SiteIcon; init(_ icon: SiteIcon) { self.icon = icon } }
     private var misses: Set<String> = []
     private var inFlight: [String: Task<SiteIcon?, Never>] = [:]
 
@@ -262,7 +269,7 @@ actor FaviconCache {
     /// Fetches each site's icon once, even when many views ask at the same moment.
     func info(for url: URL?) async -> SiteIcon? {
         guard let url, let host = url.host, let scheme = url.scheme, scheme.hasPrefix("http") else { return nil }
-        if let hit = cache[host] { return hit }
+        if let hit = cache.object(forKey: host as NSString) { return hit.icon }
         if misses.contains(host) { return nil }
         if let running = inFlight[host] { return await running.value }
 
@@ -285,7 +292,9 @@ actor FaviconCache {
         inFlight[host] = task
         let result = await task.value
         inFlight[host] = nil
-        if let result { cache[host] = result } else { misses.insert(host) }
+        if let result {
+            cache.setObject(IconBox(result), forKey: host as NSString, cost: max(1, result.pixels * result.pixels * 4))
+        } else { misses.insert(host) }
         return result
     }
 
@@ -310,6 +319,9 @@ actor FaviconCache {
               !safe.hasPrefix(".") else { return nil }
         return folder.appendingPathComponent(safe)
     }
+
+    /// Lets go of icons kept in memory (they're on disk too), when the Mac is short of memory.
+    func purgeMemory() { cache.removeAllObjects() }
 
     /// Forgets saved icons (they show which sites you've visited), e.g. when history is cleared.
     nonisolated static func clearDisk() {

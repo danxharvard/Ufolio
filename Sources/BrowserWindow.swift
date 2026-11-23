@@ -392,6 +392,7 @@ struct ShieldsPanel: View {
     @ObservedObject private var stats = BlockStats.shared
     @AppStorage(Prefs.blockingMode) private var mode = BlockingMode.standard.rawValue
     @ObservedObject private var siteShields = ShieldSettings.shared
+    @State private var showBlocked = false
 
     private var blockingMode: BlockingMode { BlockingMode(rawValue: mode) ?? .standard }
     private var shields: Shields { siteShields.effective(for: tab.host) }
@@ -425,6 +426,7 @@ struct ShieldsPanel: View {
                                   tint: Color(red: 0.62, green: 0.48, blue: 1.0))
                     }
                 }
+                if shieldsUp, !tab.blockedSites.isEmpty { blockedList }
                 if shieldsUp, tab.host != nil { siteSettings }
                 if tab.url != nil { tabActions }
             }
@@ -482,6 +484,58 @@ struct ShieldsPanel: View {
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.045)))
+    }
+
+    /// "What was blocked": the companies behind this page's blocked ads and trackers.
+    private var blockedList: some View {
+        let groups = TrackerCompanies.groups(tab.blockedSites)
+        return VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { showBlocked.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "building.2.fill").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.accentColor).frame(width: 22)
+                    Text("What was blocked").font(.system(size: 12.5))
+                    Spacer()
+                    Text(groups.count == 1 ? "1 company" : "\(groups.count) companies").font(.system(size: 11.5)).foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(showBlocked ? 90 : 0))
+                }
+                .frame(height: 32)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if showBlocked {
+                VStack(spacing: 6) {
+                    ForEach(groups.prefix(10)) { group in
+                        HStack(alignment: .top, spacing: 9) {
+                            Favicon(url: URL(string: "https://\(group.sites.first ?? "")"), size: 15)
+                                .frame(width: 22, height: 18)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(group.company).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                                if group.company != group.sites.first || group.sites.count > 1 {
+                                    Text(group.sites.prefix(3).joined(separator: ", ") + (group.sites.count > 3 ? " +\(group.sites.count - 3)" : ""))
+                                        .font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+                                }
+                            }
+                            Spacer(minLength: 6)
+                            Text("\(group.count)").font(.system(size: 11.5, weight: .semibold, design: .rounded)).monospacedDigit()
+                                .padding(.horizontal, 7).padding(.vertical, 2)
+                                .background(Capsule().fill(Color.primary.opacity(0.07)))
+                        }
+                    }
+                    if groups.count > 10 {
+                        Text("and \(groups.count - 10) more").font(.system(size: 11)).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 31)
+                    }
+                }
+                .padding(.bottom, 10)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(.horizontal, 10)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.045)))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     /// This site's own settings: anything left on Default follows Settings › Hush Guard.
@@ -809,11 +863,12 @@ private struct SidebarSlot: View {
         Group {
             if built {
                 HStack(spacing: 0) {
-                    LibrarySidebar(model: model)
+                    // While hidden, the sidebar draws nothing costly (no frosted glass), so it
+                    // doesn't slow scrolling.
+                    LibrarySidebar(model: model, active: slotOpen)
                     Divider()
                 }
                 .frame(width: width)
-                .compositingGroup()
                 .offset(x: slidIn ? 0 : -width)
                 .animation(.spring(response: 0.3, dampingFraction: 0.9), value: slidIn)   // only the slide animates
                 .frame(width: slotOpen ? width : 0, alignment: .leading)

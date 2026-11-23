@@ -89,11 +89,16 @@ final class PerformanceCenter: ObservableObject {
             self.refresh()
         }
         // Plugging in or unplugging: checked twice a minute (cheap) rather than hooking IOKit run loops.
-        timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in self?.refresh() }
+        timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            self?.refresh()
+            self?.keepWithinMemoryLimit()
+        }
         timer?.tolerance = 10
 
         let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
         source.setEventHandler { [weak self, weak source] in
+            // Pictures kept in memory can always be fetched again.
+            Task { await FaviconCache.shared.purgeMemory(); await NewsImages.shared.purgeMemory() }
             guard Prefs.bool(Prefs.freeMemoryAutomatically), let event = source?.data else { return }
             self?.sleepBackgroundTabs(idleFor: event.contains(.critical) ? 0 : 120)
         }
@@ -144,6 +149,39 @@ final class PerformanceCenter: ObservableObject {
         }
     }
 
+    // MARK: Memory Saver
+
+    static var memorySaverOn: Bool { Prefs.bool(Prefs.memorySaver) }
+
+    /// The most memory Hush should use: your choice, or a quarter of this Mac's memory.
+    static var memoryLimit: UInt64 {
+        let chosen = Prefs.double(Prefs.memoryLimitGB)
+        if chosen > 0 { return UInt64(chosen * 1_073_741_824) }
+        return max(1_073_741_824, ProcessInfo.processInfo.physicalMemory / 4)
+    }
+
+    /// When Hush is over its limit, the tabs you used least recently go to sleep, never the one
+    /// you're looking at, either side of Split View, or tabs playing sound or using the camera.
+    func keepWithinMemoryLimit() {
+        guard Self.memorySaverOn else { return }
+        let usage = measure()
+        var over = Int64(usage.total) - Int64(Self.memoryLimit)
+        guard over > 0 else { return }
+        var candidates: [(tab: BrowserTab, bytes: UInt64)] = []
+        for model in BrowserModel.all.allObjects {
+            let visibleSplit = model.splitPair.flatMap { $0.contains(model.selectedID) ? $0 : nil }
+            for tab in model.tabs where tab !== model.selectedTab && !tab.isAsleep && !tab.isLoading && !tab.isPlayingAudio
+                && !(visibleSplit?.contains(tab.id) ?? false)
+                && tab.webView.cameraCaptureState == .none && tab.webView.microphoneCaptureState == .none {
+                candidates.append((tab, usage.tabs.first { $0.id == tab.id }?.bytes ?? 0))
+            }
+        }
+        for candidate in candidates.sorted(by: { $0.tab.lastActive < $1.tab.lastActive }) where over > 0 {
+            candidate.tab.sleep()
+            over -= Int64(candidate.bytes)
+        }
+    }
+
     // MARK: Web page settings
 
     /// Applies the power mode to a new web view's settings (WebKit's own feature switches,
@@ -154,6 +192,8 @@ final class PerformanceCenter: ObservableObject {
         Self.setFeature("PreferPageRenderingUpdatesNear60FPSEnabled", mode != .performance, in: preferences)
         // Look up the addresses of links on a page before you click them.
         Self.setFeature("DNSPrefetchingEnabled", mode == .performance, in: preferences)
+        // Memory Saver: don't keep whole pages alive in memory just to make Back instant.
+        Self.setFeature("UsesBackForwardCache", !Self.memorySaverOn || mode == .performance, in: preferences)
         // 3D graphics on the energy-saving graphics chip, where a Mac has two.
         Self.setFeature("ForceWebGLUsesLowPower", isPowerSaving, in: preferences)
         // Background tabs' timers slow down further the longer they're hidden.

@@ -19,6 +19,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     @Published private(set) var blockedOnPage = 0
     @Published private(set) var adsOnPage = 0
     @Published private(set) var trackersOnPage = 0
+    /// What was blocked on this page: blocked site → requests (for the Hush Guard panel).
+    @Published private(set) var blockedSites: [String: Int] = [:]
     /// Set when a page was stopped because it looks like a fake copy of a site you use.
     @Published var lookalike: (match: Lookalike.Match, url: URL)?
     /// Quick translation: the page's language when it isn't yours, and where translation is up to.
@@ -176,16 +178,20 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     /// Sleeping tabs keep a picture of the page and its full state (including back/forward
     /// history) but release the web page itself, freeing its memory and processor time.
     @Published private(set) var isAsleep = false
-    @Published private(set) var snapshot: NSImage?
+    /// A small, compressed picture of a sleeping tab (about 150 KB instead of a full-size bitmap).
+    @Published private(set) var snapshotData: Data?
+    var snapshot: NSImage? { snapshotData.flatMap(NSImage.init(data:)) }
     var lastActive = Date()
     private var sleepState: Any?
     private var waking = false
 
     func sleep() {
         guard !isAsleep, url != nil, !isLoading, model?.selectedTab !== self else { return }
-        webView.takeSnapshot(with: nil) { [weak self] image, _ in
+        let config = WKSnapshotConfiguration()
+        config.snapshotWidth = NSNumber(value: min(Double(webView.bounds.width), 900))
+        webView.takeSnapshot(with: config) { [weak self] image, _ in
             guard let self, !self.isAsleep, self.model?.selectedTab !== self else { return }
-            self.snapshot = image
+            self.snapshotData = image.flatMap(Self.compressed)
             self.sleepState = self.webView.interactionState
             self.observers.removeAll()
             let old = self.webView
@@ -198,6 +204,12 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
                 privately: self.isPrivate, store: self.model?.dataStore))
             self.isAsleep = true
         }
+    }
+
+    /// JPEG at medium quality: plenty for the moment a tab takes to wake.
+    private static func compressed(_ image: NSImage) -> Data? {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        return NSBitmapImageRep(cgImage: cg).representation(using: .jpeg, properties: [.compressionFactor: 0.5])
     }
 
     /// A tab restored from last time: shows its address and title but loads nothing until
@@ -224,7 +236,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
             guard let self, !self.isAsleep else { return }
             self.waking = false
-            self.snapshot = nil
+            self.snapshotData = nil
         }
     }
 
@@ -372,6 +384,7 @@ extension BrowserTab: WKNavigationDelegate {
         blockedOnPage = 0
         adsOnPage = 0
         trackersOnPage = 0
+        blockedSites = [:]
         if translation != .none { setTranslation(.none, language: nil) }
         if reader != nil { reader = nil }
         if readerAvailable { readerAvailable = false }
@@ -429,6 +442,9 @@ extension BrowserTab: WKNavigationDelegate {
         DispatchQueue.main.async {
             self.blockedOnPage += 1
             if category == .trackers { self.trackersOnPage += 1 } else { self.adsOnPage += 1 }
+            if let host = url.host, self.blockedSites.count < 300 || self.blockedSites[Domains.site(host)] != nil {
+                self.blockedSites[Domains.site(host), default: 0] += 1
+            }
             BlockStats.shared.record(identifier)
             if !self.isPrivate, category == .trackers || category == .ads || category == .lists {
                 PrivacyReport.shared.recordBlocked(tracker: url, on: self.host)

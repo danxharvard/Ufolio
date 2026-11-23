@@ -21,7 +21,10 @@ enum Fingerprinting {
           var seed = hash(KEY + '|' + location.hostname);
           function rand(n) { var x = (seed ^ Math.imul((n | 0) + 1, 0x9E3779B1)) >>> 0; x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; return (x >>> 0) / 4294967296; }
           var rate = STRICT ? 0.08 : 0.015;
+          // Fingerprinting uses small canvases; big ones (maps, editors, games, video) are left
+          // alone so those pages stay fast.
           function noise(data) {
+            if (!data || data.length > 4 * 160000) return;
             for (var i = 0; i < data.length; i += 4) { if (rand(i) < rate) { data[i] = data[i] ^ 1; data[i + 1] = data[i + 1] ^ (rand(i + 1) < 0.5 ? 1 : 0); } }
           }
           // Changed functions still describe themselves as the originals, so pages can't tell.
@@ -53,7 +56,7 @@ enum Fingerprinting {
           function noisyCopy(canvas) {
             try {
               var w = canvas.width, h = canvas.height;
-              if (!w || !h || w * h > 16000000) return canvas;
+              if (!w || !h || w * h > 160000) return canvas;
               var copy = document.createElement('canvas'); copy.width = w; copy.height = h;
               var ctx = copy.getContext('2d'); ctx.drawImage(canvas, 0, 0);
               var image = ctx.getImageData(0, 0, w, h);   // already noised by the wrapper above
