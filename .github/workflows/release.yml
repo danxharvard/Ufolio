@@ -24,12 +24,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check the tag matches VERSION
+      # A tag push must match VERSION. Run by hand (from main), it releases whatever VERSION says,
+      # as long as that version isn't already published.
+      - name: Check the version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
           FILE="$(cat VERSION)"
-          if [ "$TAG" != "$FILE" ]; then
-            echo "Tag v$TAG doesn't match VERSION ($FILE)"; exit 1
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            TAG="${GITHUB_REF_NAME#v}"
+            if [ "$TAG" != "$FILE" ]; then echo "Tag v$TAG doesn't match VERSION ($FILE)"; exit 1; fi
+          elif gh release view "v$FILE" >/dev/null 2>&1; then
+            echo "Hush $FILE is already released."; exit 1
           fi
 
       # In its own Python environment: the runner's system Python refuses package installs.
@@ -58,7 +64,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           V="$(cat VERSION)"
-          gh release create "v$V" \
+          gh release create "v$V" --target "$GITHUB_SHA" \
             "build/HushBrowser-$V.dmg" \
             "build/HushBrowser-$V.zip" \
             "build/HushBrowser-$V.zip.sig" \
