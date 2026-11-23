@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.29.0
+
+**New: Command Palette (⌘K)**
+- One box to find anything: open tabs (in every Space), every command, Spaces, bookmarks and
+  history. Type a few letters, use the arrow keys, press Return. Shortcuts are shown beside
+  each command. It all runs on your Mac; nothing you type is sent anywhere unless you choose
+  to search the web.
+
+**New: Spaces**
+- Keep sets of tabs apart, such as Work, Personal and Shopping. Each window shows one Space at a
+  time. Switch with the button left of your tabs, ⌃1–⌃9, ⌃⌘[ and ⌃⌘], or the Command Palette.
+- Give each Space a name, icon and colour. Right-click a tab to move it to another Space.
+- Each Space remembers its tabs and pinned tabs between launches, and only the tab you're
+  looking at loads.
+
+**New: Profiles**
+- A profile has its own cookies, sign-ins, site data and cache, so you can be signed in to two
+  accounts on the same site at once. Give any Space its own profile.
+- Manage Spaces and profiles in Settings › Spaces & Profiles. Deleting a profile erases its
+  website data. Clear Website Data and Forget This Site now cover every profile.
+
+**Fixes**
+- Tabs brought back from last time no longer occasionally lose their address before you open them.
 ## 0.28.0
 
 **New: bookmark folders**

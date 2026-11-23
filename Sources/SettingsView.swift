@@ -2,13 +2,14 @@ import SwiftUI
 import WebKit
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, appearance, performance, adBlocker, extensions, privacy, passwords, location, keyboard, updates
+    case general, appearance, spaces, performance, adBlocker, extensions, privacy, passwords, location, keyboard, updates
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .general: return "General"
         case .appearance: return "Appearance"
+        case .spaces: return "Spaces & Profiles"
         case .performance: return "Performance"
         case .adBlocker: return "Hush Guard"
         case .extensions: return "Extensions"
@@ -25,6 +26,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general: return "default browser homepage startup new tab window search engine suggestions history import downloads safe files favourites"
         case .appearance: return "theme dark light night day accent colour color start page background aurora twilight translucent motion animation zoom bookmarks bar tab bar address magic theme colours site colour"
+        case .spaces: return "spaces profiles workspaces work personal accounts sign in cookies separate containers"
         case .performance: return "performance speed fast power battery saver eco carbon energy green memory ram tab sleep graphics 120hz smooth frame rate video pause"
         case .adBlocker: return "blocking mode strict standard off ads ad blocker trackers block filter list easylist cookie banners collapse zapper hidden elements counter statistics"
         case .extensions: return "chrome extension extensions web store add-on plugin dark reader"
@@ -40,6 +42,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general: return "gearshape.fill"
         case .appearance: return "paintbrush.fill"
+        case .spaces: return "square.stack.3d.up.fill"
         case .performance: return "speedometer"
         case .adBlocker: return "hush"
         case .extensions: return "puzzlepiece.extension.fill"
@@ -56,6 +59,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general: return [Color(white: 0.62), Color(white: 0.45)]
         case .appearance: return [Color(red: 0.30, green: 0.55, blue: 1.0), Color(red: 0.42, green: 0.32, blue: 0.95)]
+        case .spaces: return [Color(red: 0.20, green: 0.78, blue: 0.65), Color(red: 0.10, green: 0.55, blue: 0.55)]
         case .performance: return [Color(red: 1.0, green: 0.45, blue: 0.35), Color(red: 0.90, green: 0.25, blue: 0.30)]
         case .adBlocker: return [Color(red: 0.55, green: 0.40, blue: 1.0), Color(red: 0.36, green: 0.26, blue: 0.86)]
         case .extensions: return [Color(red: 1.0, green: 0.62, blue: 0.25), Color(red: 0.95, green: 0.42, blue: 0.18)]
@@ -136,6 +140,7 @@ struct SettingsView: View {
                     case .privacy: PrivacySettings()
                     case .passwords: PasswordSettings()
                     case .performance: PerformanceSettings()
+                    case .spaces: SpacesSettings()
                     case .location: LocationSettings()
                     case .keyboard: KeyboardSettings()
                     case .updates: UpdateSettings()
@@ -840,16 +845,28 @@ private struct PrivacySettings: View {
         .onAppear(perform: countSites)
     }
 
+    /// Counted across the default profile and every other profile.
     private func countSites() {
-        WKWebsiteDataStore.default().fetchDataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes()) { records in
-            siteCount = records.count
+        let stores = SpaceStore.shared.allDataStores
+        var sites = Set<String>()
+        var remaining = stores.count
+        for store in stores {
+            store.fetchDataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes()) { records in
+                records.forEach { sites.insert($0.displayName) }
+                remaining -= 1
+                if remaining == 0 { siteCount = sites.count }
+            }
         }
     }
 
     private func clearData() {
-        WKWebsiteDataStore.default().removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
-                                                modifiedSince: .distantPast) {
-            countSites()
+        let stores = SpaceStore.shared.allDataStores
+        var remaining = stores.count
+        for store in stores {
+            store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) {
+                remaining -= 1
+                if remaining == 0 { countSites() }
+            }
         }
     }
 }

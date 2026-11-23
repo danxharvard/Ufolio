@@ -19,12 +19,13 @@ enum SiteForgetter {
     }
 
     static func forget(_ site: String, in model: BrowserModel) {
-        // Website data (cookies, storage, caches) in this window's store.
-        let store = model.dataStore
+        // Website data (cookies, storage, caches): this private window's, or every profile's.
         let types = WKWebsiteDataStore.allWebsiteDataTypes()
-        store.fetchDataRecords(ofTypes: types) { records in
-            let matching = records.filter { Domains.site($0.displayName) == site }
-            store.removeData(ofTypes: types, for: matching) {}
+        for store in model.isPrivate ? [model.dataStore] : SpaceStore.shared.allDataStores {
+            store.fetchDataRecords(ofTypes: types) { records in
+                let matching = records.filter { Domains.site($0.displayName) == site }
+                store.removeData(ofTypes: types, for: matching) {}
+            }
         }
         if !model.isPrivate {
             HistoryStore.shared.remove(site: site)
@@ -34,7 +35,7 @@ enum SiteForgetter {
         }
         // Close the site's tabs (a new tab replaces them if nothing else is left).
         let tabs = model.tabs.filter { Domains.site($0.url?.host ?? "") == site }
-        if tabs.count == model.tabs.count { model.newTab(focus: true) }
+        if model.visibleTabs.allSatisfy({ open in tabs.contains { $0 === open } }) { model.newTab(focus: true) }
         for tab in tabs { model.close(tab, remember: false) }
     }
 }

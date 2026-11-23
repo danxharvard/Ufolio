@@ -49,6 +49,7 @@ struct WindowTabBar: View {
     var leadingInset: CGFloat = 80
     @State private var hoveredID: UUID?
     static let pinnedWidth: CGFloat = 46
+    private var spaceWidth: CGFloat { model.isPrivate ? 0 : 34 }
     /// Drag to reorder: the tab being dragged and how far it is from its slot.
     @State private var draggingID: UUID?
     @State private var dragOffset: CGFloat = 0
@@ -56,14 +57,20 @@ struct WindowTabBar: View {
 
     var body: some View {
         GeometryReader { geo in
-            let tabs = model.tabs
+            let tabs = model.visibleTabs
             let selectedID = model.selectedTab?.id
             // Pinned tabs are small fixed icons; the rest share what's left.
             let pinnedCount = tabs.filter(\.isPinned).count
-            let room = geo.size.width - leadingInset - 44 - 24 - CGFloat(pinnedCount) * Self.pinnedWidth
+            let room = geo.size.width - leadingInset - 44 - 24 - spaceWidth - CGFloat(pinnedCount) * Self.pinnedWidth
             let width = max(48, min(240, room / CGFloat(max(tabs.count - pinnedCount, 1))))
             HStack(spacing: 0) {
                 Color.clear.frame(width: leadingInset, height: 1)
+                if !model.isPrivate {
+                    SpaceButton(model: model)
+                        .padding(.trailing, 4)
+                        .frame(height: Chrome.tabBarHeight, alignment: .center)
+                        .offset(y: 2)   // level with the window buttons
+                }
                 ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
                     let next = index + 1 < tabs.count ? tabs[index + 1] : nil
                     let divider = next != nil && tab.id != selectedID && next?.id != selectedID
@@ -92,7 +99,7 @@ struct WindowTabBar: View {
                 .gesture(WindowDragGesture())
                 .simultaneousGesture(TapGesture(count: 2).onEnded { model.window?.performZoom(nil) })
         )
-        .animation(.spring(response: 0.28, dampingFraction: 0.88), value: model.tabs.map(\.id))
+        .animation(.spring(response: 0.28, dampingFraction: 0.88), value: model.visibleTabs.map(\.id))
     }
 
     private func reorderGesture(for tab: BrowserTab, width: CGFloat) -> some Gesture {
@@ -103,10 +110,11 @@ struct WindowTabBar: View {
                     slotsMoved = 0
                     if model.selectedID != tab.id { model.selectedID = tab.id }
                 }
-                guard draggingID == tab.id, let index = model.tabs.firstIndex(where: { $0 === tab }) else { return }
+                let tabs = model.visibleTabs
+                guard draggingID == tab.id, let index = tabs.firstIndex(where: { $0 === tab }) else { return }
                 var offset = value.translation.width - slotsMoved * width
                 // Past halfway over a neighbour: swap places with it.
-                if offset > width / 2, index < model.tabs.count - 1 {
+                if offset > width / 2, index < tabs.count - 1 {
                     model.moveTab(from: index, to: index + 1)
                     slotsMoved += 1
                     offset -= width
@@ -240,6 +248,13 @@ private struct ChromeTab: View {
                 Button("Open in Split View") { model.openSplit(with: tab) }
             }
             Button(tab.isPinned ? "Unpin Tab" : "Pin Tab") { model.togglePin(tab) }
+            if !model.isPrivate && SpaceStore.shared.spaces.count > 1 {
+                Menu("Move to Space") {
+                    ForEach(SpaceStore.shared.spaces.filter { $0.id != tab.spaceID }) { space in
+                        Button { model.move(tab, toSpace: space.id) } label: { Label(space.name, systemImage: space.symbol) }
+                    }
+                }
+            }
             Button(tab.isMuted ? "Unmute Tab" : "Mute Tab") { tab.toggleMute() }
             Button(tab.javaScriptOff ? "Turn On JavaScript in This Tab" : "Turn Off JavaScript in This Tab") { tab.toggleJavaScript() }
             if tab.url != nil {
@@ -249,11 +264,12 @@ private struct ChromeTab: View {
             Divider()
             Button("Close Tab") { model.close(tab) }
             Button("Close Other Tabs") {
-                for other in model.tabs where other !== tab { model.close(other) }
+                for other in model.visibleTabs where other !== tab { model.close(other) }
             }
             Button("Close Tabs to the Right") {
-                if let i = model.tabs.firstIndex(where: { $0 === tab }) {
-                    for other in model.tabs.suffix(from: i + 1) { model.close(other) }
+                let mine = model.visibleTabs
+                if let i = mine.firstIndex(where: { $0 === tab }) {
+                    for other in mine.suffix(from: i + 1) { model.close(other) }
                 }
             }
         }

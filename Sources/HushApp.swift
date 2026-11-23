@@ -101,6 +101,7 @@ struct HushCommands: Commands {
     @FocusedObject private var focusedBrowser: BrowserModel?
     private var browser: BrowserModel? { focusedBrowser ?? BrowserModel.frontmost }
     @ObservedObject private var bookmarks = BookmarkStore.shared
+    @ObservedObject private var spaces = SpaceStore.shared
     @AppStorage(Prefs.showBookmarkBar) private var showBookmarkBar = true
     @AppStorage(Prefs.adBlockEnabled) private var adBlockEnabled = true
     @AppStorage(Prefs.appearance) private var appearance = AppearanceMode.system.rawValue
@@ -129,6 +130,11 @@ struct HushCommands: Commands {
                 .keyboardShortcut(Shortcuts.get(.privateWindow))
             Button("Open Location…") { browser?.focusAddressBar() }
                 .keyboardShortcut(Shortcuts.get(.openLocation))
+            Button("Command Palette…") {
+                WindowOpener.ensureWindow()
+                browser?.paletteOpen.toggle()
+            }
+            .keyboardShortcut(Shortcuts.get(.commandPalette))
         }
 
         Group {
@@ -210,6 +216,18 @@ struct HushCommands: Commands {
                 .keyboardShortcut(Shortcuts.get(.muteTab))
             Button(browser?.selectedTab?.isPinned == true ? "Unpin Tab" : "Pin Tab") {
                 if let model = browser, let tab = model.selectedTab { model.togglePin(tab) }
+            }
+            Divider()
+            Button("Next Space") { browser?.switchSpace(by: 1) }
+                .keyboardShortcut(Shortcuts.get(.nextSpace))
+                .disabled(browser?.isPrivate != false)
+            Button("Previous Space") { browser?.switchSpace(by: -1) }
+                .keyboardShortcut(Shortcuts.get(.previousSpace))
+                .disabled(browser?.isPrivate != false)
+            ForEach(Array(spaces.spaces.prefix(9).enumerated()), id: \.element.id) { index, space in
+                Button("Show \(space.name)") { browser?.switchSpace(to: space.id) }
+                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .control)
+                    .disabled(browser?.isPrivate != false)
             }
         }
         }

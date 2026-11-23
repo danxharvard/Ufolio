@@ -31,6 +31,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     @Published private(set) var isMuted = false
     /// Pinned tabs sit at the left as small icons and come back next launch.
     @Published var isPinned = false
+    /// The Space this tab belongs to (only that Space's tabs show in the tab bar).
+    var spaceID: UUID?
 
     var isPrivate: Bool { model?.isPrivate ?? false }
 
@@ -114,10 +116,10 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         return config
     }
 
-    init(model: BrowserModel, configuration: WKWebViewConfiguration? = nil) {
+    init(model: BrowserModel, configuration: WKWebViewConfiguration? = nil, store: WKWebsiteDataStore? = nil) {
         self.model = model
         webView = HushWebView(frame: .zero, configuration: configuration
-            ?? BrowserTab.makeConfiguration(privately: model.isPrivate, store: model.dataStore))
+            ?? BrowserTab.makeConfiguration(privately: model.isPrivate, store: store ?? model.dataStore))
         super.init()
         setUp(webView)
     }
@@ -150,13 +152,15 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
                 .store(in: &observers)
         }
         bind(\.title) { tab, title in
-            if tab.waking && (title ?? "").isEmpty { return }
+            // A sleeping or lazily restored tab's empty web view has no title yet; keep the saved one.
+            if (tab.waking || tab.isAsleep) && (title ?? "").isEmpty { return }
             tab.title = title ?? ""
             if let url = tab.url, let title, !title.isEmpty { HistoryStore.shared.updateTitle(url, title: title) }
         }
         bind(\.url) { tab, url in
             // While waking from sleep the new web view briefly has no address; keep the old one.
-            if tab.waking && url == nil { return }
+            // The same goes for a tab restored from last time, which hasn't loaded yet.
+            if (tab.waking || tab.isAsleep) && url == nil { return }
             if url != nil { tab.waking = false }
             tab.url = url
             tab.updateSiteColor()
@@ -201,7 +205,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             old.removeFromSuperview()
             // An empty web view starts no web process until it loads something.
             self.webView = HushWebView(frame: .zero, configuration: BrowserTab.makeConfiguration(
-                privately: self.isPrivate, store: self.model?.dataStore))
+                privately: self.isPrivate, store: old.configuration.websiteDataStore))
             self.isAsleep = true
         }
     }

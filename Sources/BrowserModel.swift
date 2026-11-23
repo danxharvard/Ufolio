@@ -21,6 +21,131 @@ final class BrowserModel: NSObject, ObservableObject {
         }
     }
     private var sleepTimer: Timer?
+    /// The Space this window is showing; only its tabs appear in the tab bar.
+    @Published private(set) var spaceID: UUID = SpaceStore.shared.defaultSpace.id
+    /// The tab you last had open in each Space, to go back to when you switch.
+    private var lastSelected: [UUID: UUID] = [:]
+
+    /// The tabs in the tab bar: this Space's (private windows have no Spaces).
+    var visibleTabs: [BrowserTab] {
+        isPrivate ? tabs : tabs.filter { $0.spaceID == spaceID }
+    }
+
+    /// Where new tabs in this window keep their cookies: the current Space's profile.
+    var currentStore: WKWebsiteDataStore {
+        isPrivate ? dataStore : SpaceStore.shared.dataStore(forSpace: spaceID)
+    }
+
+    /// Shows another Space: its tabs replace the tab bar, and the tab you last used there is selected.
+    func switchSpace(to id: UUID) {
+        guard !isPrivate, id != spaceID, SpaceStore.shared.space(id) != nil else { return }
+        if let current = selectedID { lastSelected[spaceID] = current }
+        if splitPair != nil { splitPair = nil }
+        spaceID = id
+        let mine = visibleTabs
+        if let remembered = lastSelected[id], mine.contains(where: { $0.id == remembered }) {
+            selectedID = remembered
+        } else if let first = mine.first(where: { !$0.isPinned }) ?? mine.first {
+            selectedID = first.id
+        } else {
+            newTab(focus: true)
+        }
+        UserDefaults.standard.set(id.uuidString, forKey: "lastSpace")
+        scheduleSessionSave()
+    }
+
+    func switchSpace(by offset: Int) {
+        let spaces = SpaceStore.shared.spaces
+        guard spaces.count > 1, let index = spaces.firstIndex(where: { $0.id == spaceID }) else { return }
+        switchSpace(to: spaces[(index + offset + spaces.count) % spaces.count].id)
+    }
+
+    /// Moves a tab to another Space. If that Space uses a different profile, the page reopens
+    /// there (a page can't change which cookies it uses while open).
+    func move(_ tab: BrowserTab, toSpace id: UUID) {
+        guard !isPrivate, tab.spaceID != id, SpaceStore.shared.space(id) != nil else { return }
+        let target = SpaceStore.shared.dataStore(forSpace: id)
+        if splitPair?.contains(tab.id) == true { splitPair = nil }
+        if target === tab.webView.configuration.websiteDataStore {
+            tab.spaceID = id
+            if tab.id == selectedID { selectFallback(near: tab) }
+            objectWillChange.send()
+        } else {
+            let copy = BrowserTab(model: self, store: target)
+            copy.spaceID = id
+            copy.isPinned = tab.isPinned
+            if let url = tab.url { copy.restoreLazily(url) }
+            if let index = tabs.firstIndex(where: { $0 === tab }) { tabs.insert(copy, at: index + 1) }
+            ExtensionEvents.opened(copy)
+            close(tab, remember: false)
+        }
+        scheduleSessionSave()
+    }
+
+    /// After a Space's profile changes, its open tabs reopen with the new profile's cookies.
+    func spaceChangedProfile(_ id: UUID) {
+        guard !isPrivate else { return }
+        let target = SpaceStore.shared.dataStore(forSpace: id)
+        for tab in tabs where tab.spaceID == id && tab.webView.configuration.websiteDataStore !== target {
+            guard let index = tabs.firstIndex(where: { $0 === tab }) else { continue }
+            let copy = BrowserTab(model: self, store: target)
+            copy.spaceID = id
+            copy.isPinned = tab.isPinned
+            let wasSelected = tab.id == selectedID
+            if splitPair?.contains(tab.id) == true { splitPair = nil }
+            ExtensionEvents.closed(tab)
+            tab.tearDown()
+            tabs[index] = copy
+            ExtensionEvents.opened(copy)
+            if let url = tab.url { if wasSelected { copy.load(url) } else { copy.restoreLazily(url) } }
+            if wasSelected { selectedID = copy.id }
+        }
+        scheduleSessionSave()
+    }
+
+    /// A removed Space's tabs join the first Space.
+    func spaceRemoved(_ id: UUID) {
+        let fallback = SpaceStore.shared.defaultSpace.id
+        let target = SpaceStore.shared.dataStore(forSpace: fallback)
+        let wasShowing = spaceID == id
+        for tab in tabs where tab.spaceID == id {
+            if tab.webView.configuration.websiteDataStore === target {
+                tab.spaceID = fallback
+            } else {
+                tab.spaceID = id   // reopened below with the right cookies
+            }
+        }
+        // Tabs from a profile the first Space doesn't use reopen there.
+        for tab in tabs where tab.spaceID == id {
+            guard let index = tabs.firstIndex(where: { $0 === tab }) else { continue }
+            let copy = BrowserTab(model: self, store: target)
+            copy.spaceID = fallback
+            if let url = tab.url { copy.restoreLazily(url) }
+            if splitPair?.contains(tab.id) == true { splitPair = nil }
+            ExtensionEvents.closed(tab)
+            tab.tearDown()
+            tabs[index] = copy
+            ExtensionEvents.opened(copy)
+            if selectedID == tab.id { selectedID = copy.id }
+        }
+        if wasShowing {
+            spaceID = fallback
+            if !visibleTabs.contains(where: { $0.id == selectedID }) {
+                if let first = visibleTabs.first { selectedID = first.id } else { newTab(focus: true) }
+            }
+            selectedTab?.wakeIfNeeded()
+        }
+        objectWillChange.send()
+        scheduleSessionSave()
+    }
+
+    /// Picks the tab beside one that's leaving this Space.
+    private func selectFallback(near tab: BrowserTab) {
+        let mine = visibleTabs.filter { $0 !== tab }
+        if let next = mine.first(where: { !$0.isPinned }) ?? mine.first { selectedID = next.id } else { newTab(focus: true) }
+    }
+    /// Whether the Command Palette (⌘K) is showing.
+    @Published var paletteOpen = false
     /// Bumped to ask the address bar to take keyboard focus.
     @Published var addressFocusToken = 0
     /// The window showing this model (set by the view once it's on screen).
@@ -136,31 +261,37 @@ final class BrowserModel: NSObject, ObservableObject {
            LaunchBehavior(rawValue: Prefs.string(Prefs.launchBehavior)) == .restore,
            let saved = UserDefaults.standard.stringArray(forKey: "lastSession"), !saved.isEmpty {
             Self.didRestoreSession = true
+            let savedSpaces = UserDefaults.standard.stringArray(forKey: "lastSessionSpaces") ?? []
+            if let last = UserDefaults.standard.string(forKey: "lastSpace").flatMap(UUID.init(uuidString:)),
+               SpaceStore.shared.space(last) != nil { spaceID = last }
             // Only web pages come back, and only the first loads now: the rest wait until you
             // click them, so launching with lots of tabs stays quick.
-            let urls = saved.prefix(200).compactMap(URL.init(string:))
-                .filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") }
-            for (index, url) in urls.enumerated() {
-                if index == 0 {
-                    newTab(url: url)
-                } else {
-                    newTab(select: false, usePreferredPage: false, atEnd: true).restoreLazily(url)
-                }
+            var first = true
+            for (index, text) in saved.prefix(200).enumerated() {
+                guard let url = URL(string: text), ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { continue }
+                let space = savedSpaces.indices.contains(index)
+                    ? UUID(uuidString: savedSpaces[index]).flatMap { SpaceStore.shared.space($0)?.id } : nil
+                let tab = addRestoredTab(url, space: space ?? SpaceStore.shared.defaultSpace.id)
+                // Only the first tab in the Space you were using loads now.
+                if first && tab.spaceID == spaceID { selectedID = tab.id; first = false }   // selecting wakes it
             }
-            selectedID = tabs.first?.id
+            if selectedID == nil { selectedID = visibleTabs.first?.id }
         }
         // Pinned tabs always come back, at the left, loading when you click them.
         if !isPrivate, !Self.didRestoreSession || tabs.count > 0 {
-            let pinned = (UserDefaults.standard.stringArray(forKey: "pinnedTabs") ?? []).prefix(30)
-                .compactMap(URL.init(string:)).filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") }
+            let pinnedText = (UserDefaults.standard.stringArray(forKey: "pinnedTabs") ?? []).prefix(30)
+            let pinnedSpaces = UserDefaults.standard.stringArray(forKey: "pinnedTabSpaces") ?? []
             var placed: [BrowserTab] = []
-            for url in pinned {
-                if let existing = tabs.first(where: { $0.url == url && !$0.isPinned }) {
+            for (index, text) in pinnedText.enumerated() {
+                guard let url = URL(string: text), ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { continue }
+                let space = (pinnedSpaces.indices.contains(index)
+                    ? UUID(uuidString: pinnedSpaces[index]).flatMap { SpaceStore.shared.space($0)?.id } : nil)
+                    ?? SpaceStore.shared.defaultSpace.id
+                if let existing = tabs.first(where: { $0.url == url && !$0.isPinned && $0.spaceID == space }) {
                     existing.isPinned = true
                     placed.append(existing)
                 } else {
-                    let tab = newTab(select: false, usePreferredPage: false, atEnd: true)
-                    tab.restoreLazily(url)
+                    let tab = addRestoredTab(url, space: space)
                     tab.isPinned = true
                     placed.append(tab)
                 }
@@ -168,10 +299,20 @@ final class BrowserModel: NSObject, ObservableObject {
             if !placed.isEmpty { tabs = placed + tabs.filter { !$0.isPinned } }
         }
         if !isPrivate { Self.didRestoreSession = true }
-        if tabs.allSatisfy(\.isPinned) {
+        if visibleTabs.allSatisfy(\.isPinned) {
             // A new window opens the homepage if Settings › General says so.
             if let home = NewTabPage.windowURL { newTab(url: home) } else { newTab(focus: true, usePreferredPage: false) }
         }
+    }
+
+    /// A tab from last time, waiting to load until you click it.
+    private func addRestoredTab(_ url: URL, space: UUID) -> BrowserTab {
+        let tab = BrowserTab(model: self, store: SpaceStore.shared.dataStore(forSpace: space))
+        tab.spaceID = space
+        tab.restoreLazily(url)
+        tabs.append(tab)
+        ExtensionEvents.opened(tab)
+        return tab
     }
 
     deinit {
@@ -186,24 +327,29 @@ final class BrowserModel: NSObject, ObservableObject {
         sessionSave?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            let urls = self.tabs.compactMap { $0.url?.absoluteString }
-            UserDefaults.standard.set(self.tabs.filter(\.isPinned).compactMap { $0.url?.absoluteString }, forKey: "pinnedTabs")
+            let saved = self.tabs.filter { $0.url != nil }
+            let pinned = saved.filter(\.isPinned)
+            let d = UserDefaults.standard
+            d.set(pinned.compactMap { $0.url?.absoluteString }, forKey: "pinnedTabs")
+            d.set(pinned.map { $0.spaceID?.uuidString ?? "" }, forKey: "pinnedTabSpaces")
             // Closing the last tab closes the window; keep that window's pages for next launch.
-            guard !urls.isEmpty else { return }
-            UserDefaults.standard.set(urls, forKey: "lastSession")
+            guard !saved.isEmpty else { return }
+            d.set(saved.compactMap { $0.url?.absoluteString }, forKey: "lastSession")
+            d.set(saved.map { $0.spaceID?.uuidString ?? "" }, forKey: "lastSessionSpaces")
         }
         sessionSave = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
     }
 
     var selectedTab: BrowserTab? {
-        tabs.first { $0.id == selectedID } ?? tabs.first
+        tabs.first { $0.id == selectedID } ?? visibleTabs.first ?? tabs.first
     }
 
     @discardableResult
     func newTab(url: URL? = nil, configuration: WKWebViewConfiguration? = nil,
                 select: Bool = true, focus: Bool = false, usePreferredPage: Bool = true, atEnd: Bool = false) -> BrowserTab {
-        let tab = BrowserTab(model: self, configuration: configuration)
+        let tab = BrowserTab(model: self, configuration: configuration, store: currentStore)
+        tab.spaceID = isPrivate ? nil : spaceID
         defer { ExtensionEvents.opened(tab) }
         if !atEnd, let current = selectedTab, let index = tabs.firstIndex(where: { $0 === current }) {
             // New tabs go after the current one, but never in among the pinned tabs.
@@ -222,6 +368,7 @@ final class BrowserModel: NSObject, ObservableObject {
     func close(_ tab: BrowserTab, remember: Bool = true) {
         guard let index = tabs.firstIndex(where: { $0 === tab }) else { return }
         let wasSelected = tab.id == selectedTab?.id
+        let visibleIndex = visibleTabs.firstIndex(where: { $0 === tab }) ?? 0
         // Closing one side of Split View shows the other on its own.
         var partner: UUID?
         if let pair = splitPair, pair.contains(tab.id) {
@@ -238,10 +385,14 @@ final class BrowserModel: NSObject, ObservableObject {
             return
         }
         if wasSelected {
+            let mine = visibleTabs
             if let partner, tabs.contains(where: { $0.id == partner }) {
                 selectedID = partner
+            } else if !mine.isEmpty {
+                selectedID = mine[min(visibleIndex, mine.count - 1)].id
             } else {
-                selectedID = tabs[min(index, tabs.count - 1)].id
+                // The last tab in this Space: start a fresh one here rather than closing the window.
+                newTab(focus: true)
             }
         }
     }
@@ -261,12 +412,16 @@ final class BrowserModel: NSObject, ObservableObject {
     }
 
     /// Moves a tab to a new position in the tab bar (drag to reorder).
+    /// Positions are in the tab bar (this Space's tabs).
     func moveTab(from source: Int, to destination: Int) {
-        guard tabs.indices.contains(source), tabs.indices.contains(destination), source != destination,
-              tabs[source].isPinned == tabs[destination].isPinned else { return }   // pinned tabs stay together
-        let tab = tabs.remove(at: source)
-        tabs.insert(tab, at: destination)
-        ExtensionEvents.moved(tab, from: source, in: self)
+        let mine = visibleTabs
+        guard mine.indices.contains(source), mine.indices.contains(destination), source != destination,
+              mine[source].isPinned == mine[destination].isPinned,   // pinned tabs stay together
+              let from = tabs.firstIndex(where: { $0 === mine[source] }),
+              let to = tabs.firstIndex(where: { $0 === mine[destination] }) else { return }
+        let tab = tabs.remove(at: from)
+        tabs.insert(tab, at: to)
+        ExtensionEvents.moved(tab, from: from, in: self)
         scheduleSessionSave()
     }
 
@@ -281,9 +436,10 @@ final class BrowserModel: NSObject, ObservableObject {
     }
 
     func selectAdjacentTab(_ offset: Int) {
-        guard tabs.count > 1, let current = selectedTab,
-              let index = tabs.firstIndex(where: { $0 === current }) else { return }
-        selectedID = tabs[(index + offset + tabs.count) % tabs.count].id
+        let mine = visibleTabs
+        guard mine.count > 1, let current = selectedTab,
+              let index = mine.firstIndex(where: { $0 === current }) else { return }
+        selectedID = mine[(index + offset + mine.count) % mine.count].id
     }
 
     func focusAddressBar() {

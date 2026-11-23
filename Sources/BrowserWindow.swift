@@ -150,6 +150,7 @@ struct BrowserWindow: View {
             if let tab = model.selectedTab { DispatchQueue.main.async { tab.webView.window?.makeFirstResponder(tab.webView) } }
             NSApp.activate(ignoringOtherApps: true)
         }
+        .overlay { CommandPaletteOverlay(model: model) }
         .hushDialogs(model.dialogs)
         .onReceive(NotificationCenter.default.publisher(for: QuitHelper.closeSheets)) { _ in
             showWelcome = false

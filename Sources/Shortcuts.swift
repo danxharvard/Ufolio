@@ -11,6 +11,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
     case zoomIn, zoomOut, actualSize
     case splitView, reader, pictureInPicture, translate, muteTab
     case bookmark, bookmarksBar, history, sidebar
+    case commandPalette, nextSpace, previousSpace
 
     var id: String { rawValue }
 
@@ -45,6 +46,9 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .bookmarksBar: return "Show Bookmarks Bar"
         case .history: return "Show All History"
         case .sidebar: return "Show Bookmarks & History Sidebar"
+        case .commandPalette: return "Command Palette"
+        case .nextSpace: return "Next Space"
+        case .previousSpace: return "Previous Space"
         }
     }
 
@@ -57,6 +61,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .zoomIn, .zoomOut, .actualSize: return "Zoom"
         case .splitView, .reader, .pictureInPicture, .translate, .muteTab: return "Views and media"
         case .bookmark, .bookmarksBar, .history, .sidebar: return "Bookmarks and history"
+        case .commandPalette, .nextSpace, .previousSpace: return "Command Palette and Spaces"
         }
     }
 
@@ -91,6 +96,9 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .bookmarksBar: return KeyCombo("b", [.command, .shift])
         case .history: return KeyCombo("y")
         case .sidebar: return KeyCombo("l", [.command, .shift])
+        case .commandPalette: return KeyCombo("k")
+        case .nextSpace: return KeyCombo("]", [.command, .control])
+        case .previousSpace: return KeyCombo("[", [.command, .control])
         }
     }
 }
