@@ -55,7 +55,20 @@ jobs:
           HUSH_UPDATE_KEY: ${{ secrets.HUSH_UPDATE_KEY }}
         run: |
           V="$(cat VERSION)"
-          swift scripts/sign-update.swift "build/HushBrowser-$V.zip" > "build/HushBrowser-$V.zip.sig"
+          # Say clearly what's wrong (without ever showing the key).
+          KEY="$(printf %s "$HUSH_UPDATE_KEY" | tr -d '[:space:]')"
+          if [ -z "$KEY" ]; then
+            echo "::error::The HUSH_UPDATE_KEY secret is empty or this workflow can't see it. Add it under Settings › Secrets and variables › Actions › Repository secrets (not Environments, Codespaces or Dependabot), named exactly HUSH_UPDATE_KEY."
+            exit 1
+          fi
+          if [ "${#KEY}" -ne 44 ]; then
+            echo "::error::HUSH_UPDATE_KEY has ${#KEY} characters, but the key is 44. Copy it again with: pbcopy < ~/.hush-update-signing-key, then paste it as the secret's value."
+            exit 1
+          fi
+          if ! swift scripts/sign-update.swift "build/HushBrowser-$V.zip" > "build/HushBrowser-$V.zip.sig"; then
+            echo "::error::HUSH_UPDATE_KEY is 44 characters but isn't a valid signing key. Copy it again with: pbcopy < ~/.hush-update-signing-key"
+            exit 1
+          fi
 
       # The release notes start with this version's "What's new" from CHANGELOG.md, exactly as
       # Hush shows it after updating, followed by install instructions.
