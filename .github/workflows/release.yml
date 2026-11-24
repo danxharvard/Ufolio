@@ -18,7 +18,9 @@ permissions:
 
 jobs:
   release:
-    runs-on: macos-latest
+    # GitHub's Intel Macs: usually far less busy than its Apple Silicon ones, which often left
+    # releases waiting until they were cancelled. The app is built for both kinds of Mac either way.
+    runs-on: macos-15-intel
     # The most the build itself may take once a Mac picks it up.
     timeout-minutes: 90
     steps:

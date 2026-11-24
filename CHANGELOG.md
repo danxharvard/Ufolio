@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.40.2
+
+- Releases now build on machines that are far less busy, so updates reach you reliably. Includes
+  everything since 0.38.0: the new Ufolio name and saucer, Force Field, Orbits and Stealth Mode,
+  the ⋯ panel, and a smoother start page.
+
 ## 0.40.1
 
 **The saucer has landed 🛸**
