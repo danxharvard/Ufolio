@@ -136,7 +136,9 @@ final class Updater: ObservableObject {
             let version = latest.version
             try await FileDownload.fetch(latest.asset, to: zip) { progress in
                 Task { @MainActor in
-                    if case .downloading = Updater.shared.state {
+                    // Whole-percent steps only: every network tick redrew Settings for nothing.
+                    if case .downloading(_, let shown) = Updater.shared.state,
+                       Int(progress * 100) != Int(shown * 100) {
                         Updater.shared.state = .downloading(version: version, progress: progress)
                     }
                 }

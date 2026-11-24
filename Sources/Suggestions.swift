@@ -71,7 +71,11 @@ final class SuggestionsModel: ObservableObject {
                 .filter { !localTexts.contains($0.lowercased()) }
                 .prefix(max(3, 8 - local.count))
                 .map { Suggestion(kind: .search, title: $0, text: $0) }
+            // Keep the highlight on the suggestion you picked (its position may have changed);
+            // otherwise Return could open a different one.
+            let picked = self.selected?.text
             self.items = local + searches
+            self.selectedIndex = picked.flatMap { text in self.items.firstIndex { $0.text == text } }
         }
     }
 

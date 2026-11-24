@@ -382,9 +382,6 @@ enum HushDialogs {
                 HistoryStore.shared.clear()
                 RecentlyClosed.shared.clear()
                 PrivacyReport.shared.reset()
-                // Saved site icons show where you've been too (bookmarks' icons simply download again).
-                Task { await FaviconCache.shared.purgeMemory() }
-                DispatchQueue.global(qos: .utility).async { FaviconCache.clearDisk() }
             }))
     }
 }

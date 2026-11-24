@@ -42,12 +42,18 @@ final class DownloadItem: ObservableObject, Identifiable {
     }
 
     func watch(_ progressObject: Progress) {
+        // WebKit reports every chunk (thousands a second on a fast line): only steps of half a
+        // percent are passed on, so the main thread and the Downloads list aren't flooded.
+        var lastSent = -1.0
         observation = progressObject.observe(\.fractionCompleted) { [weak self] p, _ in
             let fraction = p.fractionCompleted
+            guard fraction - lastSent >= 0.005 || fraction >= 1 else { return }
+            lastSent = fraction
             let total = p.totalUnitCount
             DispatchQueue.main.async {
-                self?.progress = fraction
-                if total > 0 { self?.totalBytes = total }
+                guard let self else { return }
+                self.progress = fraction
+                if total > 0, self.totalBytes != total { self.totalBytes = total }
             }
         }
     }

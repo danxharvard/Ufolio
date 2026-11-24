@@ -462,7 +462,9 @@ actor FaviconCache {
         return c
     }()
     private final class IconBox { let icon: SiteIcon; init(_ icon: SiteIcon) { self.icon = icon } }
-    private var misses: Set<String> = []
+    /// Sites with no icon, and when that was found. Asked again after a while, so a moment
+    /// offline doesn't leave every icon blank until Ufolio restarts.
+    private var misses: [String: Date] = [:]
     private var inFlight: [String: Task<SiteIcon?, Never>] = [:]
 
     func icon(for url: URL?, saveToDisk: Bool = true) async -> NSImage? {
@@ -474,7 +476,7 @@ actor FaviconCache {
     func info(for url: URL?, saveToDisk: Bool = true) async -> SiteIcon? {
         guard let url, let host = url.host, let scheme = url.scheme, scheme.hasPrefix("http") else { return nil }
         if let hit = cache.object(forKey: host as NSString) { return hit.icon }
-        if misses.contains(host) { return nil }
+        if let missed = misses[host], Date().timeIntervalSince(missed) < 600 { return nil }
         if let running = inFlight[host] { return await running.value }
 
         let task = Task<SiteIcon?, Never> {
@@ -496,7 +498,7 @@ actor FaviconCache {
         inFlight[host] = nil
         if let result {
             cache.setObject(IconBox(result), forKey: host as NSString, cost: max(1, result.pixels * result.pixels * 4))
-        } else { misses.insert(host) }
+        } else { misses[host] = Date() }
         return result
     }
 

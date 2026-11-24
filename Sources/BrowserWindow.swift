@@ -518,7 +518,8 @@ private struct TabPage: View {
             }
             if let block = tab.lookalike {
                 LookalikeWarning(match: block.match) {
-                    tab.load(URL(string: "https://\(block.match.real)")!)
+                    // The real site comes from your own bookmarks and history: never assume it's a tidy address.
+                    if let real = URL(string: "https://\(block.match.real)") { tab.load(real) } else { tab.lookalike = nil }
                 } onContinue: {
                     Lookalike.allow(Domains.site(block.url.host ?? ""))
                     tab.load(block.url)

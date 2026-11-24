@@ -50,7 +50,9 @@ struct ReleaseNotes {
             let line = raw.trimmingCharacters(in: .whitespaces)
             if line.hasPrefix("## ") {
                 closeVersion()
-                version = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                // "## 0.43.0: the stability release" → "0.43.0" (the title after it is optional).
+                let rest = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                version = rest.split(whereSeparator: { $0 == ":" || $0 == " " }).first.map(String.init) ?? rest
             } else if version == nil {
                 continue
             } else if line.hasPrefix("**") && line.hasSuffix("**") && line.count > 4 {

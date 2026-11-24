@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.43.3: ten more fixes
+
+**Ad blocking**
+- Built-in blocking rules now update with Ufolio. Before, WebKit kept the copy compiled the
+  first time you ran Ufolio, so improved rules from later updates never took effect.
+
+**Fixes**
+- What's New appears again after updating (it couldn't find notes for recent versions).
+- History now includes pages that change without reloading, such as YouTube videos and web apps.
+- Highlighting an address bar suggestion and pressing Return opens that suggestion, even if
+  more suggestions arrive just before.
+- Tabs you opened just before quitting are kept for next time.
+- Pinned tabs stay pinned when the Orbit they were in is deleted.
+- Fixed a possible crash on the look-alike site warning's "go to the real site" button.
+- Site icons that couldn't load (for example while offline) are tried again later.
+
+**Smoother**
+- Fast downloads no longer flood the window with progress updates.
+- Downloading an update no longer redraws Settings many times a second.
+
 ## 0.43.2: security and stability fixes
 
 **Security**
@@ -8,7 +28,6 @@
   files on your Mac.
 - Deleting an Orbit profile now always wipes its cookies and logins, even if you hadn't used it
   since Ufolio started.
-- Clear History now also clears the saved site icons, which also showed where you'd been.
 
 **Stability**
 - Sleeping tabs now really free their memory: the page's web process ends straight away.

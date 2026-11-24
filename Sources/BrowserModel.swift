@@ -124,6 +124,7 @@ final class BrowserModel: NSObject, ObservableObject {
             guard let index = tabs.firstIndex(where: { $0 === tab }) else { continue }
             let copy = BrowserTab(model: self, store: target)
             copy.spaceID = fallback
+            copy.isPinned = tab.isPinned   // pinned tabs stay pinned
             if let url = tab.url { copy.restoreLazily(url) }
             if splitPair?.contains(tab.id) == true { splitPair = nil }
             ExtensionEvents.closed(tab)
@@ -337,6 +338,14 @@ final class BrowserModel: NSObject, ObservableObject {
     }
 
     /// Remembers this window's open pages (for "Tabs from last time").
+    /// Writes any waiting session save straight away (as Ufolio quits).
+    func saveSessionNow() {
+        guard let pending = sessionSave, !pending.isCancelled else { return }
+        sessionSave = nil
+        pending.perform()
+        pending.cancel()   // so the scheduled copy doesn't run again
+    }
+
     func scheduleSessionSave() {
         guard !isPrivate else { return }
         sessionSave?.cancel()

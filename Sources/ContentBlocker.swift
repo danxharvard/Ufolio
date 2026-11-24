@@ -82,6 +82,15 @@ final class ContentBlocker: ObservableObject {
 
     func prepare() {
         store.removeContentRuleList(forIdentifier: "hush-adblock-v1") { _ in } // from version 0.1.0
+        // Compiled copies of older built-in rules (each update's rules have their own name) are
+        // removed, so they don't pile up on disk.
+        let current = Set(BuiltInRules.allCases.map(\.identifier))
+        store.getAvailableContentRuleListIdentifiers { [weak self] ids in
+            for id in ids ?? [] where id.hasPrefix("hush-") && !id.hasPrefix("hush-list-")
+                && id != ElementZapper.ruleIdentifier && !current.contains(id) {
+                self?.store.removeContentRuleList(forIdentifier: id) { _ in }
+            }
+        }
         for builtIn in BuiltInRules.allCases {
             loadCompiled(builtIn.identifier) { builtIn.json }
         }
@@ -455,7 +464,23 @@ final class ContentBlocker: ObservableObject {
 enum BuiltInRules: String, CaseIterable {
     case ads, trackers, thirdPartyCookies, httpsUpgrade, strict, allCookies, thirdPartyScripts, annoyances, chatWidgets
 
-    var identifier: String { "hush-\(rawValue)-v2" }
+    /// Named after the rules themselves, so an update that changes them compiles them afresh.
+    /// (It used to be a fixed name: WebKit kept serving the first compiled copy, so new and
+    /// improved rules from later updates never reached anyone who already had Ufolio.)
+    var identifier: String {
+        if let known = Self.identifiers[self] { return known }
+        let id = "hush-\(rawValue)-" + Self.fingerprint(json)
+        Self.identifiers[self] = id
+        return id
+    }
+    private static var identifiers: [BuiltInRules: String] = [:]
+
+    /// A short, stable fingerprint of the rules (FNV-1a; the same on every launch).
+    private static func fingerprint(_ text: String) -> String {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in text.utf8 { hash = (hash ^ UInt64(byte)) &* 0x100000001b3 }
+        return String(hash, radix: 36)
+    }
 
     var json: String {
         let rules: [[String: Any]]

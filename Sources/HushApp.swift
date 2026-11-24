@@ -61,6 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         // Write everything out before Hush exits (background saves might not finish otherwise).
+        BrowserModel.all.allObjects.forEach { $0.saveSessionNow() }   // the last second of changes too
         BlockStats.shared.save()
         PrivacyReport.shared.save(waiting: true)
         HistoryStore.shared.save(waiting: true)

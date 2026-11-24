@@ -187,6 +187,11 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             if url != nil { tab.waking = false }
             guard tab.url != url else { return }
             tab.url = url
+            // Pages that change without reloading (YouTube videos, web apps) never "finish
+            // loading", so they're added to history here.
+            if !tab.isLoading, !tab.isPrivate, let url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+                HistoryStore.shared.record(url, title: tab.webView.title ?? "")
+            }
             tab.updateSiteColor()
             tab.model?.scheduleSessionSave()
             ExtensionEvents.changed(tab)
