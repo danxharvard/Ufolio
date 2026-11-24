@@ -59,6 +59,11 @@ struct BrowserWindow: View {
         .onChange(of: tabLayout) { _, _ in
             DispatchQueue.main.async { TrafficLights.align(in: model.window) }
         }
+        // Switching light/dark makes macOS lay out the title bar again, which can put the window
+        // buttons back in their default spot, out of line with the tabs.
+        .onChange(of: systemScheme) { _, _ in
+            DispatchQueue.main.async { TrafficLights.align(in: model.window) }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResizeNotification)) { note in
             if (note.object as? NSWindow) === model.window { TrafficLights.align(in: model.window) }
         }
@@ -1489,6 +1494,7 @@ struct LookalikeWarning: View {
 
     var body: some View {
         ZStack {
+            ClickBlocker()   // the previous page is still underneath: it mustn't be clickable through the warning
             LinearGradient(colors: [Color(red: 0.55, green: 0.10, blue: 0.12), Color(red: 0.32, green: 0.05, blue: 0.08)],
                            startPoint: .top, endPoint: .bottom)
             VStack(spacing: 22) {

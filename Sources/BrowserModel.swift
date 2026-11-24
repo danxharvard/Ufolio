@@ -26,6 +26,8 @@ final class BrowserModel: NSObject, ObservableObject {
         }
     }
     private var sleepTimer: Timer?
+    /// The last tab opened in the background, and the tab it was opened from (see newTab).
+    private var lastBackgroundTab: (opener: UUID, tab: UUID)?
     /// The Space this window is showing; only its tabs appear in the tab bar.
     @Published private(set) var spaceID: UUID = SpaceStore.shared.defaultSpace.id
     /// The tab you last had open in each Space, to go back to when you switch.
@@ -377,8 +379,16 @@ final class BrowserModel: NSObject, ObservableObject {
         tab.spaceID = isPrivate ? nil : spaceID
         defer { ExtensionEvents.opened(tab) }
         if !atEnd, let current = selectedTab, let index = tabs.firstIndex(where: { $0 === current }) {
-            // New tabs go after the current one, but never in among the pinned tabs.
-            tabs.insert(tab, at: max(index + 1, tabs.filter(\.isPinned).count))
+            // New tabs go after the current one, but never in among the pinned tabs. Several opened
+            // in the background from the same tab line up in the order you opened them (each one
+            // used to go straight after the current tab, so they came out backwards).
+            var position = max(index + 1, tabs.filter(\.isPinned).count)
+            if !select, let last = lastBackgroundTab, last.opener == current.id,
+               let lastIndex = tabs.firstIndex(where: { $0.id == last.tab }) {
+                position = max(position, lastIndex + 1)
+            }
+            tabs.insert(tab, at: min(position, tabs.count))
+            lastBackgroundTab = select ? nil : (current.id, tab.id)
         } else {
             tabs.append(tab)
         }

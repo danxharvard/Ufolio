@@ -280,7 +280,10 @@ struct KeyboardSettings: View {
                     message = "Shortcuts need ⌘ or ⌃."
                     return nil
                 }
-                guard let key = event.charactersIgnoringModifiers?.lowercased().first, key.isASCII, !key.isWhitespace else { return nil }
+                // The key itself, without Shift applied: ⇧⌘[ used to be recorded as ⇧⌘{ (the shifted
+                // character), which showed oddly and didn't trigger reliably.
+                let base = event.characters(byApplyingModifiers: []) ?? event.charactersIgnoringModifiers
+                guard let key = base?.lowercased().first, key.isASCII, !key.isWhitespace else { return nil }
                 var mods: EventModifiers = []
                 if flags.contains(.command) { mods.insert(.command) }
                 if flags.contains(.shift) { mods.insert(.shift) }

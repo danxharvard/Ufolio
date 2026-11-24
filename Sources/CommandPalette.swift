@@ -74,7 +74,19 @@ final class PaletteModel: ObservableObject {
     func attach(_ browser: BrowserModel, openWindow: OpenWindowAction) {
         self.browser = browser
         self.openWindow = openWindow
+        lastMouse = NSEvent.mouseLocation
         refresh()
+    }
+
+    /// Where the pointer was when hover last chose a row. Hovering only selects once the mouse
+    /// has really moved: rows appearing under a resting pointer as you typed used to take over
+    /// the selection, so Return ran that row instead of the best match.
+    private var lastMouse = NSPoint.zero
+    func hover(_ index: Int) {
+        let now = NSEvent.mouseLocation
+        guard now != lastMouse else { return }
+        lastMouse = now
+        selection = index
     }
 
     func move(_ delta: Int) {
@@ -369,7 +381,7 @@ private struct CommandPalette: View {
                                 PaletteRow(item: item, selected: index == palette.selection)
                                     .id(item.id)
                                     .onTapGesture { palette.run(item) }
-                                    .onHover { if $0 { palette.selection = index } }
+                                    .onHover { if $0 { palette.hover(index) } }
                             }
                         }
                         .padding(6)

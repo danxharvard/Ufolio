@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.43.13: ten more fixes
+
+**Fixes**
+- Links opened in the background with ⌘-click line up in the order you opened them (they came
+  out backwards).
+- A zoomed page keeps its zoom when its tab sleeps and wakes, or when an extension is added.
+- The Command Palette's top result stays selected while you type, even if the pointer is
+  resting over the list (Return could run whichever row was under the pointer).
+- The look-alike site warning and Reader mode can't be clicked through to the page underneath.
+- Save Page As on a PDF saves the PDF itself.
+- Recording a shortcut with Shift and a symbol key (like ⇧⌘[) now works properly.
+- The window buttons stay lined up with the tabs after switching between Light and Dark.
+
+**Smoother**
+- The list of Safari extensions in Settings no longer looks up every app's icon on every update.
+
 ## 0.43.12: ten more fixes
 
 **Pages that couldn't load**

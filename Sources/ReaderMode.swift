@@ -145,6 +145,8 @@ struct ReaderView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
+            // The page is still underneath: clicks in Reader's margins mustn't reach its links.
+            ClickBlocker()
             theme.background.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: size * 0.9) {

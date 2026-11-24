@@ -244,6 +244,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     }
     var lastActive = Date()
     private var sleepState: Any?
+    /// The page's zoom when it went to sleep (a woken tab used to come back at the default size).
+    private var zoomBeforeSleep: CGFloat?
     private var waking = false
 
     func sleep() {
@@ -254,6 +256,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             guard let self, !self.isAsleep, self.model?.selectedTab !== self else { return }
             self.snapshotData = image.flatMap(Self.compressed)
             self.sleepState = self.webView.interactionState
+            self.zoomBeforeSleep = self.webView.pageZoom   // the woken page gets it back
             self.observers.removeAll()
             let old = self.webView
             old.stopLoading()
@@ -294,6 +297,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         }
         let state = url != nil ? webView.interactionState : nil
         let address = url
+        let zoom = webView.pageZoom   // kept for the rebuilt page
         observers.removeAll()
         let old = webView
         old.stopLoading()
@@ -304,6 +308,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         webView = HushWebView(frame: .zero, configuration: BrowserTab.makeConfiguration(
             privately: isPrivate, store: old.configuration.websiteDataStore))
         setUp(webView)
+        webView.pageZoom = zoom
         if let state { webView.interactionState = state } else if let address { webView.load(URLRequest(url: address)) }
         objectWillChange.send()
     }
@@ -321,6 +326,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             webView.load(URLRequest(url: url))
         }
         sleepState = nil
+        if let zoom = zoomBeforeSleep { webView.pageZoom = zoom; zoomBeforeSleep = nil }
         isAsleep = false
         lastActive = Date()
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
@@ -379,7 +385,12 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     /// Save Page As (⌘S): the whole page, images included, as a web archive.
     func savePage() {
-        guard let window = webView.window, url != nil else { return }
+        guard let window = webView.window, let url else { return }
+        // A PDF is saved as the PDF itself (a web archive of it was no use outside Safari).
+        if url.pathExtension.lowercased() == "pdf" {
+            webView.startDownload(using: URLRequest(url: url)) { download in download.delegate = Downloads.shared }
+            return
+        }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.webArchive]
         panel.nameFieldStringValue = Downloads.safeFilename(displayTitle) + ".webarchive"

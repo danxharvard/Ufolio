@@ -2084,6 +2084,8 @@ private struct SafariExtensionRow: View {
     let info: SafariExtensionInfo
     @ObservedObject private var store = ExtensionStore.shared
     @ObservedObject private var blocker = ContentBlocker.shared
+    /// Looked up once (the row redraws whenever filter-list status changes).
+    @State private var appIcon: NSImage?
 
     private var added: Bool {
         switch info.kind {
@@ -2094,8 +2096,9 @@ private struct SafariExtensionRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: info.appURL.path))
+            Image(nsImage: appIcon ?? NSImage())
                 .resizable().frame(width: 28, height: 28)
+                .task(id: info.appURL) { appIcon = NSWorkspace.shared.icon(forFile: info.appURL.path) }
             VStack(alignment: .leading, spacing: 2) {
                 Text(info.name).font(.system(size: 13, weight: .medium))
                 Text(info.kind == .webExtension ? "Safari extension · \(info.appName)" : "Content blocker · \(info.appName)")
