@@ -8,8 +8,8 @@ struct StartPage: View {
     @ObservedObject private var history = HistoryStore.shared
     @ObservedObject private var closed = RecentlyClosed.shared
     @ObservedObject private var weather = LocalWeather.shared
-    @AppStorage(Prefs.startBackground) private var backgroundStyle = StartBackground.twilight.rawValue
-    @AppStorage(Prefs.startTranslucent) private var translucent = true
+    @ObservedObject private var background = BackgroundStore.shared
+    @Environment(\.colorScheme) private var scheme
     @AppStorage(Prefs.startGreeting) private var showGreeting = true
     @AppStorage(Prefs.startRecentlyClosed) private var showClosed = true
     @AppStorage(Prefs.startBookmarks) private var showFavourites = true
@@ -22,7 +22,7 @@ struct StartPage: View {
         let favouriteHosts = Set(bookmarks.items.compactMap { $0.url.host?.lowercased().strippingWWW })
         let suggestions = showSuggestions ? history.frequentSites(limit: 6, excluding: favouriteHosts) : []
         ZStack {
-            StartBackdrop(style: StartBackground(rawValue: backgroundStyle) ?? .twilight, translucent: translucent)
+            StartBackdrop()
             ScrollView {
                 VStack(alignment: .leading, spacing: 46) {
                     header.riseIn(0)
@@ -45,6 +45,20 @@ struct StartPage: View {
                 .padding(.top, 54)
                 .padding(.bottom, 64)
                 .frame(maxWidth: .infinity)
+            }
+            // Over a picture, light text reads best.
+            .environment(\.colorScheme, background.image != nil ? .dark : scheme)
+        }
+        .overlay(alignment: .bottomLeading) {
+            if let credit = background.credit, background.image != nil {
+                Text(credit)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .lineLimit(1)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Capsule().fill(.black.opacity(0.25)))
+                    .padding(14)
+                    .help(credit)
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -463,105 +477,6 @@ private struct TrackerList: View {
 
 // MARK: - Backdrop
 
-/// Frosted glass (the desktop softly blurred behind the window) with the chosen theme on top.
-private struct StartBackdrop: View {
-    let style: StartBackground
-    let translucent: Bool
-
-    var body: some View {
-        ZStack {
-            if translucent {
-                VisualEffect(material: .underWindowBackground, blending: .behindWindow)
-                StartBackgroundView(style: style, translucent: true)
-            } else {
-                StartBackgroundView(style: style, translucent: false)
-            }
-        }
-        .clipped()
-        .allowsHitTesting(false)
-    }
-}
-
-/// The theme layer: a soft twilight gradient, slow-drifting aurora, or plain.
-struct StartBackgroundView: View {
-    let style: StartBackground
-    var translucent = false
-    @Environment(\.colorScheme) private var scheme
-    @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
-    @ObservedObject private var performance = PerformanceCenter.shared
-
-    var body: some View {
-        Group {
-            switch style {
-            case .plain:
-                if translucent { Color.clear } else { Color(nsColor: .windowBackgroundColor) }
-            case .twilight:
-                LinearGradient(
-                    colors: scheme == .dark
-                        ? [Color(red: 0.09, green: 0.09, blue: 0.13), Color(red: 0.13, green: 0.11, blue: 0.19)]
-                        : [Color(red: 0.98, green: 0.97, blue: 1.0), Color(red: 0.93, green: 0.93, blue: 0.98)],
-                    startPoint: .top, endPoint: .bottom)
-                .opacity(translucent ? 0.55 : 1)
-            case .aurora:
-                AuroraView(dark: scheme == .dark, animate: !reduceMotion && !performance.isPowerSaving, translucent: translucent)
-            }
-        }
-        // A backdrop must never catch clicks or spill outside the page.
-        .clipped()
-        .allowsHitTesting(false)
-    }
-}
-
-/// Slowly drifting colour fields. Drawn frame by frame from the clock (no long-running
-/// SwiftUI animation that could leak into the toolbar), with cheap radial gradients.
-private struct AuroraView: View {
-    let dark: Bool
-    let animate: Bool
-    var translucent = false
-    /// Pauses the drift when the window isn't the one in use (saves power).
-    @Environment(\.controlActiveState) private var activeState
-
-    private struct Field {
-        let color: Color
-        let from: CGPoint
-        let to: CGPoint
-        let radius: CGFloat
-        let speed: Double
-    }
-
-    private let fields = [
-        Field(color: Color(red: 0.45, green: 0.35, blue: 0.95), from: CGPoint(x: 0.25, y: 0.32), to: CGPoint(x: 0.34, y: 0.22), radius: 0.48, speed: 28),
-        Field(color: Color(red: 0.15, green: 0.65, blue: 0.85), from: CGPoint(x: 0.66, y: 0.40), to: CGPoint(x: 0.74, y: 0.55), radius: 0.40, speed: 34),
-        Field(color: Color(red: 0.95, green: 0.45, blue: 0.65), from: CGPoint(x: 0.56, y: 0.72), to: CGPoint(x: 0.46, y: 0.80), radius: 0.36, speed: 40),
-    ]
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 15, paused: !animate || activeState == .inactive)) { context in
-            Canvas { ctx, size in
-                let base = dark ? Color(red: 0.07, green: 0.07, blue: 0.11) : Color(red: 0.97, green: 0.97, blue: 0.99)
-                ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(base.opacity(translucent ? 0.45 : 1)))
-                let t = animate ? context.date.timeIntervalSinceReferenceDate : 0
-                let strength = dark ? 0.55 : 0.32
-                for field in fields {
-                    let phase = (sin(t * 2 * .pi / field.speed) + 1) / 2
-                    let center = CGPoint(x: (field.from.x + (field.to.x - field.from.x) * phase) * size.width,
-                                         y: (field.from.y + (field.to.y - field.from.y) * phase) * size.height)
-                    let r = field.radius * size.width
-                    let rect = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
-                    ctx.fill(Path(ellipseIn: rect), with: .radialGradient(
-                        Gradient(stops: [
-                            .init(color: field.color.opacity(strength), location: 0),
-                            .init(color: field.color.opacity(strength * 0.45), location: 0.45),
-                            .init(color: field.color.opacity(0), location: 1),
-                        ]),
-                        center: center, startRadius: 0, endRadius: r))
-                }
-            }
-        }
-    }
-}
-
-/// Sections float gently into place when a new tab opens (skipped with Reduce Motion).
 private struct RiseIn: ViewModifier {
     let order: Int
     @State private var shown = false

@@ -591,8 +591,9 @@ enum UserScripts {
         el.dataset.hushCollapsed = '1';
         el.style.setProperty('display', 'none', 'important');
       }
+      // textContent, not innerText: innerText makes the page lay itself out again.
       function ownText(el) {
-        return (el.innerText || '').replace(/\s+/g, ' ').trim();
+        return (el.textContent || '').replace(/\s+/g, ' ').trim();
       }
       // "Real content": visible text that isn't just an ad label, or a loaded image/video.
       function hasRealContent(el) {
@@ -634,7 +635,22 @@ enum UserScripts {
           if (!el.dataset.hushCollapsed && el.offsetParent !== null && isDeadSlot(el)) hide(el);
         }
       }
-      window.__hushSweep = function () { sweep(); sweepDeadSlots(); };
+      // Nothing happens until Hush reports a blocked ad on this page (pages without ads pay nothing).
+      var active = false, sweeps = 0;
+      var idle = window.requestIdleCallback || function (f) { return setTimeout(f, 200); };
+      window.__hushSweep = function () {
+        if (!active) {
+          active = true;
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+        }
+        idle(function () { sweep(); sweepDeadSlots(); });
+      };
+      function start() {
+        if (!document.body) return;
+        new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+        window.addEventListener('load', function () { setTimeout(window.__hushSweep, 1500); });
+        schedule();
+      }
 
       function sweep() {
         // 1. Containers named as ads that now hold nothing real (blocked or never filled).
@@ -663,22 +679,14 @@ enum UserScripts {
         });
       }
 
-      // At most one scan every 0.6 s, and none while the tab is in the background.
+      // At most one scan every 0.8 s, in idle time, never in a background tab, and at most 25
+      // per page (endless feeds stop costing anything after that).
       var timer = null;
       function schedule() {
-        if (timer || document.hidden) return;
-        timer = setTimeout(function () { timer = null; sweep(); }, 600);
+        if (!active || timer || document.hidden || sweeps >= 25) return;
+        timer = setTimeout(function () { timer = null; sweeps++; idle(sweep); }, 800);
       }
       document.addEventListener('visibilitychange', function () { if (!document.hidden) schedule(); });
-      document.addEventListener('DOMContentLoaded', schedule);
-      window.addEventListener('load', function () {
-        schedule();
-        setTimeout(window.__hushSweep, 1500);
-        setTimeout(window.__hushSweep, 5000);
-      });
-      document.addEventListener('DOMContentLoaded', function () {
-        new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
-      });
     })();
     """#, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .defaultClient)
 
@@ -740,9 +748,18 @@ enum UserScripts {
           }
         }
       }
+      // Starts once the page has loaded and the browser is idle, so it never slows loading.
+      // Pop-ups often appear a little late, so it looks a few more times, then stops.
       var tries = 0;
-      function loop() { attempt(); if (!done && ++tries < 20) setTimeout(loop, 500); }
-      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loop); else loop();
+      var idle = window.requestIdleCallback || function (f) { return setTimeout(f, 150); };
+      function loop() {
+        if (done || document.hidden) return;
+        idle(function () {
+          attempt();
+          if (!done && ++tries < 12) setTimeout(loop, tries < 4 ? 400 : 1000);
+        });
+      }
+      if (document.readyState === 'complete') loop(); else window.addEventListener('load', loop, { once: true });
     })();
     """#, injectionTime: .atDocumentEnd, forMainFrameOnly: false, in: .defaultClient)
 

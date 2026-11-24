@@ -25,7 +25,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var keywords: String {
         switch self {
         case .general: return "default browser homepage startup new tab window search engine suggestions history import downloads safe files favourites"
-        case .appearance: return "tabs vertical side sidebar layout theme dark light night day accent colour color start page background aurora twilight translucent motion animation zoom bookmarks bar tab bar address magic theme colours site colour"
+        case .appearance: return "tabs vertical side sidebar layout theme dark light night day accent colour color start page background wallpaper photo picture daily desktop translucent motion animation zoom bookmarks bar tab bar address magic theme colours site colour"
         case .spaces: return "spaces profiles workspaces work personal accounts sign in cookies separate containers"
         case .performance: return "performance speed fast power battery saver eco carbon energy green memory ram tab sleep graphics 120hz smooth frame rate video pause"
         case .adBlocker: return "blocking mode strict standard off ads ad blocker trackers block filter list easylist cookie banners collapse zapper hidden elements counter statistics"
@@ -76,18 +76,8 @@ enum SettingsOpener {
     /// Opens Hush Settings (⌘,), optionally on a particular section.
     static func open(tab: SettingsTab? = nil) {
         if let tab { UserDefaults.standard.set(tab.rawValue, forKey: "settingsTab") }
-        NSApp.activate(ignoringOtherApps: true)
-        // Since macOS 14 the old "showSettingsWindow:" action is ignored, so use the app
-        // menu's own Settings… item (⌘,), which always works. Close any open popover first.
-        DispatchQueue.main.async {
-            let appMenu = NSApp.mainMenu?.items.first?.submenu
-            if let menu = appMenu,
-               let index = menu.items.firstIndex(where: { $0.keyEquivalent == "," && $0.keyEquivalentModifierMask == .command }) {
-                menu.performActionForItem(at: index)
-            } else {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-            }
-        }
+        // After any open popover or menu has closed.
+        DispatchQueue.main.async { MainActor.assumeIsolated { SettingsWindow.show() } }
     }
 }
 
@@ -220,7 +210,8 @@ private struct SidebarCard: View {
 struct SafariFormStyle: FormStyle {
     func makeBody(configuration: Configuration) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 6) {
+            // Lazy: only the sections on screen are built, so a long page opens straight away.
+            LazyVStack(alignment: .leading, spacing: 6) {
                 // Each section is a rounded card (like System Settings), with its title above
                 // and any note below. The page header and "bare" sections are drawn as they are.
                 Group(sections: configuration.content) { sections in
@@ -673,7 +664,7 @@ private struct AppearanceSettings: View {
     @AppStorage(Prefs.appearance) private var appearance = AppearanceMode.system.rawValue
     @AppStorage(Prefs.tabLayout) private var tabLayout = TabLayout.top.rawValue
     @AppStorage(Prefs.accent) private var accent = AccentChoice.system.rawValue
-    @AppStorage(Prefs.startBackground) private var background = StartBackground.twilight.rawValue
+    @AppStorage(Prefs.startBackground) private var background = StartBackground.frosted.rawValue
     @AppStorage(Prefs.startGreeting) private var greeting = true
     @AppStorage(Prefs.startBookmarks) private var startBookmarks = true
     @AppStorage(Prefs.magicTheme) private var magicTheme = false
@@ -736,13 +727,12 @@ private struct AppearanceSettings: View {
             }
 
             Section {
-                LabeledContent("Background") { Picker("", selection: $background) {
-                    ForEach(StartBackground.allCases) { Text($0.label).tag($0.rawValue) }
-                }.labelsHidden().fixedSize() }
-                .pickerStyle(.segmented)
-                DescribedToggle(title: "Translucent background",
-                                detail: "Lets your desktop show softly through the start page, like frosted glass.",
-                                isOn: $startTranslucent)
+                BackgroundPicker()
+                if background == StartBackground.frosted.rawValue {
+                    DescribedToggle(title: "Translucent background",
+                                    detail: "Lets your desktop show softly through the start page, like frosted glass.",
+                                    isOn: $startTranslucent)
+                }
                 Toggle("Show greeting", isOn: $greeting)
                 Toggle("Show Recently Closed Tabs", isOn: $startClosed)
                 Toggle("Show Favourites", isOn: $startBookmarks)

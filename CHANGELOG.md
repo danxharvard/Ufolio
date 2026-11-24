@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.35.0
+
+**New: beautiful backgrounds**
+- Twilight and Aurora are gone. Choose Frosted Glass, your desktop picture, a fresh Photo of the
+  Day, one of Apple's macOS wallpapers, or your own photo (Settings › Appearance › Start page).
+- Pictures get a gentle shade so the start page reads well, and they're loaded at screen size to
+  keep memory low.
+
+**Faster**
+- Pages load as fast as in plain WebKit, even with Hush Guard on: Hush's cookie and ad-tidying
+  helpers now wait until a page has loaded, and only run where ads were actually blocked.
+- Settings is now Hush's own window. It opens faster, and reopens instantly.
+- When your Mac is short of memory, Hush also lets go of the Settings window and the start page
+  picture.
+
 ## 0.34.1
 
 **Fixes**

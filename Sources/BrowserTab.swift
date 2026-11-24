@@ -471,7 +471,8 @@ extension BrowserTab: WKNavigationDelegate {
                 PrivacyReport.shared.recordBlocked(tracker: url, on: self.host)
             }
             // Tell the page's ad-space collapser that ads really were blocked here.
-            if self.blockedOnPage == 1 && Prefs.bool(Prefs.collapseAdSpace) {
+            // (Again at the 5th and 20th, in case the first came before the page's script was ready.)
+            if [1, 5, 20].contains(self.blockedOnPage) && Prefs.bool(Prefs.collapseAdSpace) {
                 webView.evaluateJavaScript("window.__hushAdsBlocked = true; window.__hushSweep && window.__hushSweep();",
                                            in: nil, in: .defaultClient) { _ in }
             }

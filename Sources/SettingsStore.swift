@@ -18,6 +18,8 @@ enum Prefs {
     static let startRecentlyClosed = "startShowRecentlyClosed"
     static let startPrivacyReport = "startShowPrivacyReport"
     static let startTranslucent = "startTranslucent"
+    static let startWallpaper = "startWallpaper"
+    static let startPhoto = "startPhoto"
     static let defaultZoom = "defaultZoom"
     // General
     static let searchEngine = "searchEngine"
@@ -87,7 +89,7 @@ enum Prefs {
         showBookmarkBar: true,
         showFullAddress: false,
         reduceMotion: false,
-        startBackground: StartBackground.twilight.rawValue,
+        startBackground: StartBackground.frosted.rawValue,
         startGreeting: true,
         startBookmarks: true,
         startFrequent: true,
@@ -213,12 +215,6 @@ enum AccentChoice: String, CaseIterable, Identifiable {
     }
 
     static var current: AccentChoice { AccentChoice(rawValue: Prefs.string(Prefs.accent)) ?? .system }
-}
-
-enum StartBackground: String, CaseIterable, Identifiable {
-    case twilight, aurora, plain
-    var id: String { rawValue }
-    var label: String { rawValue.capitalized }
 }
 
 enum SearchEngine: String, CaseIterable, Identifiable {

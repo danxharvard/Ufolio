@@ -39,11 +39,7 @@ struct HushApp: App {
         }
         .defaultSize(width: 640, height: 640)
 
-        Settings {
-            SettingsView()
-                .hushDialogs(DialogHost.settings)
-                .transaction { if reduceMotion { $0.animation = nil } }
-        }
+        // Settings is Hush's own window (SettingsWindow), which opens much faster than SwiftUI's.
 
     }
 }
@@ -112,6 +108,11 @@ struct HushCommands: Commands {
         CommandGroup(replacing: .appTermination) {
             Button("Quit Hush Browser") { QuitHelper.quit() }
                 .keyboardShortcut("q")
+        }
+
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings…") { SettingsWindow.show() }
+                .keyboardShortcut(",", modifiers: .command)
         }
 
         CommandGroup(after: .appInfo) {
@@ -294,5 +295,51 @@ enum WindowOpener {
             menu.performActionForItem(at: menu.index(of: item))
         }
         NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+
+/// Hush's Settings window. SwiftUI's built-in Settings window took most of a second to appear
+/// every time; this one is built when you first open it and then kept ready, so it reopens
+/// instantly. If the Mac runs short of memory it's let go (see PerformanceCenter).
+@MainActor
+enum SettingsWindow {
+    private static var window: NSWindow?
+
+    static func show() {
+        let w = window ?? make()
+        window = w
+        NSApp.activate(ignoringOtherApps: true)
+        w.makeKeyAndOrderFront(nil)
+    }
+
+    /// Lets go of the window (when memory is short), unless it's open.
+    static func releaseNow() {
+        guard let w = window, !w.isVisible else { return }
+        w.contentViewController = nil
+        window = nil
+    }
+
+    private static func make() -> NSWindow {
+        let controller = NSHostingController(rootView: SettingsRoot())
+        controller.sceneBridgingOptions = [.all]   // the centred title and sidebar search
+        let w = NSWindow(contentViewController: controller)
+        w.title = "Settings"
+        w.identifier = NSUserInterfaceItemIdentifier("settings")
+        w.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
+        w.isReleasedWhenClosed = false
+        w.tabbingMode = .disallowed
+        if !w.setFrameUsingName("HushSettings") { w.center() }
+        w.setFrameAutosaveName("HushSettings")
+        return w
+    }
+}
+
+private struct SettingsRoot: View {
+    @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
+    var body: some View {
+        SettingsView()
+            .hushDialogs(DialogHost.settings)
+            .transaction { if reduceMotion { $0.animation = nil } }
     }
 }

@@ -99,6 +99,10 @@ final class PerformanceCenter: ObservableObject {
         source.setEventHandler { [weak self, weak source] in
             // Pictures kept in memory can always be fetched again.
             Task { await FaviconCache.shared.purgeMemory(); await NewsImages.shared.purgeMemory() }
+            MainActor.assumeIsolated {
+                SettingsWindow.releaseNow()          // rebuilt next time you open Settings
+                BackgroundStore.shared.purgeIfHidden()   // the start page picture, if no start page shows
+            }
             guard Prefs.bool(Prefs.freeMemoryAutomatically), let event = source?.data else { return }
             self?.sleepBackgroundTabs(idleFor: event.contains(.critical) ? 0 : 120)
         }
