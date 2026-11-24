@@ -22,7 +22,8 @@ struct StartPage: View {
         let favouriteHosts = Set(bookmarks.items.compactMap { $0.url.host?.lowercased().strippingWWW })
         let suggestions = showSuggestions ? history.frequentSites(limit: 6, excluding: favouriteHosts) : []
         ZStack {
-            StartBackdrop()
+            // In the background, so it can never affect the page's size.
+            Color.clear.background { StartBackdrop() }
             ScrollView {
                 VStack(alignment: .leading, spacing: 46) {
                     header.riseIn(0)

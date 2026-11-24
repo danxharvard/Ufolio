@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.35.1
+
+**Fixes**
+- Changing the start page background no longer changes the size of the page or pushes the tab
+  column aside. Every picture now simply fills the space, whatever its size.
+
 ## 0.35.0
 
 **New: beautiful backgrounds**

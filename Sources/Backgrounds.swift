@@ -187,10 +187,16 @@ struct StartBackdrop: View {
                 Color(nsColor: .windowBackgroundColor)
             }
             if let image = store.image, StartBackground.current != .frosted {
-                Image(nsImage: image)
-                    .resizable()
-                    .interpolation(.high)
-                    .aspectRatio(contentMode: .fill)
+                // Fills whatever space the page has, and never asks for more: a large picture
+                // must not change the window's size or push the tab column aside.
+                Color.clear
+                    .overlay {
+                        Image(nsImage: image)
+                            .resizable()
+                            .interpolation(.high)
+                            .scaledToFill()
+                    }
+                    .clipped()
                     .transition(.opacity)
                 // A soft shade, deeper at the bottom where the cards are.
                 LinearGradient(colors: [.black.opacity(0.18), .black.opacity(0.42)], startPoint: .top, endPoint: .bottom)
