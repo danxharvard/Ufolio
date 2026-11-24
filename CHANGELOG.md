@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.41.0
+
+**Pew pew 🛸**
+- In the Force Field panel, the saucer now fires laser bolts at ads floating below it, and each
+  one bursts into pieces.
+- The setup guide opens with the saucer flying about, zapping ads with its beams.
+- "Ufolio" on the start page is now in goofy alien lettering.
+
+**Start page**
+- Adult websites no longer appear in Recently Closed or Suggestions unless you turn on
+  "Show adult sites in Recently Closed and Suggestions" in Settings › Appearance › Start page.
+
 ## 0.40.2
 
 - Releases now build on machines that are far less busy, so updates reach you reliably. Includes

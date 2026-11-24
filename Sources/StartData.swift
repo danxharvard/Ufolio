@@ -210,3 +210,26 @@ enum Domains {
         return lastTwo
     }
 }
+
+/// Adult websites, recognised by their address, so the start page (Recently Closed and
+/// Suggestions) doesn't show them unless you choose to (Settings › Appearance › Start page).
+enum AdultSites {
+    private static let domains: Set<String> = [
+        "pornhub.com", "xvideos.com", "xnxx.com", "xhamster.com", "redtube.com", "youporn.com", "tube8.com",
+        "spankbang.com", "eporner.com", "txxx.com", "hqporner.com", "porn.com", "beeg.com", "tnaflix.com",
+        "chaturbate.com", "stripchat.com", "livejasmin.com", "cam4.com", "camsoda.com", "bongacams.com", "myfreecams.com",
+        "onlyfans.com", "fansly.com", "manyvids.com", "clips4sale.com", "brazzers.com", "realitykings.com", "bangbros.com",
+        "nhentai.net", "e-hentai.org", "exhentai.org", "hanime.tv", "rule34.xxx", "rule34.paheal.net", "gelbooru.com",
+        "motherless.com", "heavy-r.com", "efukt.com", "literotica.com", "adultfriendfinder.com", "fapello.com", "erome.com",
+    ]
+    private static let words = ["porn", "xxx", "hentai", "nsfw", "camgirl", "sexcam", "xvideo", "xhamster", "fetish", "milf", "nude"]
+
+    static func isAdult(_ url: URL?) -> Bool {
+        guard let host = url?.host?.lowercased() else { return false }
+        if host.hasSuffix(".xxx") || host.hasSuffix(".porn") || host.hasSuffix(".adult") || host.hasSuffix(".sex") { return true }
+        if domains.contains(Domains.site(host)) { return true }
+        return words.contains { host.contains($0) }
+    }
+
+    static var showOnStartPage: Bool { Prefs.bool(Prefs.startShowAdult) }
+}

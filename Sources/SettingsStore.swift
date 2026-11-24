@@ -20,6 +20,7 @@ enum Prefs {
     static let startTranslucent = "startTranslucent"
     static let startWallpaper = "startWallpaper"
     static let startPhoto = "startPhoto"
+    static let startShowAdult = "startShowAdult"
     static let defaultZoom = "defaultZoom"
     // General
     static let searchEngine = "searchEngine"

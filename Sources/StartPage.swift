@@ -15,20 +15,25 @@ struct StartPage: View {
     @AppStorage(Prefs.startBookmarks) private var showFavourites = true
     @AppStorage(Prefs.startFrequent) private var showSuggestions = true
     @AppStorage(Prefs.startPrivacyReport) private var showPrivacy = true
+    @AppStorage(Prefs.startShowAdult) private var showAdult = false
     @State private var personalising = false
     @State private var customisingNews = false
 
     var body: some View {
         let favouriteHosts = Set(bookmarks.items.compactMap { $0.url.host?.lowercased().strippingWWW })
-        let suggestions = showSuggestions ? history.frequentSites(limit: 6, excluding: favouriteHosts) : []
+        // Adult sites stay off the start page unless you've chosen to show them.
+        let hideAdult = !showAdult
+        let suggestions = showSuggestions ? history.frequentSites(limit: hideAdult ? 12 : 6, excluding: favouriteHosts)
+            .filter { !hideAdult || !AdultSites.isAdult($0.url) }.prefix(6).map { $0 } : []
+        let closedTabs = closed.tabs.filter { !hideAdult || !AdultSites.isAdult($0.url) }
         ZStack {
             // In the background, so it can never affect the page's size.
             Color.clear.background { StartBackdrop() }
             ScrollView {
                 VStack(alignment: .leading, spacing: 46) {
                     header.riseIn(0)
-                    if showClosed && !closed.tabs.isEmpty {
-                        RecentlyClosedSection(model: model, tabs: Array(closed.tabs.prefix(9))).riseIn(1)
+                    if showClosed && !closedTabs.isEmpty {
+                        RecentlyClosedSection(model: model, tabs: Array(closedTabs.prefix(9))).riseIn(1)
                     }
                     if showFavourites && !bookmarks.items.isEmpty {
                         favourites.riseIn(2)
@@ -89,10 +94,7 @@ struct StartPage: View {
         VStack(spacing: 8) {
             AnimatedHushLogo(size: 54)
                 .padding(.bottom, 4)
-            Text("Ufolio")
-                .font(.system(size: 50, weight: .light, design: .rounded))
-                .tracking(1.5)
-                .foregroundStyle(LinearGradient(colors: [.primary, .primary.opacity(0.7)], startPoint: .top, endPoint: .bottom))
+            AlienTitle(size: 50)
             if showGreeting || weather.temperature != nil {
                 HStack(spacing: 8) {
                     if showGreeting { Text(greeting) }

@@ -127,7 +127,8 @@ struct SetupGuide: View {
 
     private var welcomeArt: some View {
         VStack(spacing: 22) {
-            AnimatedHushLogo(size: 120)
+            UFOZapperScene()
+                .frame(height: 210)
             VStack(alignment: .leading, spacing: 14) {
                 Highlight(symbol: "bolt.fill", color: .orange, text: "Blazing fast: ads and trackers stopped before they reach the page")
                 Highlight(symbol: "memorychip.fill", color: .green, text: "Native and light on memory and battery")

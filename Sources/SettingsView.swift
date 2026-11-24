@@ -671,6 +671,7 @@ private struct AppearanceSettings: View {
     @AppStorage(Prefs.startFrequent) private var startFrequent = true
     @AppStorage(Prefs.startRecentlyClosed) private var startClosed = true
     @AppStorage(Prefs.startPrivacyReport) private var startPrivacy = true
+    @AppStorage(Prefs.startShowAdult) private var startAdult = false
     @AppStorage(Prefs.startTranslucent) private var startTranslucent = true
     @AppStorage(Prefs.showBookmarkBar) private var bookmarkBar = true
     @AppStorage(Prefs.showFullAddress) private var fullAddress = false
@@ -737,6 +738,7 @@ private struct AppearanceSettings: View {
                 Toggle("Show Favourites", isOn: $startBookmarks)
                 Toggle("Show Suggestions", isOn: $startFrequent)
                 Toggle("Show Privacy Report", isOn: $startPrivacy)
+                Toggle("Show adult sites in Recently Closed and Suggestions", isOn: $startAdult)
                 DescribedToggle(title: "Show News",
                                 detail: "Headlines from publishers you choose, fetched privately by Ufolio. Customise topics from the start page.",
                                 isOn: $startNews)

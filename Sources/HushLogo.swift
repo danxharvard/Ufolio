@@ -246,3 +246,105 @@ struct CrescentShape: Shape {
         return path
     }
 }
+
+/// The saucer flying about and zapping ads with its beams (the setup guide's welcome).
+/// Drawn from the clock at 30 frames a second; still when Reduce Motion is on.
+struct UFOZapperScene: View {
+    @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
+            let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
+            GeometryReader { geo in
+                let w = geo.size.width, h = geo.size.height
+                // A lazy figure-of-eight across the sky.
+                let saucerX = w * 0.5 + CGFloat(sin(t * 0.55)) * w * 0.28
+                let saucerY = h * 0.30 + CGFloat(sin(t * 1.1)) * h * 0.08
+                let saucerW = min(w, h) * 0.42
+                ZStack {
+                    ZapperCanvas(t: t, size: geo.size, muzzle: CGPoint(x: saucerX, y: saucerY + saucerW * 0.12))
+                    SaucerArt(beam: 0)
+                        .frame(width: saucerW, height: saucerW)
+                        .rotationEffect(.degrees(cos(t * 0.55) * 7))   // banks as it turns
+                        .position(x: saucerX, y: saucerY)
+                }
+            }
+        }
+    }
+}
+
+/// Ads drifting up from below; the saucer's bolt hits each one and it bursts apart.
+private struct ZapperCanvas: View {
+    let t: Double
+    let size: CGSize
+    let muzzle: CGPoint
+    private static let laser = Color(red: 0.55, green: 1.0, blue: 0.55)
+    private static let adColors = [Color(red: 1.0, green: 0.42, blue: 0.36), Color(red: 1.0, green: 0.62, blue: 0.25),
+                                   Color(red: 0.95, green: 0.35, blue: 0.6), Color(red: 0.4, green: 0.6, blue: 1.0)]
+
+    var body: some View {
+        Canvas { ctx, _ in
+            let lanes: [CGFloat] = [0.14, 0.38, 0.62, 0.86]
+            for (i, lane) in lanes.enumerated() {
+                let phase = ((t / 2.6) + Double(i) / 4).truncatingRemainder(dividingBy: 1)
+                let x = size.width * lane + CGFloat(sin(t + Double(i) * 1.7)) * 8
+                let y = size.height * 0.82 + CGFloat(sin(t * 1.4 + Double(i))) * 4
+                let color = Self.adColors[i % Self.adColors.count]
+                let ad = CGRect(x: x - 20, y: y - 12, width: 40, height: 24)
+                switch phase {
+                case ..<0.45:
+                    draw(ctx, ad.offsetBy(dx: 0, dy: CGFloat((0.45 - phase) * 30)), color.opacity(min(1, phase * 4)))
+                case ..<0.56:
+                    draw(ctx, ad, color)
+                    let p = (phase - 0.45) / 0.11
+                    let head = CGPoint(x: muzzle.x + (x - muzzle.x) * p, y: muzzle.y + (y - muzzle.y) * p)
+                    var bolt = Path(); bolt.move(to: muzzle); bolt.addLine(to: head)
+                    ctx.stroke(bolt, with: .color(Self.laser.opacity(0.35)), style: StrokeStyle(lineWidth: 9, lineCap: .round))
+                    ctx.stroke(bolt, with: .color(.white.opacity(0.95)), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                case ..<0.82:
+                    let k = (phase - 0.56) / 0.26
+                    let flash = 12 + 40 * k
+                    ctx.fill(Path(ellipseIn: CGRect(x: x - flash / 2, y: y - flash / 2, width: flash, height: flash)), with: .color(Self.laser.opacity(0.5 * (1 - k))))
+                    for f in 0..<8 {
+                        let a = Double(f) / 8 * 2 * .pi + Double(i)
+                        let r = 8 + 34 * k
+                        let s = 6 * (1 - k * 0.6)
+                        ctx.fill(Path(roundedRect: CGRect(x: x + CGFloat(cos(a) * r) - s / 2, y: y + CGFloat(sin(a) * r) + CGFloat(k * k * 14) - s / 2, width: s, height: s), cornerRadius: 1.5),
+                                 with: .color(color.opacity(1 - k)))
+                    }
+                default: break
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func draw(_ ctx: GraphicsContext, _ r: CGRect, _ color: Color) {
+        ctx.fill(Path(roundedRect: r, cornerRadius: 6), with: .color(color))
+        ctx.stroke(Path(roundedRect: r, cornerRadius: 6), with: .color(.white.opacity(0.35)), lineWidth: 1)
+        ctx.draw(Text("AD").font(.system(size: 12, weight: .heavy, design: .rounded)).foregroundStyle(.white), at: CGPoint(x: r.midX, y: r.midY))
+    }
+}
+
+/// "Ufolio" in goofy alien lettering: chunky rounded letters in alien green, each tilted and
+/// bobbing at its own angle, with a soft glow.
+struct AlienTitle: View {
+    var text = "Ufolio"
+    var size: CGFloat = 50
+
+    var body: some View {
+        HStack(spacing: size * 0.02) {
+            ForEach(Array(text.enumerated()), id: \.offset) { i, letter in
+                Text(String(letter))
+                    .font(.system(size: size, weight: .black, design: .rounded))
+                    .foregroundStyle(LinearGradient(colors: [Color(red: 0.70, green: 1.0, blue: 0.45), Color(red: 0.25, green: 0.80, blue: 0.45)],
+                                                    startPoint: .top, endPoint: .bottom))
+                    .rotationEffect(.degrees([-8.0, 6, -5, 9, -7, 5][i % 6]))
+                    .offset(y: CGFloat([2.0, -4, 3, -2, 4, -3][i % 6]) * size / 50)
+                    .scaleEffect([1.0, 0.92, 1.06, 0.95, 1.04, 0.97][i % 6])
+            }
+        }
+        .shadow(color: Color(red: 0.4, green: 1.0, blue: 0.5).opacity(0.45), radius: size * 0.14)
+        .accessibilityLabel(text)
+    }
+}

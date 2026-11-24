@@ -666,7 +666,7 @@ struct ShieldsPanel: View {
         VStack(spacing: 0) {
             // The animated moon and stars, with this page's count beneath.
             GuardIllustration(on: shieldsUp, blocked: tab.blockedOnPage)
-                .frame(height: 150)
+                .frame(height: 176)
             VStack(spacing: 1) {
                 Text("\(tab.blockedOnPage)")
                     .font(.system(size: 40, weight: .bold, design: .rounded))
@@ -995,11 +995,12 @@ private struct GuardScene: View {
     let size: CGSize
 
     var body: some View {
-        let moonSize = size.height * 0.62
-        let center = CGPoint(x: size.width * 0.5, y: size.height * 0.52)
+        let moonSize = size.height * 0.5
+        // The saucer hovers in the upper half, bobbing gently, with ads to zap below it.
+        let center = CGPoint(x: size.width * 0.5, y: size.height * 0.34 + CGFloat(sin(t * 1.6)) * 2.5)
         ZStack {
             GuardStars(on: on, t: t, size: size)
-            GuardBeads(on: on, blocked: blocked, t: t, center: center, moonSize: moonSize)
+            GuardLasers(on: on, t: t, size: size, saucer: center, saucerWidth: moonSize)
             HushMoon(colors: on
                      ? [Color(red: 0.80, green: 0.72, blue: 1.0), Color(red: 0.40, green: 0.28, blue: 0.85)]
                      : [Color(white: 0.88), Color(white: 0.52)])
@@ -1076,6 +1077,78 @@ private struct GuardBeads: View {
                            size: diameter)
             .opacity(opacity)
             .position(x: x, y: y)
+    }
+}
+
+/// The saucer zapping ads: little "AD" cards drift in below it, a laser bolt shoots down, and
+/// each card bursts into a flash and fragments. With Force Field off, the ads just float there.
+private struct GuardLasers: View {
+    let on: Bool
+    let t: Double
+    let size: CGSize
+    let saucer: CGPoint
+    let saucerWidth: CGFloat
+
+    private static let laser = Color(red: 0.55, green: 1.0, blue: 0.55)
+    private static let adColors = [Color(red: 1.0, green: 0.42, blue: 0.36), Color(red: 1.0, green: 0.62, blue: 0.25), Color(red: 0.95, green: 0.35, blue: 0.6)]
+
+    var body: some View {
+        Canvas { ctx, _ in
+            let lanes: [CGFloat] = [0.2, 0.5, 0.8]
+            let groundY = size.height * 0.84
+            let muzzle = CGPoint(x: saucer.x, y: saucer.y + saucerWidth * 0.2)
+            for (i, lane) in lanes.enumerated() {
+                let period = 3.0
+                let phase = ((t / period) + Double(i) / 3).truncatingRemainder(dividingBy: 1)
+                let x = size.width * lane + CGFloat(sin(t * 0.9 + Double(i) * 2)) * 6
+                let y = groundY + CGFloat(sin(t * 1.3 + Double(i))) * 3
+                let ad = CGRect(x: x - 13, y: y - 8, width: 26, height: 16)
+                let color = Self.adColors[i % Self.adColors.count]
+
+                guard on else {
+                    // Force Field off: the ads stay, dimmed, nothing fires.
+                    drawAd(ctx, ad, color: color.opacity(0.75))
+                    continue
+                }
+                switch phase {
+                case ..<0.40:   // drifting in
+                    drawAd(ctx, ad.offsetBy(dx: 0, dy: CGFloat((0.4 - phase) * 18)), color: color.opacity(min(1, phase * 4)))
+                case ..<0.52:   // the laser fires
+                    drawAd(ctx, ad, color: color)
+                    let progress = (phase - 0.40) / 0.12
+                    let head = CGPoint(x: muzzle.x + (x - muzzle.x) * progress, y: muzzle.y + (y - muzzle.y) * progress)
+                    var bolt = Path(); bolt.move(to: muzzle); bolt.addLine(to: head)
+                    ctx.stroke(bolt, with: .color(Self.laser.opacity(0.35)), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    ctx.stroke(bolt, with: .color(.white.opacity(0.95)), style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
+                    ctx.fill(Path(ellipseIn: CGRect(x: muzzle.x - 4, y: muzzle.y - 3, width: 8, height: 6)), with: .color(Self.laser.opacity(0.9)))
+                case ..<0.80:   // boom: a flash and flying fragments
+                    let k = (phase - 0.52) / 0.28
+                    let flash = 8 + 26 * k
+                    ctx.fill(Path(ellipseIn: CGRect(x: x - flash / 2, y: y - flash / 2, width: flash, height: flash)),
+                             with: .color(Self.laser.opacity(0.55 * (1 - k))))
+                    ctx.fill(Path(ellipseIn: CGRect(x: x - flash / 4, y: y - flash / 4, width: flash / 2, height: flash / 2)),
+                             with: .color(.white.opacity(0.8 * (1 - k))))
+                    for f in 0..<7 {
+                        let angle = Double(f) / 7 * 2 * .pi + Double(i)
+                        let reach = 6 + 22 * k
+                        let fx = x + CGFloat(cos(angle) * reach), fy = y + CGFloat(sin(angle) * reach) + CGFloat(k * k * 10)
+                        let side = 4 * (1 - k * 0.6)
+                        ctx.fill(Path(roundedRect: CGRect(x: fx - side / 2, y: fy - side / 2, width: side, height: side), cornerRadius: 1),
+                                 with: .color(color.opacity(1 - k)))
+                    }
+                default:        // gone; the next one is on its way
+                    break
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func drawAd(_ ctx: GraphicsContext, _ rect: CGRect, color: Color) {
+        ctx.fill(Path(roundedRect: rect, cornerRadius: 4), with: .color(color))
+        ctx.stroke(Path(roundedRect: rect, cornerRadius: 4), with: .color(.white.opacity(0.35)), lineWidth: 0.8)
+        ctx.draw(Text("AD").font(.system(size: 8, weight: .heavy, design: .rounded)).foregroundStyle(.white),
+                 at: CGPoint(x: rect.midX, y: rect.midY))
     }
 }
 
