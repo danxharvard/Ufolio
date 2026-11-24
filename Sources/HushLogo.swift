@@ -115,7 +115,7 @@ struct SaucerArt: View {
 }
 
 /// One little green man: a head, two antennae and big black eyes.
-private struct Alien: View {
+struct Alien: View {
     var body: some View {
         GeometryReader { g in
             let w = g.size.width, h = g.size.height
@@ -346,5 +346,49 @@ struct AlienTitle: View {
         }
         .shadow(color: Color(red: 0.4, green: 1.0, blue: 0.5).opacity(0.45), radius: size * 0.14)
         .accessibilityLabel(text)
+    }
+}
+
+
+/// A little green man poking his head up from behind something (an easter egg in Settings).
+/// Put it in a `.background(alignment:)` with a negative y offset so the thing in front hides
+/// his lower half.
+struct PeekingAlien: View {
+    var size: CGFloat = 26
+    @State private var hovering = false
+
+    var body: some View {
+        Alien()
+            .frame(width: size, height: size * 1.2)
+            .rotationEffect(.degrees(hovering ? -10 : 6))
+            .offset(y: hovering ? -4 : 0)
+            .animation(.spring(response: 0.35, dampingFraction: 0.5), value: hovering)
+            .onHover { hovering = $0 }
+            .help("Greetings, Earthling")
+            .accessibilityHidden(true)
+    }
+}
+
+/// A tiny saucer gliding across now and then (an easter egg in Settings). Core Animation moves it,
+/// so it costs next to nothing; with Reduce Motion it stays parked in the corner.
+struct FlyingSaucerEgg: View {
+    @State private var flying = false
+    @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
+
+    var body: some View {
+        GeometryReader { geo in
+            SaucerArt(beam: 0)
+                .frame(width: 34, height: 34)
+                .rotationEffect(.degrees(-6))
+                .offset(x: reduceMotion ? geo.size.width - 40 : (flying ? geo.size.width + 50 : -60),
+                        y: flying ? 2 : 10)
+                .onAppear {
+                    guard !reduceMotion else { return }
+                    withAnimation(.linear(duration: 9).delay(3).repeatForever(autoreverses: false)) { flying = true }
+                }
+        }
+        .frame(height: 40)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

@@ -1472,6 +1472,7 @@ private struct UpdateSettings: View {
                     Image(nsImage: NSApp.applicationIconImage)
                         .resizable()
                         .frame(width: 64, height: 64)
+                        .background(alignment: .topTrailing) { PeekingAlien(size: 20).offset(x: 4, y: -14) }
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Ufolio Browser \(updater.currentVersion)")
                             .font(.system(size: 17, weight: .semibold))

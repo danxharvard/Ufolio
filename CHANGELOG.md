@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.42.1
+
+**Smoother sidebar**
+- Bookmarks & History now slides in as a frosted card over the edge of the page, instead of
+  squeezing the page. The page never has to rearrange itself, so the slide is silky even on big sites.
+
+**Settings**
+- The performance mode cards are now all the same size.
+- Keep an eye out: a couple of little green men, and the odd saucer, are hiding around Settings. 👽
+
 ## 0.42.0
 
 **New: automatic Power Mode ⚡**

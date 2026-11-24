@@ -182,8 +182,6 @@ struct BrowserWindow: View {
             }
 
             HStack(spacing: 0) {
-            // Bookmarks & History, beside the page (⇧⌘L).
-            SidebarSlot(model: model)
             // The page: a rounded card set into the frosted window.
             ZStack(alignment: .topLeading) {
                 PageArea(model: model)
@@ -194,6 +192,8 @@ struct BrowserWindow: View {
             // Rounded by the page itself (cheap even for video), with a hairline edge. No drop
             // shadow or clipping mask here: those make the Mac recompose a playing video every frame.
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.08)).allowsHitTesting(false))
+            // Bookmarks & History (⇧⌘L) slides in over the page's edge, so the page never resizes.
+            .overlay(alignment: .leading) { SidebarSlot(model: model) }
             }
             .padding([.horizontal, .bottom], 6)
             .padding(.top, 6)
@@ -225,12 +225,12 @@ struct BrowserWindow: View {
                 SelectedTab(model: model) { tab in WebStoreBar(tab: tab) }
                 SelectedTab(model: model) { tab in BookmarkOfferBar(tab: tab) }
                 HStack(spacing: 0) {
-                    SidebarSlot(model: model)
                     ZStack(alignment: .topLeading) {
                         PageArea(model: model)
                         if let tab = model.selectedTab { ProgressLine(tab: tab) }
                     }
                     .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.08)).allowsHitTesting(false))
+                    .overlay(alignment: .leading) { SidebarSlot(model: model) }
                 }
                 .padding(.trailing, 8)
                 .padding(.bottom, 8)
@@ -1221,22 +1221,22 @@ private struct SidebarSlot: View {
     var body: some View {
         Group {
             if built {
-                // A rounded, frosted card beside the page card (same corners, a small gap), rather
-                // than a square slab. While hidden it draws nothing costly, so scrolling stays smooth.
+                // A frosted card that slides in over the edge of the page. The page underneath never
+                // changes size, so opening it never makes a big page lay itself out again mid-slide.
                 LibrarySidebar(model: model, active: slotOpen)
-                    .frame(width: width - 6)
+                    .frame(width: width - 12)
+                    .frame(maxHeight: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
-                    .padding(.trailing, 6)
-                .frame(width: width)
-                .offset(x: slidIn ? 0 : -width)
-                .animation(.spring(response: 0.3, dampingFraction: 0.9), value: slidIn)   // only the slide animates
-                .frame(width: slotOpen ? width : 0, alignment: .leading)
-                .clipped()
-                .allowsHitTesting(slotOpen)
-                .accessibilityHidden(!slotOpen)
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.1)))
+                    .padding(6)
+                    .offset(x: slidIn ? 0 : -width - 20)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.9), value: slidIn)
+                    .allowsHitTesting(slotOpen)
+                    .accessibilityHidden(!slotOpen)
             }
         }
+        .frame(maxHeight: .infinity, alignment: .leading)
+        .clipped()   // only the sidebar is clipped, never the page
         .onAppear {
             if model.sidebarOpen { open() } else {
                 // Build it quietly while nothing else is happening.
@@ -1248,14 +1248,14 @@ private struct SidebarSlot: View {
 
     private func open() {
         built = true
-        slotOpen = true                          // the page makes room in one step
-        DispatchQueue.main.async { slidIn = true }   // then the sidebar glides in
+        slotOpen = true                          // frosted glass on, and clickable
+        DispatchQueue.main.async { slidIn = true }   // then it glides in over the page
     }
 
     private func close() {
         slidIn = false                           // the sidebar glides out first
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-            if !model.sidebarOpen { slotOpen = false }   // then the page takes the space back
+            if !model.sidebarOpen { slotOpen = false }   // then its frosted glass switches off
         }
     }
 }

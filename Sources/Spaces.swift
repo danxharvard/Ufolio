@@ -321,6 +321,7 @@ struct SpacesSettings: View {
     var body: some View {
         Form {
             Section {
+                FlyingSaucerEgg().padding(.bottom, -36)
                 SettingsHeader(tab: .spaces, subtitle: "Orbits keep sets of tabs apart, such as Work and Personal. Give an Orbit its own profile to keep its cookies and sign-ins separate too.")
             }
             Section {

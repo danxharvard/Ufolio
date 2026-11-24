@@ -205,7 +205,7 @@ private struct PowerModeCard: View {
                     Text(mode.detail)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(4)
                         .multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 0)
@@ -213,7 +213,8 @@ private struct PowerModeCard: View {
                     .foregroundStyle(selected ? Color.accentColor : Color.secondary.opacity(0.5))
             }
             .padding(11)
-            .frame(maxWidth: .infinity, minHeight: 74, alignment: .topLeading)
+            // Every card the same size, whatever its text.
+            .frame(maxWidth: .infinity, minHeight: 112, maxHeight: 112, alignment: .topLeading)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.primary.opacity(selected ? 0.07 : hovering ? 0.05 : 0.03)))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -223,6 +224,10 @@ private struct PowerModeCard: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .accessibilityAddTraits(selected ? .isSelected : [])
+        // Someone's peeking over the Eco card.
+        .background(alignment: .topTrailing) {
+            if mode == .eco { PeekingAlien(size: 24).offset(x: -34, y: -20) }
+        }
     }
 }
 
