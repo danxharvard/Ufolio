@@ -261,7 +261,8 @@ struct KeyboardSettings: View {
         recording = action
         message = nil
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard let action = recording else { return event }
+            // Only keys pressed in Settings: typing in a browser window mid-recording used to be swallowed.
+            guard let action = recording, event.window?.identifier?.rawValue == "settings" else { return event }
             switch event.keyCode {
             case 53:                                   // Esc: cancel
                 stopRecording()

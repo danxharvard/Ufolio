@@ -78,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             if !BrowserModel.hasVisibleWindow { WindowOpener.ensureWindow() }
         }
+        Lookalike.refreshKnown()   // ready before the first page loads
         ContentBlocker.shared.prepare()
         ContentBlocker.shared.startListUpdates()
         ExtensionEvents.launch()

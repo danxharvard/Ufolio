@@ -87,8 +87,7 @@ final class ExtensionStore: ObservableObject {
     private init() {
         folder = AppPaths.support.appendingPathComponent("Extensions", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        if let data = try? Data(contentsOf: listFile),
-           let saved = try? JSONDecoder().decode([InstalledExtension].self, from: data) {
+        if let saved = AppPaths.load([InstalledExtension].self, from: listFile) {
             installed = saved
         }
     }

@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.43.1: more stability
+
+**Smoother**
+- Fixed occasional freezes of a few seconds: checking a page against look-alike sites, and
+  offering saved logins or cards, read your passwords from the keychain on the main thread,
+  which can stall. They now happen in the background.
+- Find on Page waits for a pause in typing, and Next/Previous no longer re-read the whole page.
+- Bookmarks: checking whether a page is bookmarked is now instant however many you have, and
+  importing thousands of bookmarks no longer freezes the window.
+- Reader mode lays out long articles as you scroll, so changing the text size is instant.
+- The Force Field settings pane no longer redraws itself as ads are blocked in other windows.
+
+**Fixes**
+- The setup guide, dialogs and the Command Palette now block clicks to the page behind them
+  (you could click a website's buttons through the frosted backdrop).
+- A damaged bookmarks file no longer gets replaced by the starter bookmarks. History, filter
+  lists and extensions also keep a copy of a damaged file rather than losing it.
+- Recording a new keyboard shortcut no longer swallows typing in browser windows.
+- A Stealth tab can no longer be counted as a normal tab for a moment while its window closes.
+- The photo of the day is tried again if you were offline, instead of waiting until tomorrow.
+
+**Tabs down the side**
+- Force Field and Stealth now sit at the top right, beside the ⋯ menu.
+
 ## 0.43.0: the stability release
 
 **Buttons respond instantly**

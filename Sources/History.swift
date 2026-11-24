@@ -50,8 +50,7 @@ final class HistoryStore: ObservableObject {
         let folder = AppPaths.support
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         file = folder.appendingPathComponent("history.json")
-        if let data = try? Data(contentsOf: file),
-           let saved = try? JSONDecoder().decode([HistoryEntry].self, from: data) {
+        if let saved = AppPaths.load([HistoryEntry].self, from: file) {
             entries = Dictionary(saved.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         }
         hiddenHosts = Set(UserDefaults.standard.stringArray(forKey: "hiddenFrequentHosts") ?? [])

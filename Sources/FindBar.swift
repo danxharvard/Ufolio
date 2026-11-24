@@ -9,6 +9,19 @@ final class FindModel: ObservableObject {
     @Published private(set) var matches: Int?
     @Published private(set) var current = 0
     @Published var focusToken = 0
+    /// The query the match count belongs to, so Next/Previous don't count the page again.
+    private var countedQuery: String?
+    private weak var countedPage: WKWebView?
+    private var pendingSearch: DispatchWorkItem?
+
+    /// Searches after a short pause in typing: counting matches reads the whole page's text,
+    /// which is slow on long pages if done for every letter.
+    func searchSoon(in webView: WKWebView?) {
+        pendingSearch?.cancel()
+        let work = DispatchWorkItem { [weak self, weak webView] in self?.search(in: webView, restart: true) }
+        pendingSearch = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
+    }
 
     func show() {
         isVisible = true
@@ -17,6 +30,8 @@ final class FindModel: ObservableObject {
 
     func hide(in webView: WKWebView?) {
         isVisible = false
+        pendingSearch?.cancel()
+        countedQuery = nil
         matches = nil
         current = 0
         // Clear the highlighted match.
@@ -24,8 +39,8 @@ final class FindModel: ObservableObject {
     }
 
     func search(in webView: WKWebView?, backwards: Bool = false, restart: Bool = false) {
-        guard let webView, !query.isEmpty else { matches = nil; current = 0; return }
-        if restart { current = 0 }
+        guard let webView, !query.isEmpty else { matches = nil; current = 0; countedQuery = nil; return }
+        if restart { current = 0; countedQuery = nil }
         let config = WKFindConfiguration()
         config.backwards = backwards
         config.caseSensitive = false
@@ -34,6 +49,11 @@ final class FindModel: ObservableObject {
         webView.find(text, configuration: config) { [weak self] result in
             guard let self, self.query == text else { return }
             if !result.matchFound { self.matches = 0; self.current = 0; return }
+            // Already counted on this page: just step the position.
+            if self.countedQuery == text, self.countedPage === webView, let total = self.matches, total > 0 {
+                self.current = backwards ? (self.current - 2 + total) % total + 1 : self.current % total + 1
+                return
+            }
             self.countMatches(of: text, in: webView, backwards: backwards)
         }
     }
@@ -51,6 +71,8 @@ final class FindModel: ObservableObject {
             guard let self, self.query == text, case .success(let value) = result else { return }
             let total = (value as? Int) ?? (value as? NSNumber)?.intValue ?? 0
             self.matches = total
+            self.countedQuery = text
+            self.countedPage = webView
             guard total > 0 else { self.current = 0; return }
             if self.current == 0 { self.current = 1 } else {
                 self.current = backwards ? (self.current - 2 + total) % total + 1 : self.current % total + 1
@@ -103,7 +125,7 @@ struct FindBar: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 36)
-        .onChange(of: find.query) { _, _ in find.search(in: webView, restart: true) }
+        .onChange(of: find.query) { _, _ in find.searchSoon(in: webView) }
         .onChange(of: find.focusToken) { _, _ in focused = true }
         .onAppear { focused = true }
     }

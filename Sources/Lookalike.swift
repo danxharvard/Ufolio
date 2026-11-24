@@ -10,18 +10,36 @@ enum Lookalike {
         let real: String      // the site you use, e.g. "paypal.com"
     }
 
-    private static var knownCache: (sites: Set<String>, built: Date)?
+    /// A site you use, with its look-alike "skeleton" worked out once rather than per page.
+    private struct Known { let site: String; let skeleton: String; let label: String }
+    private static var known: [Known] = []
+    private static var knownSet: Set<String> = []
+    private static var builtAt = Date.distantPast
+    private static var refreshing = false
 
-    /// Sites you use, refreshed at most once a minute.
-    private static var knownSites: Set<String> {
-        if let cache = knownCache, Date().timeIntervalSince(cache.built) < 60 { return cache.sites }
+    /// Rebuilds the list of sites you use (at most once a minute) in the background. It reads
+    /// saved passwords from the keychain, which can stall for a long time, so it must never
+    /// happen on the main thread in the middle of loading a page.
+    static func refreshKnown() {
+        guard !refreshing else { return }
+        refreshing = true
         var sites = Set<String>()
         for b in BookmarkStore.shared.items { if let h = b.url.host { sites.insert(Domains.site(h)) } }
-        for login in PasswordVault.logins() { sites.insert(Domains.site(login.host)) }
         for site in HistoryStore.shared.frequentSites(limit: 60) where site.score >= 3 { sites.insert(Domains.site(site.host)) }
-        sites.remove("")
-        knownCache = (sites, Date())
-        return sites
+        DispatchQueue.global(qos: .utility).async {
+            for login in PasswordVault.logins() { sites.insert(Domains.site(login.host)) }
+            sites.remove("")
+            let entries = sites.map { site -> Known in
+                let skeleton = skeleton(site)
+                return Known(site: site, skeleton: skeleton, label: label(of: skeleton))
+            }
+            DispatchQueue.main.async {
+                known = entries
+                knownSet = sites
+                builtAt = Date()
+                refreshing = false
+            }
+        }
     }
 
     static func allowedAnyway(_ site: String) -> Bool {
@@ -36,24 +54,23 @@ enum Lookalike {
     /// Checks a host before its page loads.
     static func check(host: String) -> Match? {
         guard Prefs.bool(Prefs.lookalikeWarning) else { return nil }
+        if Date().timeIntervalSince(builtAt) > 60 { refreshKnown() }
         let site = Domains.site(host)
-        let known = knownSites
-        guard !site.isEmpty, !known.contains(site), !allowedAnyway(site) else { return nil }
+        guard !site.isEmpty, !knownSet.contains(site), !allowedAnyway(site) else { return nil }
 
         let decoded = Punycode.decodeHost(site)
         let visitedSkeleton = skeleton(decoded)
         let visitedLabel = label(of: visitedSkeleton)
         for real in known {
-            let realSkeleton = skeleton(real)
             // Foreign or swapped letters that read the same (аpple.com, g00gle.com, rnicrosoft.com).
-            if visitedSkeleton == realSkeleton {
-                return Match(visited: decoded, real: real)
+            if visitedSkeleton == real.skeleton {
+                return Match(visited: decoded, real: real.site)
             }
             // One letter added, removed, changed or swapped (paypa1.com, amazom.co.uk, gooogle.com).
-            let realLabel = label(of: realSkeleton)
+            let realLabel = real.label
             if realLabel.count >= 5, visitedLabel.count >= 5, abs(realLabel.count - visitedLabel.count) <= 1,
                distance(visitedLabel, realLabel) == 1 {
-                return Match(visited: decoded, real: real)
+                return Match(visited: decoded, real: real.site)
             }
         }
         return nil

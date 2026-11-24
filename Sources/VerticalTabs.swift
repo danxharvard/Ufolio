@@ -74,8 +74,7 @@ struct SideTabBar: View {
             Spacer(minLength: 4)
             DownloadsButton()
             if !model.isPrivate { ExtensionButtons() }
-            SelectedTab(model: model) { ShieldsButton(tab: $0) }
-            PrivateWindowButton(isPrivate: model.isPrivate)
+            // Force Field and Stealth sit at the top right, beside the ⋯ menu.
         }
         .padding(.horizontal, 8)
         .padding(.top, 6)
@@ -88,7 +87,6 @@ struct SideTabBar: View {
                 .scaleEffect(0.9)
             ToolbarIconButton(symbol: "magnifyingglass", help: "Search or enter a website (⌘L)") { model.paletteOpen = true }
             if !model.isPrivate { SpaceButton(model: model) }
-            SelectedTab(model: model) { ShieldsButton(tab: $0) }
         }
         .padding(.top, 2)
     }

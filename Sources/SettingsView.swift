@@ -1044,7 +1044,8 @@ struct BlockingModeCard: View {
 
 private struct AdBlockerSettings: View {
     @ObservedObject private var blocker = ContentBlocker.shared
-    @ObservedObject private var stats = BlockStats.shared
+    /// Not observed here: only the stats card redraws as the count goes up, not the whole pane.
+    private let stats = BlockStats.shared
     @ObservedObject private var zapper = ElementZapper.shared
     @AppStorage(Prefs.adBlockEnabled) private var ads = true
     @AppStorage(Prefs.trackerBlockEnabled) private var trackers = true

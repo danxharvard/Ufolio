@@ -81,6 +81,9 @@ final class BackgroundStore: ObservableObject {
             }
             let decoded = await Task.detached(priority: .utility) { url.flatMap { Self.downsampled($0, maxPixels: maxPixels) } }.value
             guard !Task.isCancelled else { return }
+            // Couldn't get it (offline, say): try again next time a start page opens, rather
+            // than waiting until tomorrow.
+            if decoded == nil { self.loadedKey = nil }
             withAnimation(.easeOut(duration: 0.35)) {
                 self.image = decoded.map { NSImage(cgImage: $0, size: .zero) }
                 self.credit = decoded == nil ? nil : credit

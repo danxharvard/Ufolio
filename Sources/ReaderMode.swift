@@ -98,11 +98,12 @@ enum ReaderMode {
             guard case .success(let value) = result, let dict = value as? [String: Any],
                   let raw = dict["blocks"] as? [[String: Any]], !raw.isEmpty else { NSSound.beep(); return }
             var title = (dict["title"] as? String) ?? tab.displayTitle
-            let blocks: [ReaderArticle.Block] = raw.enumerated().compactMap { index, item in
+            // A sensible limit, so a page stuffed with thousands of paragraphs can't bog it down.
+            let blocks: [ReaderArticle.Block] = raw.prefix(2000).enumerated().compactMap { index, item in
                 guard let kind = ReaderArticle.Block.Kind(rawValue: item["kind"] as? String ?? "") else { return nil }
                 let src = (item["src"] as? String).flatMap(URL.init(string:))
                 let image = ["http", "https"].contains(src?.scheme ?? "") ? src : nil
-                return ReaderArticle.Block(id: index, kind: kind, text: item["text"] as? String ?? "", image: image)
+                return ReaderArticle.Block(id: index, kind: kind, text: String((item["text"] as? String ?? "").prefix(20_000)), image: image)
             }
             // Don't repeat the title as the first heading.
             var trimmed = blocks
@@ -161,8 +162,11 @@ struct ReaderView: View {
                         .font(.system(size: 13)).foregroundStyle(theme.text.opacity(0.6))
                     }
                     .padding(.bottom, 8)
-                    ForEach(article.blocks) { block in
-                        ReaderBlockView(block: block, size: size, serif: serif, theme: theme)
+                    // Laid out as you scroll, so long articles open (and resize their text) instantly.
+                    LazyVStack(alignment: .leading, spacing: size * 0.9) {
+                        ForEach(article.blocks) { block in
+                            ReaderBlockView(block: block, size: size, serif: serif, theme: theme)
+                        }
                     }
                 }
                 .foregroundStyle(theme.text)

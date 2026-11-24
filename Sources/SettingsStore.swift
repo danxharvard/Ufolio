@@ -384,6 +384,17 @@ enum AppPaths {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder
     }()
+
+    /// Reads a saved JSON file. If it exists but can't be read, a copy is kept beside it before
+    /// anything else is written there, so a damaged file never quietly costs you your data.
+    static func load<T: Decodable>(_ type: T.Type, from file: URL) -> T? {
+        guard let data = try? Data(contentsOf: file) else { return nil }
+        if let value = try? JSONDecoder().decode(type, from: data) { return value }
+        let backup = file.deletingPathExtension().appendingPathExtension("damaged-\(Int(Date().timeIntervalSince1970)).json")
+        try? FileManager.default.copyItem(at: file, to: backup)
+        NSLog("Ufolio: \(file.lastPathComponent) couldn't be read; a copy was kept at \(backup.path)")
+        return nil
+    }
 }
 
 

@@ -53,7 +53,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     /// The Space this tab belongs to (only that Space's tabs show in the tab bar).
     var spaceID: UUID?
 
-    var isPrivate: Bool { model?.isPrivate ?? false }
+    /// Fixed when the tab is made: a Stealth tab stays private even in the moment its window is
+    /// going away (it used to count as not private then, and could write to history).
+    let isPrivate: Bool
 
     /// Set when the page's process crashed: the tab shows a friendly Reload screen.
     @Published private(set) var crashed = false
@@ -108,8 +110,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     }
 
     func setTranslation(_ state: TranslationState, language: Locale.Language?) {
-        translation = state
-        pageLanguage = language
+        if translation != state { translation = state }
+        if pageLanguage != language { pageLanguage = language }
     }
     /// The last address loaded by the user (typed, bookmark…), as opposed to by a page.
     private var userLoadedURL: URL?
@@ -137,6 +139,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     init(model: BrowserModel, configuration: WKWebViewConfiguration? = nil, store: WKWebsiteDataStore? = nil) {
         self.model = model
+        isPrivate = model.isPrivate
         webView = HushWebView(frame: .zero, configuration: configuration
             ?? BrowserTab.makeConfiguration(privately: model.isPrivate, store: store ?? model.dataStore))
         super.init()

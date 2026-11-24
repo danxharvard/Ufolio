@@ -333,16 +333,29 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
 
     private func offer(kind: String, rect: [Double], host: String, secure: Bool, tab: BrowserTab) {
         var options: [Option] = []
+        // Saved logins and cards come from the keychain, which can be slow: looked up in the
+        // background so clicking into a form never stalls the window.
+        func fromKeychain(_ lookup: @escaping () -> [Option]) {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self, weak tab] in
+                let found = lookup()
+                DispatchQueue.main.async {
+                    guard let self, let tab, !found.isEmpty else { return }
+                    self.show(found, kind: kind, at: rect, host: host, in: tab)
+                }
+            }
+        }
         switch kind {
         case "login":
             guard secure, Prefs.bool(Prefs.autofillPasswords) else { return }
-            options = PasswordVault.logins(for: host).map(Option.login)
+            fromKeychain { PasswordVault.logins(for: host).map(Option.login) }
+            return
         case "newpassword":
             guard secure, Prefs.bool(Prefs.autofillPasswords) else { return }
             options = [.generate(PasswordGenerator.make())]
         case "card":
             guard secure, Prefs.bool(Prefs.autofillCards) else { return }
-            options = CardVault.list().map(Option.card)
+            fromKeychain { CardVault.list().map(Option.card) }
+            return
         case "contact":
             guard Prefs.bool(Prefs.autofillContact), MyCard.status != .denied, MyCard.status != .restricted else { return }
             options = [.contact(MyCard.status == .authorized ? MyCard.displayName : nil)]

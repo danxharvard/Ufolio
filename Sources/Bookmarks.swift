@@ -14,7 +14,12 @@ struct Bookmark: Codable, Identifiable, Equatable {
 final class BookmarkStore: ObservableObject {
     static let shared = BookmarkStore()
 
-    @Published private(set) var items: [Bookmark] = []
+    @Published private(set) var items: [Bookmark] = [] {
+        didSet { keys = Set(items.map { Self.key($0.url) }) }
+    }
+    /// Every bookmark's address in comparable form, so "is this page bookmarked?" (asked on every
+    /// redraw of the address bar) is a quick lookup rather than a pass over every bookmark.
+    private var keys: Set<String> = []
     private let fileURL: URL
 
     private init() {
@@ -24,9 +29,7 @@ final class BookmarkStore: ObservableObject {
         load()
     }
 
-    func contains(_ url: URL) -> Bool {
-        items.contains { Self.same($0.url, url) }
-    }
+    func contains(_ url: URL) -> Bool { keys.contains(Self.key(url)) }
 
     func toggle(url: URL, title: String) {
         if contains(url) {
@@ -39,14 +42,16 @@ final class BookmarkStore: ObservableObject {
 
     /// Adds bookmarks brought over from another browser, skipping ones you already have.
     func add(imported: [(title: String, url: URL)]) -> Int {
-        var added = 0
-        for item in imported where !contains(item.url) && !items.contains(where: { Self.same($0.url, item.url) }) {
+        // Added all at once: appending one by one redrew everything showing bookmarks each time.
+        var seen = keys, adding: [Bookmark] = []
+        for item in imported where seen.insert(Self.key(item.url)).inserted {
             let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
-            items.append(Bookmark(title: title.isEmpty ? (item.url.host ?? item.url.absoluteString) : String(title.prefix(200)), url: item.url))
-            added += 1
+            adding.append(Bookmark(title: title.isEmpty ? (item.url.host ?? item.url.absoluteString) : String(title.prefix(200)), url: item.url))
         }
-        if added > 0 { save() }
-        return added
+        guard !adding.isEmpty else { return 0 }
+        items += adding
+        save()
+        return adding.count
     }
 
     func remove(_ bookmark: Bookmark) {
@@ -145,13 +150,12 @@ final class BookmarkStore: ObservableObject {
             }
             if found.count >= 5000 { break }
         }
-        var added = 0
-        for bookmark in found where !items.contains(where: { Self.same($0.url, bookmark.url) }) {
-            items.append(bookmark)
-            added += 1
-        }
-        if added > 0 { save() }
-        return added
+        var seen = keys
+        let adding = found.filter { seen.insert(Self.key($0.url)).inserted }
+        guard !adding.isEmpty else { return 0 }
+        items += adding
+        save()
+        return adding.count
     }
 
     func exportHTML() -> String {
@@ -222,19 +226,19 @@ final class BookmarkStore: ObservableObject {
         save()
     }
 
-    private static func same(_ a: URL, _ b: URL) -> Bool {
-        func key(_ u: URL) -> String {
-            var s = u.absoluteString.lowercased()
-            if s.hasSuffix("/") { s.removeLast() }
-            return s.replacingOccurrences(of: "://www.", with: "://")
-        }
-        return key(a) == key(b)
+    private static func key(_ u: URL) -> String {
+        var s = u.absoluteString.lowercased()
+        if s.hasSuffix("/") { s.removeLast() }
+        return s.replacingOccurrences(of: "://www.", with: "://")
     }
 
+    private static func same(_ a: URL, _ b: URL) -> Bool { key(a) == key(b) }
+
     private func load() {
-        if let data = try? Data(contentsOf: fileURL),
-           let saved = try? JSONDecoder().decode([Bookmark].self, from: data) {
-            items = saved
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            // Unreadable files are kept as a copy (see AppPaths.load); the starter bookmarks are
+            // only for a first launch, never written over a file that's there.
+            items = AppPaths.load([Bookmark].self, from: fileURL) ?? []
         } else {
             // A few starters on first launch; easy to remove (right-click › Remove).
             items = [

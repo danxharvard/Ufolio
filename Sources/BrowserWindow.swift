@@ -214,7 +214,12 @@ struct BrowserWindow: View {
                 // The top row: bookmarks (if shown), and the ⋯ panel at the top right.
                 HStack(spacing: 0) {
                     if showBookmarkBar { BookmarkBar(model: model) } else { Color.clear.contentShape(Rectangle()).gesture(WindowDragGesture()) }
-                    MoreMenuButton(model: model).padding(.horizontal, 8)
+                    HStack(spacing: 2) {
+                        SelectedTab(model: model) { ShieldsButton(tab: $0) }
+                        PrivateWindowButton(isPrivate: model.isPrivate)
+                        MoreMenuButton(model: model)
+                    }
+                    .padding(.horizontal, 8)
                 }
                 .frame(height: 34)
                 if showDefaultBanner {
@@ -1197,6 +1202,29 @@ struct Hairline: View {
     }
 }
 
+/// Catches every click, scroll and hover over its area. Web pages are separate macOS views, so
+/// a SwiftUI layer drawn over one (a frosted backdrop, say) doesn't stop clicks reaching the
+/// page underneath; this does. Used behind cards and guides shown over the page.
+struct ClickBlocker: NSViewRepresentable {
+    /// What a click on the blocked area does (e.g. close the palette); nothing by default.
+    var onClick: (() -> Void)? = nil
+
+    final class BlockingView: NSView {
+        var onClick: (() -> Void)?
+        override func hitTest(_ point: NSPoint) -> NSView? { frame.contains(point) ? self : nil }
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override func mouseDown(with event: NSEvent) { onClick?() }
+        override func mouseUp(with event: NSEvent) {}
+        override func mouseDragged(with event: NSEvent) {}
+        override func rightMouseDown(with event: NSEvent) {}
+        override func otherMouseDown(with event: NSEvent) {}
+        override func scrollWheel(with event: NSEvent) {}
+        override func resetCursorRects() { addCursorRect(bounds, cursor: .arrow) }
+    }
+    func makeNSView(context: Context) -> BlockingView { let v = BlockingView(); v.onClick = onClick; return v }
+    func updateNSView(_ view: BlockingView, context: Context) { view.onClick = onClick }
+}
+
 struct VisualEffect: NSViewRepresentable {
     var material: NSVisualEffectView.Material
     var blending: NSVisualEffectView.BlendingMode = .withinWindow
@@ -1363,6 +1391,7 @@ struct LaunchCardOverlay<Card: View>: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
+                ClickBlocker().ignoresSafeArea()   // nothing behind the card can be clicked
                 Rectangle()
                     .fill(Color.black.opacity(0.3))
                     .contentShape(Rectangle())

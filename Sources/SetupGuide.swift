@@ -360,6 +360,8 @@ private struct SetupBackdrop: View {
 
     var body: some View {
         ZStack {
+            // Frosted, but solid to the pointer: the page behind can't be clicked through it.
+            ClickBlocker()
             VisualEffect(material: .fullScreenUI, blending: .withinWindow)
             RadialGradient(colors: [Color(hue: hue, saturation: 0.55, brightness: 0.85).opacity(scheme == .dark ? 0.45 : 0.55), .clear],
                            center: .topLeading, startRadius: 0, endRadius: 900)

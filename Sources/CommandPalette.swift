@@ -318,6 +318,7 @@ struct CommandPaletteOverlay: View {
             if model.paletteOpen {
                 Color.black.opacity(0.12)
                     .contentShape(Rectangle())
+                    .background(ClickBlocker { model.paletteOpen = false })   // the page behind can't be clicked or scrolled
                     .onTapGesture { model.paletteOpen = false }
                     .ignoresSafeArea()
                     .transition(.opacity)

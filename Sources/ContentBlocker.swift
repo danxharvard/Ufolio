@@ -46,8 +46,7 @@ final class ContentBlocker: ObservableObject {
     private init() {
         folder = AppPaths.support.appendingPathComponent("Filters", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        if let data = try? Data(contentsOf: folder.appendingPathComponent("lists.json")),
-           let saved = try? JSONDecoder().decode([FilterList].self, from: data) {
+        if let saved = AppPaths.load([FilterList].self, from: folder.appendingPathComponent("lists.json")) {
             lists = saved
         }
         shieldsDown = UserDefaults.standard.stringArray(forKey: "shieldsDown") ?? []
