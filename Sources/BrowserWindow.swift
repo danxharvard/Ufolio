@@ -191,9 +191,9 @@ struct BrowserWindow: View {
                     ProgressLine(tab: tab)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
-            .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+            // Rounded by the page itself (cheap even for video), with a hairline edge. No drop
+            // shadow or clipping mask here: those make the Mac recompose a playing video every frame.
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.08)).allowsHitTesting(false))
             }
             .padding([.horizontal, .bottom], 6)
             .padding(.top, 6)
@@ -228,9 +228,7 @@ struct BrowserWindow: View {
                         PageArea(model: model)
                         if let tab = model.selectedTab { ProgressLine(tab: tab) }
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
-                    .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.08)).allowsHitTesting(false))
                 }
                 .padding(.top, showBookmarkBar ? 0 : 8)
                 .padding(.trailing, 8)
@@ -358,20 +356,23 @@ private struct TabPage: View {
             // A blank tab shows only the start page, so its translucent backdrop
             // isn't drawn over an empty white web view.
             if tab.isBlank {
-                if model.isPrivate { PrivateStartPage() } else { StartPage(model: model) }
+                Group { if model.isPrivate { PrivateStartPage() } else { StartPage(model: model) } }
+                    .clipShape(PageCorners.shape)
             } else if tab.isAsleep, let snapshot = tab.snapshot {
                 Image(nsImage: snapshot).resizable().aspectRatio(contentMode: .fill)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).clipped()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).clipShape(PageCorners.shape)
             } else {
                 // A woken tab has a new web view, so key the host on it.
                 WebViewHost(webView: tab.webView).id(ObjectIdentifier(tab.webView))
             }
             if tab.crashed {
                 CrashedPage { tab.recoverFromCrash() }
+                    .clipShape(PageCorners.shape)
                     .transition(.opacity)
             }
             if let article = tab.reader {
                 ReaderView(article: article) { tab.toggleReader() }
+                    .clipShape(PageCorners.shape)
                     .transition(.opacity)
             }
             if let block = tab.lookalike {
@@ -381,6 +382,7 @@ private struct TabPage: View {
                     Lookalike.allow(Domains.site(block.url.host ?? ""))
                     tab.load(block.url)
                 }
+                .clipShape(PageCorners.shape)
                 .transition(.opacity)
             }
         }
@@ -389,8 +391,24 @@ private struct TabPage: View {
 
 struct WebViewHost: NSViewRepresentable {
     let webView: WKWebView
-    func makeNSView(context: Context) -> WKWebView { webView }
-    func updateNSView(_ nsView: WKWebView, context: Context) {}
+    func makeNSView(context: Context) -> WKWebView { PageCorners.round(webView); return webView }
+    func updateNSView(_ nsView: WKWebView, context: Context) { PageCorners.round(nsView) }
+}
+
+/// The page card's rounded corners. Web pages are rounded by their own layer, which Core
+/// Animation does almost for free, rather than by a SwiftUI clipping mask (which forces the
+/// whole page, video and all, to be recomposed every frame).
+enum PageCorners {
+    static let radius: CGFloat = 10
+    static let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+
+    static func round(_ view: NSView) {
+        view.wantsLayer = true
+        guard let layer = view.layer, layer.cornerRadius != radius else { return }
+        layer.cornerRadius = radius
+        layer.cornerCurve = .continuous
+        layer.masksToBounds = true
+    }
 }
 
 struct NavButtons: View {
@@ -941,6 +959,7 @@ struct ProgressLine: View {
                 .animation(.easeOut(duration: 0.4), value: tab.isLoading)
         }
         .frame(height: 2)
+        .padding(.horizontal, PageCorners.radius)   // stays inside the page's rounded corners
         .allowsHitTesting(false)
     }
 }

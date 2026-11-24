@@ -277,7 +277,7 @@ private struct HeroCard: View {
             .frame(height: 360)
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color.white.opacity(0.08)))
-            .shadow(color: .black.opacity(hovering ? 0.28 : 0.16), radius: hovering ? 22 : 12, y: hovering ? 10 : 5)
+            .shadow(color: .black.opacity(0.16), radius: 5, y: 3)
             .offset(y: hovering ? -2 : 0)
             .opacity(store.read.contains(article.id) ? 0.75 : 1)
         }
@@ -400,7 +400,7 @@ private struct CardStyle: ViewModifier {
             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.regularMaterial))
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.primary.opacity(hovering ? 0.12 : 0.06)))
-            .shadow(color: .black.opacity(hovering ? 0.18 : 0.07), radius: hovering ? 16 : 6, y: hovering ? 8 : 2)
+            .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
             .offset(y: hovering ? -2 : 0)
     }
 }

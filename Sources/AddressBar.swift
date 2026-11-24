@@ -37,6 +37,7 @@ struct AddressBar: View {
                 .frame(width: 14)
 
             AddressTextField(
+                register: { [weak model] field in model?.addressField = field },
                 text: $text,
                 isEditing: $isEditing,
                 placeholder: "Search \((SearchEngine(rawValue: engine) ?? .google).name) or enter a website",
@@ -122,6 +123,8 @@ struct AddressBar: View {
 
 /// An NSTextField wrapper, so the arrow keys, Return and Esc can drive the suggestions.
 struct AddressTextField: NSViewRepresentable {
+    /// Hands the field to its window, so "focus the address bar" can go straight to it.
+    var register: (NSTextField) -> Void = { _ in }
     @Binding var text: String
     @Binding var isEditing: Bool
     let placeholder: String
@@ -148,6 +151,7 @@ struct AddressTextField: NSViewRepresentable {
         field.cell?.wraps = false
         field.placeholderString = placeholder
         field.delegate = context.coordinator
+        register(field)
         field.onFocus = { [weak field, weak coordinator = context.coordinator] in
             guard let field, let coordinator else { return }
             coordinator.beginEditing(field)
@@ -163,10 +167,9 @@ struct AddressTextField: NSViewRepresentable {
         if field.stringValue != text { field.setText(text) }
         let alignment: NSTextAlignment = centered ? .center : .left
         if field.alignment != alignment { field.alignment = alignment }   // re-setting it can drop the selection
-        if context.coordinator.lastFocusToken != focusToken {
-            context.coordinator.lastFocusToken = focusToken
-            DispatchQueue.main.async { field.window?.makeFirstResponder(field) }
-        }
+        register(field)
+        // (Focusing is done directly by BrowserModel.focusAddressBar, which checks it worked.)
+        context.coordinator.lastFocusToken = focusToken
     }
 
     final class Coordinator: NSObject, NSTextFieldDelegate {

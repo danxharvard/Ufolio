@@ -303,7 +303,6 @@ struct SettingsCard<Content: View>: View {
         }
         .background(SettingsColors.card, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(SettingsColors.stroke))
-        .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
     }
 }
 

@@ -226,6 +226,31 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         isAsleep = true
     }
 
+    /// Extensions attach when a page view is made, so a tab opened before an extension was added
+    /// gets a fresh page view (keeping its place and history) to run it. Sleeping tabs pick it up
+    /// when they wake.
+    func adoptExtensions() {
+        guard !isAsleep, !isPrivate else {
+            if isAsleep { webView = HushWebView(frame: .zero, configuration: BrowserTab.makeConfiguration(
+                privately: isPrivate, store: webView.configuration.websiteDataStore)) }
+            return
+        }
+        let state = url != nil ? webView.interactionState : nil
+        let address = url
+        observers.removeAll()
+        let old = webView
+        old.stopLoading()
+        old.navigationDelegate = nil
+        old.uiDelegate = nil
+        old.removeFromSuperview()
+        WebKitExtras.close(old)
+        webView = HushWebView(frame: .zero, configuration: BrowserTab.makeConfiguration(
+            privately: isPrivate, store: old.configuration.websiteDataStore))
+        setUp(webView)
+        if let state { webView.interactionState = state } else if let address { webView.load(URLRequest(url: address)) }
+        objectWillChange.send()
+    }
+
     func wakeIfNeeded() {
         guard isAsleep else { return }
         waking = true

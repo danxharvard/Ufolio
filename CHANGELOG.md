@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.37.0
+
+**Cooler and smoother**
+- Video and busy sites no longer make Hush work harder than it should: the rounded page card was
+  being redrawn with a soft shadow and clipping mask on every frame. Pages are now rounded by
+  WebKit's own layer, which costs almost nothing, so fans stay quieter on sites like video
+  streaming services.
+- Smoother scrolling on the start page and in Settings: lighter, fixed shadows on cards, with no
+  redraws as the pointer moves over them.
+
+**Fixes**
+- Opening a new tab always puts the cursor in the address bar, ready to type. (Hush now checks
+  the cursor really landed there, and tries again for a moment if the new tab is still settling.)
+
+**Extensions**
+- An extension you add now runs in the tabs you already have open, not only in new ones.
+- Extensions that open a window open it as tabs, and extensions asking for access to more sites
+  get a proper Hush prompt.
+
 ## 0.36.0
 
 **New: Hushlist**

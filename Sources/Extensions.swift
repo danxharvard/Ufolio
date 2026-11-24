@@ -393,6 +393,10 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
             for pattern in ext.allRequestedMatchPatterns { context.setPermissionStatus(.grantedExplicitly, for: pattern) }
             try controller.load(context)
             contexts[record.id] = context
+            // Open tabs were made before this extension; rebuild their pages so it runs in them now.
+            for model in BrowserModel.all.allObjects where !model.isPrivate {
+                for tab in model.tabs where tab.webView.configuration.webExtensionController == nil { tab.adoptExtensions() }
+            }
             if let model = BrowserModel.frontmostNormal {
                 controller.didOpenWindow(model)
                 for tab in model.tabs { controller.didOpenTab(tab) }
@@ -476,6 +480,31 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
         guard let model = BrowserModel.frontmostNormal else { completionHandler(nil, nil); return }
         let tab = model.newTab(url: configuration.url, select: configuration.shouldBeActive)
         completionHandler(tab, nil)
+    }
+
+    /// windows.create: Hush keeps everything in tabs, so the pages open as tabs in the window.
+    func webExtensionController(_ controller: WKWebExtensionController, openNewWindowUsing configuration: WKWebExtension.WindowConfiguration,
+                                for extensionContext: WKWebExtensionContext,
+                                completionHandler: @escaping ((any WKWebExtensionWindow)?, (any Error)?) -> Void) {
+        guard let model = BrowserModel.frontmostNormal else { completionHandler(nil, nil); return }
+        let urls = configuration.tabURLs.filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") || $0.scheme == "webkit-extension" }
+        if urls.isEmpty { model.newTab(focus: true) } else { for (i, url) in urls.prefix(20).enumerated() { model.newTab(url: url, select: i == 0) } }
+        completionHandler(model, nil)
+    }
+
+    func webExtensionController(_ controller: WKWebExtensionController, promptForPermissionMatchPatterns matchPatterns: Set<WKWebExtension.MatchPattern>,
+                                in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext,
+                                completionHandler: @escaping (Set<WKWebExtension.MatchPattern>, Date?) -> Void) {
+        let name = extensionContext.webExtension.displayName ?? "An extension"
+        let art: HushDialog.Art = extensionContext.webExtension.icon(for: CGSize(width: 64, height: 64)).map { .image($0) } ?? .symbol("puzzlepiece.extension.fill")
+        let all = matchPatterns.contains { $0.matchesAllHosts }
+        let sites = matchPatterns.compactMap(\.host).filter { !$0.isEmpty }.sorted().prefix(5).joined(separator: ", ")
+        DialogHost.active.present(HushDialog(
+            art: art, badge: "globe", theme: .permission, motion: .orbit,
+            title: "“\(name)” wants access to more sites",
+            message: all ? "It’s asking to read and change your data on all websites." : "It’s asking for access to: \(sites)",
+            choices: [.init(title: "Don’t Allow", role: .cancel), .init(title: "Allow", role: .primary)],
+            completion: { choice, _ in completionHandler(choice == 1 ? matchPatterns : [], nil) }))
     }
 
     func webExtensionController(_ controller: WKWebExtensionController, openOptionsPageFor extensionContext: WKWebExtensionContext,

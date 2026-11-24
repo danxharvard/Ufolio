@@ -450,9 +450,23 @@ final class BrowserModel: NSObject, ObservableObject {
         selectedID = mine[(index + offset + mine.count) % mine.count].id
     }
 
+    /// The window's address field (set by the field itself), so focusing it is direct.
+    weak var addressField: NSTextField?
+
+    /// Puts the cursor in the address bar, ready to type. A brand-new tab's bar may still be
+    /// settling, so it checks it really got the cursor and tries again for a moment if not.
     func focusAddressBar() {
-        // Just after the current update: a brand-new tab's address bar must exist to take focus.
-        DispatchQueue.main.async { self.addressFocusToken += 1 }
+        addressFocusToken += 1   // (tabs down the side, icons only: opens the Command Palette instead)
+        func attempt(_ tries: Int) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + (tries == 0 ? 0 : 0.05)) { [weak self] in
+                guard let self else { return }
+                if let field = self.addressField, let window = field.window, field.currentEditor() == nil {
+                    window.makeFirstResponder(field)
+                }
+                if self.addressField?.currentEditor() == nil, tries < 8 { attempt(tries + 1) }
+            }
+        }
+        attempt(0)
     }
 
     /// Opens a URL in the current tab, or a new background tab when ⌘ is held.
