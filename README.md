@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/icon.png" width="160" alt="The Hush Browser icon: a crescent moon on a twilight tile">
+  <img src="docs/icon.png" width="160" alt="The Hush Browser icon: a crescent moon on a purple tile">
 </p>
 
 <h1 align="center">Hush Browser 🌙</h1>
@@ -18,29 +18,35 @@
 
 ## Meet Hush
 
-Most browsers are huge, noisy and busy watching you. Hush is the opposite.
+Most browsers are huge, heavy and busy watching you. Hush is the opposite: **light, yet
+seriously powerful**.
 
-It's a **truly native Mac app** built on **WebKit**, the same engine that powers Safari. So it's
-light on your battery, quick on your fingertips and feels right at home on your Mac. Then we
-added the good stuff: a **built-in ad and tracker blocker**, a **gorgeous design** and lots of
-small touches that make browsing a pleasure again.
+It's a **truly native Mac app** built on **WebKit**, the same engine that powers Safari, so it's
+quick, light on memory and battery, and feels right at home on your Mac. Then we added the good
+stuff: an **ad and tracker blocker that stops them before they ever reach the page**, Spaces,
+Profiles, a Command Palette, tabs along the top or down the side, and a **gorgeous frosted design**.
 
-No bloat. No tracking. No nonsense. Just *hush*.
+No bloat. No tracking. No nonsense. Just *Hush*.
 
 ---
 
 ## What makes Hush, Hush
 
 ### ⚡️ Blazing fast
-- **WebKit inside**: Apple's own engine, tuned for the Mac and for Apple Silicon.
-- **Blocking happens before pages load.** Ads and trackers are stopped before they download,
-  so pages show up sooner and use less data.
-- **Tab Sleep**: tabs you're not using take a nap and give back memory and battery. They wake
-  up exactly where you left them.
+- **WebKit inside**: Apple's own engine, tuned for the Mac.
+- **Ads blocked before they load.** Ads and trackers are stopped before they download, so busy
+  pages show up sooner and use less data. Even with blocking on, pages load as quickly as in
+  plain WebKit.
+- **Tab Sleep and Memory Saver**: tabs you're not using take a nap and give back memory and
+  battery, and Hush keeps itself under a memory limit you can set. Tabs wake up exactly where
+  you left them.
+- **Performance modes**: Automatic, Performance, Balanced, Battery Saver and Eco.
 
 ### 🐜 Small but mighty
-- **About a 5 MB download.** Chrome-based browsers are often well over a hundred.
-- No hidden background helpers and no bundled copy of Chrome. Just one tidy, native app.
+- **A 9 MB download** (22 MB installed), one app for both Apple Silicon and Intel Macs.
+- **About 40 MB of memory** for the Hush app itself. Web pages run in WebKit's own processes,
+  just like in Safari, and a closed tab gives its memory straight back.
+- No bundled copy of Chrome: Hush uses the WebKit that's already on your Mac.
 - And it still runs **Chrome and Safari extensions** (macOS 15.4 or later).
 
 ### 🛡️ Hush Guard: ad & tracker blocker
@@ -50,12 +56,20 @@ No bloat. No tracking. No nonsense. Just *hush*.
 - **Turn it off for one site** with a single click, whenever you need to.
 - **Bring your own filter lists**: EasyList, uBlock Origin and Adblock Plus lists, hosts files and
   Safari content blockers.
+- **Blocks annoyances**: "Sign in with Google" pop-ups, push-notification prompts and newsletter
+  pop-ups. Chat widgets too, if you like.
+- **Per-site settings**: choose Standard, Strict or Off, and block scripts or cookies, for each site.
 - **Element Zapper**: click anything annoying on a page and it's gone for good.
+- **Filter lists update themselves** every week.
 
 ### 🔒 Private by design
-- **Third-party cookies blocked** and **Global Privacy Control** sent to every site.
+- **Third-party cookies blocked**, **fingerprinting protection** and **Global Privacy Control**
+  sent to every site.
+- **Private windows** that leave no trace, and **Forget This Site** to wipe everything a site
+  stored in one go.
+- **Profiles**: separate cookies and sign-ins, so you can use two accounts on one site.
 - **Clean Links**: removes the tracking tags (`utm_source`, `fbclid`, `gclid`…) that follow you
-  from site to site.
+  from site to site, and skips tracking redirects and AMP pages.
 - **HTTPS upgrade**: secure connections whenever a site supports them.
 - **Fake-site warnings**: Hush spots look-alike addresses like `paypa1.com` and warns you
   before you type anything.
@@ -64,18 +78,27 @@ No bloat. No tracking. No nonsense. Just *hush*.
 - Your history and bookmarks stay **on your Mac**. Always.
 
 ### 🎨 Gorgeous to look at
-- **Beautiful start pages** (Twilight, Aurora or Plain) in light and dark mode.
-- A moon logo that **eclipses trackers** in a little animation.
-- Frosted glass, soft shadows and smooth animations, with **Reduce Motion** if you prefer everything instant.
-- A clean, **Safari-style Settings window** with no clutter.
+- **Frosted glass everywhere**, with the page as a rounded card, in Day and Night themes.
+- **Start page backgrounds**: frosted glass, your desktop picture, a fresh Photo of the Day,
+  Apple's macOS wallpapers or your own photo.
+- **Tabs along the top or down the side**, in a frosted column you can resize or shrink to icons.
+- **Magic Theme** tints the toolbar with each site's own colour.
+- Smooth animations, with **Reduce Motion** if you prefer everything instant.
+- A **System Settings-style Settings window**, and a friendly **setup guide** the first time you
+  open Hush.
 
 ### 🙂 A pleasure to use
+- **Command Palette (⌘K)**: one box for tabs, commands, bookmarks and history.
+- **Spaces**: keep Work, Personal and anything else apart, each with its own tabs.
+- **Split View**, **Reader**, **Picture in Picture** and **quick translation**.
 - **Smart address bar** with live suggestions from Google, DuckDuckGo, Bing, Brave Search or Ecosia.
-- **Favourites, suggestions and a privacy report** right on your start page.
-- **Personalise Start Page**: type your town or postcode and see your local weather.
+- **Bookmarks with folders**, a Bookmarks & History sidebar, and bookmark import and export
+  that works with every browser.
+- **Favourites, suggestions, news and a privacy report** right on your start page, plus your
+  local weather if you like.
 - **Recently closed tabs** one click away, and your session restored when you come back.
-- **Move in easily**: bring your history over from Safari, Chrome, Brave, Edge, Arc, Vivaldi
-  or Firefox, so your favourite sites are suggested from day one.
+- **Move in easily**: bring your bookmarks and favourite sites over from Safari, Chrome, Brave,
+  Edge, Arc, Vivaldi or Firefox, right from the setup guide.
 - **Updates itself** quietly, and shows you what's new after each update.
 
 ---
@@ -111,11 +134,14 @@ All settings live in **Hush Browser › Settings…** (⌘,).
 - The blocked-ads counter uses WebKit's own reporting of blocked requests, the same one
   Safari uses.
 - Site icons come from each site directly, not through a third-party icon service.
+- Photo of the Day, if you choose it, is fetched from Bing's public photo of the day without
+  cookies. News, if you turn it on, is fetched straight from the publishers you pick.
 - Bookmarks and history are stored only in `~/Library/Application Support/Hush Browser/`.
 - Passwords and cards are stored in the macOS Keychain and filled only after Touch ID or your
   password.
-- Updates come only from this repository's releases. Hush checks each download's checksum
-  and signature before installing it.
+- Updates come only from this repository's releases, and every update is signed with Hush's
+  own key. Hush checks that signature (and the checksum) before installing anything, so even a
+  release published by someone else couldn't be installed.
 
 </details>
 
@@ -148,10 +174,12 @@ This makes `build/Hush Browser.app`, `build/HushBrowser-<version>.dmg` (the inst
    git tag v1.2.3 && git push origin main v1.2.3
    ```
 
-GitHub Actions (`.github/workflows/release.yml`) builds the app and publishes a release with the
-DMG and the update zip. The release notes come from `CHANGELOG.md`. Installed copies check every
+GitHub Actions (`.github/workflows/release.yml`) builds the app, signs the update with the
+`HUSH_UPDATE_KEY` repository secret, and publishes a release with the DMG, the update zip and its
+signature. The release notes come from `CHANGELOG.md`. Installed copies check every
 few hours and install the update the next time they quit, or straight away from
-Settings › Software Update.
+Settings › Software Update. If GitHub is too busy to start the build, run it again from
+**Actions › Release › Run workflow** on `main`.
 
 </details>
 
@@ -166,12 +194,17 @@ Settings › Software Update.
 | `Sources/BrowserTab.swift` | One tab: the WebKit view, navigation, pop-ups, Tab Sleep |
 | `Sources/AddressBar.swift` | Address field and turning typed text into a URL or search |
 | `Sources/Suggestions.swift` | Live search and bookmark suggestions |
-| `Sources/TabStrip.swift` | The tab strip |
+| `Sources/TabStrip.swift` | The tab strip along the top |
+| `Sources/VerticalTabs.swift` | Tabs down the side |
+| `Sources/Spaces.swift` | Spaces and Profiles |
+| `Sources/CommandPalette.swift` | The Command Palette (⌘K) |
+| `Sources/Backgrounds.swift` | Start page backgrounds |
+| `Sources/Performance.swift` | Performance modes, Tab Sleep and Memory Saver |
 | `Sources/Bookmarks.swift` | Bookmarks, bookmarks bar and site icons |
 | `Sources/StartPage.swift`, `Sources/StartData.swift` | The start page and recently closed tabs |
 | `Sources/PersonaliseStartPage.swift` | Personalise Start Page: town and postcode search |
 | `Sources/SettingsStore.swift` | Every setting's key and default |
-| `Sources/SettingsView.swift` | The Settings window |
+| `Sources/SettingsView.swift` | The Settings window and its sections |
 | `Sources/ContentBlocker.swift` | Hush Guard: blocking, per-site on/off, blocked counter |
 | `Sources/FilterConverter.swift` | Turns imported filter lists into WebKit rules |
 | `Sources/ElementZapper.swift` | Click-to-hide for page elements |
@@ -184,7 +217,8 @@ Settings › Software Update.
 | `Sources/Extensions.swift` | Chrome and Safari extensions and their toolbar buttons |
 | `Sources/Updater.swift` | Checks for, downloads and installs updates |
 | `Sources/ReleaseNotes.swift` | What's New and the release notes in Settings |
-| `Sources/Welcome.swift` | Welcome screen and default-browser prompt |
+| `Sources/SetupGuide.swift` | The setup guide shown the first time Hush opens |
+| `Sources/Welcome.swift` | What's New and the default-browser prompt |
 | `Sources/HushLogo.swift` | The Hush moon logo, drawn in code |
 | `scripts/build-app.sh` | Builds the app, update zip and DMG |
 | `scripts/make-dmg-background.swift`, `scripts/dmg-settings.py` | The styled installer window |
@@ -208,5 +242,5 @@ please give it a different name and icon.
 ---
 
 <p align="center">
-  Made with 💜 for the Mac. Enjoy a quieter web.
+  Made with 💜 for the Mac. Enjoy a faster, lighter web.
 </p>
