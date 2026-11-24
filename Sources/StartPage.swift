@@ -29,29 +29,20 @@ struct StartPage: View {
         ZStack {
             // In the background, so it can never affect the page's size.
             Color.clear.background { StartBackdrop() }
-            ScrollView {
-                VStack(alignment: .leading, spacing: 46) {
-                    header.riseIn(0)
-                    if showClosed && !closedTabs.isEmpty {
-                        RecentlyClosedSection(model: model, tabs: Array(closedTabs.prefix(9))).riseIn(1)
-                    }
-                    if showFavourites && !bookmarks.items.isEmpty {
-                        favourites.riseIn(2)
-                    }
-                    if !suggestions.isEmpty {
-                        suggestionSection(suggestions).riseIn(3)
-                    }
-                    if showPrivacy {
-                        PrivacyReportSection().riseIn(4)
-                    }
-                    NewsSection(model: model, customising: $customisingNews).riseIn(5)
+            // A static page, no scrolling: the fullest layout that fits the window is shown,
+            // leaving out the least important sections first (News, then the Privacy Report, then
+            // Recently Closed) when the window is small.
+            let parts = startParts(closedTabs: closedTabs, suggestions: suggestions)
+            ViewThatFits(in: .vertical) {
+                ForEach(Self.layouts(for: parts).indices, id: \.self) { i in
+                    page(Self.layouts(for: parts)[i], closedTabs: closedTabs, suggestions: suggestions)
                 }
-                .frame(maxWidth: 940, alignment: .leading)
-                .padding(.horizontal, 48)
-                .padding(.top, 54)
-                .padding(.bottom, 64)
-                .frame(maxWidth: .infinity)
+                header
             }
+            .frame(maxWidth: 940, alignment: .leading)
+            .padding(.horizontal, 48)
+            .padding(.vertical, 26)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             // Over a picture, light text reads best.
             .environment(\.colorScheme, background.image != nil ? .dark : scheme)
         }
@@ -88,6 +79,44 @@ struct StartPage: View {
         .animation(.easeOut(duration: 0.2), value: personalising)
         .onAppear { weather.refreshIfNeeded() }
         .onReceive(NotificationCenter.default.publisher(for: QuitHelper.closeSheets)) { _ in personalising = false }
+    }
+
+    enum Part: Hashable { case closed, favourites, suggestions, privacy, news }
+
+    private func startParts(closedTabs: [ClosedTab], suggestions: [FrequentSite]) -> [Part] {
+        var parts: [Part] = []
+        if showClosed && !closedTabs.isEmpty { parts.append(.closed) }
+        if showFavourites && !bookmarks.items.isEmpty { parts.append(.favourites) }
+        if !suggestions.isEmpty { parts.append(.suggestions) }
+        if showPrivacy { parts.append(.privacy) }
+        if Prefs.bool(Prefs.startNews) { parts.append(.news) }
+        return parts
+    }
+
+    /// Layouts from fullest to simplest, dropping the least important section each time.
+    static func layouts(for parts: [Part]) -> [[Part]] {
+        var result = [parts]
+        var current = parts
+        for drop in [Part.news, .privacy, .closed, .suggestions] where current.contains(drop) {
+            current.removeAll { $0 == drop }
+            result.append(current)
+        }
+        return result
+    }
+
+    private func page(_ parts: [Part], closedTabs: [ClosedTab], suggestions: [FrequentSite]) -> some View {
+        VStack(alignment: .leading, spacing: 30) {
+            header.riseIn(0)
+            ForEach(parts, id: \.self) { part in
+                switch part {
+                case .closed: RecentlyClosedSection(model: model, tabs: Array(closedTabs.prefix(6))).riseIn(1)
+                case .favourites: favourites.riseIn(2)
+                case .suggestions: suggestionSection(suggestions).riseIn(3)
+                case .privacy: PrivacyReportSection().riseIn(4)
+                case .news: NewsSection(model: model, customising: $customisingNews).riseIn(5)
+                }
+            }
+        }
     }
 
     private var header: some View {

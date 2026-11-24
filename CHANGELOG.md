@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.41.1
+
+**A start page that fits**
+- The start page is now a single, static screen: no scrolling. It uses all the space in the
+  window, and if the window is small it leaves out the least important sections first (News, then
+  the Privacy Report, then Recently Closed), so everything you see fits.
+
 ## 0.41.0
 
 **Pew pew 🛸**
