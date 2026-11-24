@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.40.1
+
+**The saucer has landed 🛸**
+- Ufolio's new saucer, with its two little green men, now appears throughout the app: on the
+  start page, in the setup guide and What's New, in Settings, and on blank tabs.
+- The Force Field button and panel show the saucer too, with its tractor beam.
+
 ## 0.40.0
 
 **Hush is now Ufolio Browser 🛸**
