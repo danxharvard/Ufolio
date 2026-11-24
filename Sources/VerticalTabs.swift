@@ -304,6 +304,6 @@ private struct SideRowButton: View {
 enum SideColors {
     /// The selected tab: a soft, bright lozenge on the frosted column.
     static let selected = Color(nsColor: NSColor(name: nil) { a in
-        a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.13) : NSColor(white: 1, alpha: 0.85)
+        a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.12) : NSColor(white: 1, alpha: 0.7)
     })
 }

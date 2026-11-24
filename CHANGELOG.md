@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.35.2
+
+**Lighter frosting**
+- The frosted glass is clearer: more of your desktop shows through the toolbar, the side tab
+  column and Settings.
+
 ## 0.35.1
 
 **Fixes**

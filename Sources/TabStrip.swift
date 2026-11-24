@@ -8,7 +8,7 @@ enum Chrome {
     /// softly through. The selected tab uses exactly the same veil, so the two always match.
     static let toolbar = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? NSColor(white: 1, alpha: 0.075) : NSColor(white: 1, alpha: 0.62)
+            ? NSColor(white: 1, alpha: 0.045) : NSColor(white: 1, alpha: 0.38)
     })
     static let tabBarHeight: CGFloat = 38
 
