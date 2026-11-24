@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.37.1
+
+**Smoother start page**
+- Cards on the start page now move with the scroll instead of lagging behind it: each card is
+  drawn once as a single picture, and news cards no longer use frosted glass that had to be
+  re-blurred on every frame.
+
 ## 0.37.0
 
 **Cooler and smoother**

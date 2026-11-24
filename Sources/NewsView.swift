@@ -47,7 +47,7 @@ struct NewsSection: View {
                         Label("Show more stories", systemImage: "chevron.down")
                             .font(.system(size: 12.5, weight: .semibold))
                             .padding(.horizontal, 18).padding(.vertical, 9)
-                            .background(Capsule().fill(.regularMaterial))
+                            .background(Capsule().fill(Color.primary.opacity(0.07)))
                             .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08)))
                     }
                     .buttonStyle(.plain)
@@ -82,7 +82,7 @@ struct NewsSection: View {
                     .rotationEffect(.degrees(store.isLoading ? 360 : 0))
                     .animation(store.isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: store.isLoading)
                     .frame(width: 30, height: 30)
-                    .background(Circle().fill(.regularMaterial))
+                    .background(Circle().fill(Color.primary.opacity(0.07)))
             }
             .buttonStyle(.plain)
             .help("Refresh")
@@ -91,7 +91,7 @@ struct NewsSection: View {
                 Label("Customise", systemImage: "slider.horizontal.3")
                     .font(.system(size: 12, weight: .medium))
                     .padding(.horizontal, 12).frame(height: 30)
-                    .background(Capsule().fill(.regularMaterial))
+                    .background(Capsule().fill(Color.primary.opacity(0.07)))
             }
             .buttonStyle(.plain)
         }
@@ -139,7 +139,7 @@ private struct NewsChip: View {
                     Capsule().fill(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing))
                         .shadow(color: colors[1].opacity(0.35), radius: 6, y: 2)
                 } else {
-                    Capsule().fill(.regularMaterial)
+                    Capsule().fill(Color.primary.opacity(0.07))
                         .overlay(Capsule().fill(Color.primary.opacity(hovering ? 0.06 : 0)))
                 }
             }
@@ -277,6 +277,7 @@ private struct HeroCard: View {
             .frame(height: 360)
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color.white.opacity(0.08)))
+            .drawingGroup()
             .shadow(color: .black.opacity(0.16), radius: 5, y: 3)
             .offset(y: hovering ? -2 : 0)
             .opacity(store.read.contains(article.id) ? 0.75 : 1)
@@ -397,7 +398,7 @@ private struct CardStyle: ViewModifier {
     let hovering: Bool
     func body(content: Content) -> some View {
         content
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.regularMaterial))
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.primary.opacity(0.07)))
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.primary.opacity(hovering ? 0.12 : 0.06)))
             .shadow(color: .black.opacity(0.08), radius: 4, y: 2)

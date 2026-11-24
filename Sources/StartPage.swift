@@ -238,6 +238,7 @@ private struct FavouriteTile: View {
                     .frame(width: 66, height: 66)
                     .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).strokeBorder(Color.primary.opacity(0.09)))
+                    .drawingGroup()   // one flat picture: scrolls without redrawing its layers
                     .shadow(color: .black.opacity(0.14), radius: 3, y: 2)
                     .scaleEffect(hovering ? 1.05 : 1)
                 Text(bookmark.title)
@@ -349,6 +350,7 @@ private struct SuggestionCard: View {
                     .allowsHitTesting(false)
             }
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.white.opacity(0.08)))
+            .drawingGroup()   // one flat picture: scrolls without redrawing its layers
             .shadow(color: .black.opacity(0.16), radius: 4, y: 2)
             .scaleEffect(hovering ? 1.025 : 1)
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
