@@ -60,6 +60,15 @@ final class PerformanceCenter: ObservableObject {
     @Published private(set) var effectiveMode: PowerMode = .balanced
     @Published private(set) var onBattery = false
     @Published private(set) var lowPowerMode = false
+    /// Automatic Power Mode: when a tab genuinely needs more (it's heavy, or playing video or
+    /// sound, or using the camera), Ufolio lets it have the memory, then drops back to its
+    /// low-memory default a few minutes after. nil = not active.
+    @Published private(set) var powerBoost: PowerBoost?
+
+    struct PowerBoost: Equatable {
+        let reason: String
+        let limit: UInt64
+    }
 
     private var pressureSource: DispatchSourceMemoryPressure?
     private var timer: Timer?
@@ -157,18 +166,75 @@ final class PerformanceCenter: ObservableObject {
 
     static var memorySaverOn: Bool { Prefs.bool(Prefs.memorySaver) }
 
-    /// The most memory Hush should use: your choice, or a quarter of this Mac's memory.
-    static var memoryLimit: UInt64 {
+    /// The usual most memory Ufolio should use: your choice, or a quarter of this Mac's memory.
+    static var baseMemoryLimit: UInt64 {
         let chosen = Prefs.double(Prefs.memoryLimitGB)
         if chosen > 0 { return UInt64(chosen * 1_073_741_824) }
         return max(1_073_741_824, ProcessInfo.processInfo.physicalMemory / 4)
     }
 
+    /// The limit right now: higher while Power Mode is on.
+    static var memoryLimit: UInt64 { shared.powerBoost?.limit ?? baseMemoryLimit }
+
+    // MARK: Power Mode
+
+    /// A tab using more than this is "heavy" (a big web app, a map, a 4K video…).
+    static let heavyTabBytes: UInt64 = 250 * 1_048_576
+    /// How long after the heavy work stops before Ufolio drops back to its usual limit.
+    private static let powerCooldown: TimeInterval = 180
+    private var lastNeededPower = Date.distantPast
+    private var recentlyHeavy: [UUID: Date] = [:]
+
+    /// Works out whether any tab needs more right now, and raises or lowers the limit to suit.
+    func evaluatePowerMode(_ usage: Usage? = nil) {
+        guard Prefs.bool(Prefs.autoPowerMode) else { if powerBoost != nil { powerBoost = nil }; return }
+        let usage = usage ?? measure()
+        var reason: String?
+        for model in BrowserModel.all.allObjects {
+            for tab in model.tabs where !tab.isAsleep {
+                let bytes = usage.tabs.first { $0.id == tab.id }?.bytes ?? 0
+                if bytes >= Self.heavyTabBytes { recentlyHeavy[tab.id] = Date() }
+                let inFront = tab === model.selectedTab
+                let capturing = tab.webView.cameraCaptureState != .none || tab.webView.microphoneCaptureState != .none
+                if capturing { reason = reason ?? "“\(tab.displayTitle)” is using the camera or microphone" }
+                else if tab.isPlayingAudio { reason = reason ?? "“\(tab.displayTitle)” is playing" }
+                else if inFront && bytes >= Self.heavyTabBytes { reason = reason ?? "“\(tab.displayTitle)” is a heavy page" }
+            }
+        }
+        recentlyHeavy = recentlyHeavy.filter { Date().timeIntervalSince($0.value) < Self.powerCooldown }
+        if reason != nil { lastNeededPower = Date() }
+        let stillCooling = Date().timeIntervalSince(lastNeededPower) < Self.powerCooldown
+        guard reason != nil || (stillCooling && powerBoost != nil) else {
+            if powerBoost != nil { powerBoost = nil }
+            return
+        }
+        let base = Self.baseMemoryLimit
+        // Up to 60% more, but never more than 45% of the Mac's memory (and never below the usual).
+        let boosted = max(base, min(base + base * 3 / 5, ProcessInfo.processInfo.physicalMemory * 45 / 100))
+        let next = PowerBoost(reason: reason ?? powerBoost?.reason ?? "A heavy page", limit: boosted)
+        if next != powerBoost { powerBoost = next }
+    }
+
+    /// Heavy tabs you used in the last few minutes are kept awake while Power Mode is on.
+    func isProtectedHeavy(_ tab: BrowserTab) -> Bool {
+        powerBoost != nil && recentlyHeavy[tab.id] != nil && Date().timeIntervalSince(tab.lastActive) < Self.powerCooldown
+    }
+
+    /// Called when you switch tabs: a moment later, check whether the new tab needs more.
+    func tabSwitched() {
+        powerCheck?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.evaluatePowerMode() }
+        powerCheck = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: work)
+    }
+    private var powerCheck: DispatchWorkItem?
+
     /// When Hush is over its limit, the tabs you used least recently go to sleep, never the one
     /// you're looking at, either side of Split View, or tabs playing sound or using the camera.
     func keepWithinMemoryLimit() {
-        guard Self.memorySaverOn else { return }
         let usage = measure()
+        evaluatePowerMode(usage)
+        guard Self.memorySaverOn else { return }
         var over = Int64(usage.total) - Int64(Self.memoryLimit)
         guard over > 0 else { return }
         var candidates: [(tab: BrowserTab, bytes: UInt64)] = []
@@ -176,11 +242,16 @@ final class PerformanceCenter: ObservableObject {
             let visibleSplit = model.splitPair.flatMap { $0.contains(model.selectedID) ? $0 : nil }
             for tab in model.tabs where tab !== model.selectedTab && !tab.isAsleep && !tab.isLoading && !tab.isPlayingAudio
                 && !(visibleSplit?.contains(tab.id) ?? false)
-                && tab.webView.cameraCaptureState == .none && tab.webView.microphoneCaptureState == .none {
+                && tab.webView.cameraCaptureState == .none && tab.webView.microphoneCaptureState == .none
+                && !isProtectedHeavy(tab) {
                 candidates.append((tab, usage.tabs.first { $0.id == tab.id }?.bytes ?? 0))
             }
         }
-        for candidate in candidates.sorted(by: { $0.tab.lastActive < $1.tab.lastActive }) where over > 0 {
+        // The biggest, longest-idle tabs first: one sleeping web app frees more than five articles.
+        func cost(_ c: (tab: BrowserTab, bytes: UInt64)) -> Double {
+            Date().timeIntervalSince(c.tab.lastActive) * (Double(c.bytes) / 1_048_576 + 50)
+        }
+        for candidate in candidates.sorted(by: { cost($0) > cost($1) }) where over > 0 {
             candidate.tab.sleep()
             over -= Int64(candidate.bytes)
         }

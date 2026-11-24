@@ -68,6 +68,7 @@ enum Prefs {
     static let offerBookmarks = "offerBookmarks"
     static let powerMode = "powerMode"
     static let memorySaver = "memorySaver"
+    static let autoPowerMode = "autoPowerMode"
     static let blockAnnoyances = "blockAnnoyances"
     static let blockChatWidgets = "blockChatWidgets"
     static let autoUpdateLists = "autoUpdateLists"
@@ -136,6 +137,7 @@ enum Prefs {
         offerBookmarks: true,
         powerMode: PowerMode.automatic.rawValue,
         memorySaver: true,
+        autoPowerMode: true,
         blockAnnoyances: true,
         blockChatWidgets: false,
         autoUpdateLists: true,

@@ -6,6 +6,7 @@ struct PerformanceSettings: View {
     @AppStorage(Prefs.tabSleepMinutes) private var tabSleep = 15.0
     @AppStorage(Prefs.freeMemoryAutomatically) private var freeMemory = true
     @AppStorage(Prefs.memorySaver) private var memorySaver = true
+    @AppStorage(Prefs.autoPowerMode) private var autoPowerMode = true
     @AppStorage(Prefs.memoryLimitGB) private var memoryLimitGB = 0.0
     @AppStorage(Prefs.pauseBackgroundMedia) private var pauseMedia = false
     @ObservedObject private var center = PerformanceCenter.shared
@@ -84,6 +85,14 @@ struct PerformanceSettings: View {
                         }
                         .labelsHidden().fixedSize()
                     }
+                }
+                SettingsSwitch(title: "Power Mode",
+                               detail: "Works out when a tab needs more, such as a big web app, a map or a 4K video, and lets it use extra memory. Drops back to light by itself a few minutes after.",
+                               symbol: "bolt.fill", colors: PowerMode.performance.colors, isOn: $autoPowerMode)
+                if autoPowerMode, let boost = center.powerBoost {
+                    Label("On now: \(boost.reason), so Ufolio’s limit is \(PerformanceCenter.format(boost.limit)) for the moment.",
+                          systemImage: "bolt.circle.fill")
+                        .font(.system(size: 11.5)).foregroundStyle(Color.orange)
                 }
                 LabeledContent("Sleep inactive tabs") { Picker("", selection: $tabSleep) {
                     Text("Never").tag(0.0)

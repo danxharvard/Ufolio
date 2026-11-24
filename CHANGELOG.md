@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.42.0
+
+**New: automatic Power Mode ⚡**
+- Ufolio now works out when a tab genuinely needs more: a big web app like Google Sheets or
+  Figma, a map, a 4K video, a call. It then lets it use extra memory (up to 60% more than usual,
+  never more than 45% of your Mac's), and keeps heavy tabs you've just used awake.
+- A few minutes after the heavy work stops, it drops back to its light, low-memory self on its own.
+- When memory does need freeing, the biggest idle tabs go to sleep first, so one sleeping web app
+  frees more than five articles.
+- Silent videos and animations in tabs you can't see are paused, saving memory, graphics and
+  battery; they carry on when you go back. Sound keeps playing.
+- Find it in Settings › Performance, where it shows when it's on and why. It's on by default.
+
 ## 0.41.1
 
 **A start page that fits**

@@ -13,11 +13,15 @@ final class BrowserModel: NSObject, ObservableObject {
             // Pause sound and video in the tab you leave (Eco, or Settings › Performance),
             // unless it's still showing on the other side of Split View.
             let stillVisible = old.map { splitPair?.contains($0.id) == true && splitPair?.contains(selectedID) == true } ?? false
-            if let old, old !== selectedTab, !old.isAsleep, !stillVisible, PerformanceCenter.shared.pausesBackgroundMedia {
+            // Silent video and animations in a tab you can't see are always paused (they only cost
+            // memory, graphics and battery); sound keeps playing unless you've asked otherwise.
+            if let old, old !== selectedTab, !old.isAsleep, !stillVisible,
+               PerformanceCenter.shared.pausesBackgroundMedia || !old.isPlayingAudio {
                 old.webView.setAllMediaPlaybackSuspended(true)
             }
             if let tab = selectedTab, !tab.isAsleep { tab.webView.setAllMediaPlaybackSuspended(false) }
             if let tab = selectedTab, tab !== old { ExtensionEvents.activated(tab, previous: old) }
+            if selectedTab !== old { PerformanceCenter.shared.tabSwitched() }
         }
     }
     private var sleepTimer: Timer?
