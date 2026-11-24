@@ -13,4 +13,4 @@ Hush needs **macOS 15 Sequoia or later** on an Apple Silicon or Intel Mac.
 Hush updates itself from here: new versions install the next time you quit it, or straight away from
 **Settings › Software Update**.
 
-See [CHANGELOG.md](https://github.com/danxharvard/hushbrowser/blob/main/CHANGELOG.md) for what's new.
+See [CHANGELOG.md](https://github.com/danxharvard/Ufolio/blob/main/CHANGELOG.md) for what's new.

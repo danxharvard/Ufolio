@@ -346,7 +346,7 @@ private struct MorePanel: View {
                 }
                 row("gearshape", "Settings", shortcutText: "⌘,") { SettingsOpener.open() }
                 row("questionmark.circle", "Help and Feedback", chevron: true) {
-                    NSWorkspace.shared.open(URL(string: "https://github.com/danxharvard/hushbrowser")!)
+                    NSWorkspace.shared.open(URL(string: "https://github.com/danxharvard/Ufolio")!)
                 }
             }
         }

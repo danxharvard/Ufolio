@@ -78,7 +78,7 @@ func render(scale: CGFloat) -> NSBitmapImageRep {
     head.lineJoinStyle = .round
     head.stroke()
 
-    text("github.com/danxharvard/hushbrowser", size: 10.5, weight: .regular,
+    text("github.com/danxharvard/Ufolio", size: 10.5, weight: .regular,
          color: NSColor(red: 0.50, green: 0.48, blue: 0.60, alpha: 1), y: height - 26)
 
     NSGraphicsContext.restoreGraphicsState()

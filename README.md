@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/danxharvard/hushbrowser/releases/latest"><b>Download Hush for Mac</b></a>
+  <a href="https://github.com/danxharvard/Ufolio/releases/latest"><b>Download Hush for Mac</b></a>
   &nbsp;·&nbsp; macOS 15 Sequoia or later &nbsp;·&nbsp; Apple Silicon &amp; Intel &nbsp;·&nbsp; Free and open source
 </p>
 
@@ -105,7 +105,7 @@ No bloat. No tracking. No nonsense. Just *Hush*.
 
 ## Get started in 30 seconds
 
-1. Download **HushBrowser-x.y.z.dmg** from the [latest release](https://github.com/danxharvard/hushbrowser/releases/latest).
+1. Download **HushBrowser-x.y.z.dmg** from the [latest release](https://github.com/danxharvard/Ufolio/releases/latest).
 2. Open it and drag **Hush Browser** onto **Applications**.
 3. The first time you open it, macOS says it can't verify Hush, because Hush isn't signed with a
    paid Apple Developer ID. Click **Done**, then go to **System Settings › Privacy & Security**,

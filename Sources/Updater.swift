@@ -13,7 +13,7 @@ import CryptoKit
 /// Apple's own update mechanisms need a paid Developer ID, so Hush swaps the app itself.
 final class Updater: ObservableObject {
     static let shared = Updater()
-    static let repo = "danxharvard/hushbrowser"
+    static let repo = "danxharvard/Ufolio"
     /// Every update must be signed with the matching private key (kept off GitHub's code, as a
     /// release secret). Even someone who could publish a release can't make Hush install it.
     static let updatePublicKey = "FKLwuCcTXRyR9HdUM16PNY49xl0lftz0B4qAoWgHkVY="

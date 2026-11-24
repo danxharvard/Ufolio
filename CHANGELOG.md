@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.39.1
+
+- Hush now looks for updates, help and downloads at the project's new home on GitHub
+  (danxharvard/Ufolio). Nothing changes for you.
+
 ## 0.39.0
 
 **More beautiful**
