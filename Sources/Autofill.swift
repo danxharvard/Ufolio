@@ -277,6 +277,8 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
     private let registered = NSHashTable<WKUserContentController>.weakObjects()
     private var popover: NSPopover?
     private var lastSaveOffer: (key: String, date: Date)?
+    /// Strong passwords Ufolio filled in this session (kept in memory only).
+    private var generatedPasswords: Set<String> = []
 
     static var isEnabled: Bool {
         Prefs.bool(Prefs.autofillPasswords) || Prefs.bool(Prefs.autofillCards) || Prefs.bool(Prefs.autofillContact)
@@ -309,8 +311,11 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
                   let rect = body["rect"] as? [Double], rect.count == 4 else { return }
             offer(kind: kind, rect: rect, host: host, secure: secure, tab: tab)
         case "submit":
+            // Stealth windows promise not to remember what you type, so they don't offer to save,
+            // except a strong password Ufolio made for you there (or it would be lost for good).
             guard secure, Prefs.bool(Prefs.autofillPasswords),
-                  let password = body["password"] as? String, !password.isEmpty, password.count <= 512 else { return }
+                  let password = body["password"] as? String, !password.isEmpty, password.count <= 512,
+                  !tab.isPrivate || generatedPasswords.contains(password) else { return }
             let username = String((body["username"] as? String ?? "").prefix(256))
             offerToSave(username: username, password: password, host: host, tab: tab)
         default:
@@ -421,6 +426,8 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
         switch option {
         case .generate(let password):
             // Filled into every new-password box; Hush offers to save it when the form is sent.
+            generatedPasswords.insert(password)
+            if generatedPasswords.count > 20 { generatedPasswords.removeFirst() }
             send(kind: "newpassword", data: ["password": password], host: host, tab: tab)
         case .login(let login):
             UserAuth.confirm("fill your password for \(host)") { [weak self] ok in

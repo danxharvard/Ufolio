@@ -128,8 +128,10 @@ private struct SideTabList: View {
         let tabs = model.visibleTabs
         let pinned = tabs.filter(\.isPinned)
         let others = tabs.filter { !$0.isPinned }
+        ScrollViewReader { proxy in
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 2) {
+            // Lazy: rows scrolled out of view aren't built, so lots of tabs stay quick.
+            LazyVStack(spacing: 2) {
                 if !pinned.isEmpty {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: compact ? 44 : 50), spacing: 6)], spacing: 6) {
                         ForEach(pinned) { tab in
@@ -152,11 +154,19 @@ private struct SideTabList: View {
                         }
                         .onDrop(of: [.text], delegate: SideTabDrop(target: id, model: model, dragging: $dragging))
                         .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
+                        .id(id)
                 }
             }
             .padding(.horizontal, 6)
             .padding(.bottom, 12)
             .animation(.spring(response: 0.28, dampingFraction: 0.88), value: tabs.map(\.id))
+        }
+        // The current tab is scrolled into view when it changes (switching by keyboard or the
+        // palette to a tab further down used to leave it out of sight).
+        .onChange(of: model.selectedID) { _, id in
+            guard let id, others.contains(where: { $0.id == id }) else { return }
+            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id) }
+        }
         }
     }
 }

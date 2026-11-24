@@ -207,14 +207,17 @@ struct HushCommands: Commands {
             Button("Actual Size") { browser?.selectedTab?.resetZoom() }
                 .keyboardShortcut(Shortcuts.get(.actualSize))
             Divider()
-            Button(browser?.sidebarOpen == true ? "Hide Sidebar" : "Show Sidebar") { browser?.sidebarOpen.toggle() }
+            // One label that's always right (the sidebar's open state isn't something menus watch).
+            Button("Show or Hide Sidebar") { browser?.sidebarOpen.toggle() }
                 .keyboardShortcut(Shortcuts.get(.sidebar))
             Button(browser?.splitPair != nil ? "Close Split View" : "Split View") {
                 guard let model = browser else { return }
                 if model.splitPair != nil { model.closeSplit(keeping: model.selectedID) } else { model.openSplit() }
             }
             .keyboardShortcut(Shortcuts.get(.splitView))
-            Button(browser?.selectedTab?.reader != nil ? "Leave Reader" : "Show Reader") { browser?.selectedTab?.toggleReader() }
+            // Labels that are always right: menus aren't told when a single tab changes, so a
+            // "Mute"/"Unmute" style label could show the wrong one until you switched tabs.
+            Button("Show or Leave Reader") { browser?.selectedTab?.toggleReader() }
                 .keyboardShortcut(Shortcuts.get(.reader))
             Button("Picture in Picture") {
                 if let view = browser?.selectedTab?.webView { WebKitExtras.togglePictureInPicture(view) }
@@ -239,9 +242,9 @@ struct HushCommands: Commands {
         }
 
         CommandMenu("Tab") {
-            Button(browser?.selectedTab?.isMuted == true ? "Unmute Tab" : "Mute Tab") { browser?.selectedTab?.toggleMute() }
+            Button("Mute or Unmute Tab") { browser?.selectedTab?.toggleMute() }
                 .keyboardShortcut(Shortcuts.get(.muteTab))
-            Button(browser?.selectedTab?.isPinned == true ? "Unpin Tab" : "Pin Tab") {
+            Button("Pin or Unpin Tab") {
                 if let model = browser, let tab = model.selectedTab { model.togglePin(tab) }
             }
             Divider()

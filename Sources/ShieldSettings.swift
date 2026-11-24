@@ -88,7 +88,13 @@ final class ShieldSettings: ObservableObject {
 
     static func key(for host: String) -> String { Domains.site(host) }
 
-    func overrides(for host: String) -> SiteOverrides { sites[Self.key(for: host)] ?? SiteOverrides() }
+    func overrides(for host: String) -> SiteOverrides {
+        let key = Self.key(for: host)
+        return sessionSites[key] ?? sites[key] ?? SiteOverrides()
+    }
+
+    /// Changes made from a Stealth window: until Ufolio quits only, never written down.
+    @Published private(set) var sessionSites: [String: SiteOverrides] = [:]
 
     func effective(for host: String?) -> Shields {
         var result = Self.defaults
@@ -101,15 +107,20 @@ final class ShieldSettings: ObservableObject {
         return result
     }
 
-    func update(_ host: String, _ change: (inout SiteOverrides) -> Void) {
+    func update(_ host: String, privately: Bool = false, _ change: (inout SiteOverrides) -> Void) {
         let key = Self.key(for: host)
-        var o = sites[key] ?? SiteOverrides()
+        var o = overrides(for: host)
         change(&o)
+        if privately {
+            sessionSites[key] = o.isEmpty ? nil : o   // back to Default: the saved settings apply again
+            return
+        }
         sites[key] = o.isEmpty ? nil : o
         save()
     }
 
     func reset(_ host: String) {
+        sessionSites[Self.key(for: host)] = nil
         sites[Self.key(for: host)] = nil
         save()
     }

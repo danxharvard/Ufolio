@@ -94,9 +94,9 @@ final class ContentBlocker: ObservableObject {
         for builtIn in BuiltInRules.allCases {
             loadCompiled(builtIn.identifier) { builtIn.json }
         }
-        if ElementZapper.shared.rulesJSON != nil {
-            loadCompiled(ElementZapper.ruleIdentifier) { ElementZapper.shared.rulesJSON }
-        }
+        // Rebuilt from the saved list at each launch, never taken from WebKit's cached copy: that
+        // copy can include things hidden from a Stealth window, which mustn't outlive the session.
+        installZapperRules(ElementZapper.shared.rulesJSON)
         for list in lists {
             if list.isOutdated {
                 // Converted by an older, buggy converter: never load those rules.
@@ -242,15 +242,23 @@ final class ContentBlocker: ObservableObject {
     func isShieldsDown(_ host: String) -> Bool {
         let h = Self.normalize(host)
         return shieldsDown.contains { h == $0 || h.hasSuffix("." + $0) }
+            || sessionShieldsDown.contains { h == $0 || h.hasSuffix("." + $0) }
     }
 
-    func setShields(_ up: Bool, for host: String) {
+    /// Sites Force Field was switched off for from a Stealth window: until Ufolio quits only,
+    /// never written down (the saved list would otherwise record a site visited in Stealth).
+    private var sessionShieldsDown: Set<String> = []
+
+    func setShields(_ up: Bool, for host: String, privately: Bool = false) {
         let h = Self.normalize(host)
         if up {
             shieldsDown.removeAll { h == $0 || h.hasSuffix("." + $0) }
+            sessionShieldsDown = sessionShieldsDown.filter { !(h == $0 || h.hasSuffix("." + $0)) }
         } else if !isShieldsDown(h) {
-            shieldsDown.append(h)
-            shieldsDown.sort()
+            if privately { sessionShieldsDown.insert(h) } else {
+                shieldsDown.append(h)
+                shieldsDown.sort()
+            }
         }
         UserDefaults.standard.set(shieldsDown, forKey: "shieldsDown")
         for controller in controllers.allObjects { configure(controller) }

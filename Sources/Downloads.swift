@@ -422,12 +422,16 @@ private struct DownloadsList: View {
 private struct DownloadRow: View {
     @ObservedObject var item: DownloadItem
     @State private var hovering = false
+    /// Looked up once per state change, not on every progress tick (asking macOS for a file's
+    /// icon isn't free, and the list redraws as downloads move).
+    @State private var fileIcon: NSImage?
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(nsImage: icon)
+            Image(nsImage: fileIcon ?? Self.genericIcon)
                 .resizable()
                 .frame(width: 32, height: 32)
+                .task(id: item.state) { fileIcon = icon }
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.filename)
                     .font(.system(size: 12.5))
@@ -496,6 +500,8 @@ private struct DownloadRow: View {
             Button { Downloads.shared.remove(item) } label: { Label("Remove from List", systemImage: "minus.circle") }
         }
     }
+
+    private static let genericIcon = NSWorkspace.shared.icon(for: .data)
 
     private var icon: NSImage {
         if let url = item.destination, FileManager.default.fileExists(atPath: url.path) {

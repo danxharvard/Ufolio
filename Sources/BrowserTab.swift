@@ -190,10 +190,18 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             if (tab.waking || tab.isAsleep) && url == nil { return }
             if url != nil { tab.waking = false }
             guard tab.url != url else { return }
+            let previous = tab.url
             tab.url = url
             // Pages that change without reloading (YouTube videos, web apps) never "finish
-            // loading", so they're added to history here.
-            if !tab.isLoading, !tab.isPrivate, let url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+            // loading", so they're added to history here. Only a real change of page counts:
+            // sites that update just the "#section" as you scroll would otherwise add a visit each time.
+            func page(_ u: URL?) -> String? {
+                guard let u, var c = URLComponents(url: u, resolvingAgainstBaseURL: false) else { return nil }
+                c.fragment = nil
+                return c.string
+            }
+            if !tab.isLoading, !tab.isPrivate, let url, page(url) != page(previous),
+               ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
                 HistoryStore.shared.record(url, title: tab.webView.title ?? "")
             }
             tab.updateSiteColor()

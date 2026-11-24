@@ -757,7 +757,7 @@ struct ShieldsPanel: View {
                 Toggle("", isOn: Binding(
                     get: { !ContentBlocker.shared.isShieldsDown(host) },
                     set: { up in
-                        ContentBlocker.shared.setShields(up, for: host)
+                        ContentBlocker.shared.setShields(up, for: host, privately: tab.isPrivate)
                         tab.webView.reload()
                     }))
                 .toggleStyle(.switch)
@@ -912,7 +912,7 @@ private struct SiteSettingRow: View {
 
     private func set(_ value: String?) {
         guard let host = tab.host else { return }
-        siteShields.update(host) { $0[keyPath: keyPath] = value }
+        siteShields.update(host, privately: tab.isPrivate) { $0[keyPath: keyPath] = value }
         tab.webView.reload()
     }
 }

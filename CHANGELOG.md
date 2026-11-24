@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.43.11: ten more fixes
+
+**Stealth Mode leaves no trace**
+- Turning Force Field off for a site, changing a site's settings, or hiding elements from a
+  Stealth window now lasts until Ufolio quits, instead of being saved (which recorded the site).
+- Stealth windows don't offer to save passwords you type, except a strong password Ufolio
+  made for you there.
+
+**Tabs down the side**
+- The tab list only builds the rows you can see, so lots of tabs stay quick.
+- Switching to a tab further down the list scrolls it into view.
+
+**Fixes**
+- Menu items for the sidebar, Reader, muting and pinning have labels that are always right
+  (they could show the opposite of what they'd do).
+- Sites that update the "#section" part of their address as you scroll no longer count each
+  change as a new visit in history.
+
+**Smoother**
+- The downloads list no longer asks macOS for every file's icon on every update.
+
 ## 0.43.10: ten more fixes
 
 **Tabs**

@@ -9,6 +9,8 @@ final class ElementZapper: NSObject, ObservableObject, WKScriptMessageHandler {
 
     /// site → CSS selectors hidden on it
     @Published private(set) var hidden: [String: [String]]
+    /// Hidden from a Stealth window: until Ufolio quits only, never written down.
+    private var sessionHidden: [String: [String]] = [:]
 
     private let tabs = NSMapTable<WKWebView, BrowserTab>.weakToWeakObjects()
     private let registered = NSHashTable<WKUserContentController>.weakObjects()
@@ -40,6 +42,14 @@ final class ElementZapper: NSObject, ObservableObject, WKScriptMessageHandler {
               !selector.contains(where: { "{};\n\r".contains($0) }) else { return }
         let site = ContentBlocker.normalize(message.frameInfo.securityOrigin.host)
         guard !site.isEmpty else { return }
+        if let webView = message.webView, let tab = tabs.object(forKey: webView), tab.isPrivate {
+            var list = sessionHidden[site] ?? []
+            guard !list.contains(selector), list.count < 200 else { return }
+            list.append(selector)
+            sessionHidden[site] = list
+            ContentBlocker.shared.installZapperRules(rulesJSON)
+            return
+        }
         var list = hidden[site] ?? []
         // Kept to a sensible size, so the rules stay quick to build.
         guard !list.contains(selector), list.count < 200, hidden[site] != nil || hidden.count < 1000 else { return }
@@ -50,6 +60,7 @@ final class ElementZapper: NSObject, ObservableObject, WKScriptMessageHandler {
 
     func showAgain(_ site: String) {
         hidden[site] = nil
+        sessionHidden[site] = nil
         saveAndApply()
     }
 
@@ -60,7 +71,8 @@ final class ElementZapper: NSObject, ObservableObject, WKScriptMessageHandler {
 
     /// One css-display-none rule per site; nil when nothing is hidden.
     var rulesJSON: String? {
-        let rules: [[String: Any]] = hidden.sorted { $0.key < $1.key }.compactMap { site, selectors in
+        let all = hidden.merging(sessionHidden) { saved, session in saved + session.filter { !saved.contains($0) } }
+        let rules: [[String: Any]] = all.sorted { $0.key < $1.key }.compactMap { site, selectors in
             guard !selectors.isEmpty else { return nil }
             return [
                 "trigger": ["url-filter": ".*", "if-domain": ["*" + site]] as [String: Any],
