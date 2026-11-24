@@ -195,12 +195,17 @@ enum CardVault {
     @discardableResult
     static func save(_ card: SavedCard) -> Bool {
         guard let data = try? JSONEncoder().encode(card) else { return false }
-        delete(card.id)
-        let add: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                  kSecAttrService as String: service,
-                                  kSecAttrAccount as String: card.id.uuidString,
-                                  kSecAttrLabel as String: "\(card.label) · \(card.expiry)",
-                                  kSecValueData as String: data]
+        // Updated in place (it used to be deleted first, so a failed save lost the card).
+        let match: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                    kSecAttrService as String: service,
+                                    kSecAttrAccount as String: card.id.uuidString]
+        let label = "\(card.label) · \(card.expiry)"
+        let status = SecItemUpdate(match as CFDictionary,
+                                   [kSecValueData as String: data, kSecAttrLabel as String: label] as CFDictionary)
+        guard status == errSecItemNotFound else { return status == errSecSuccess }
+        var add = match
+        add[kSecAttrLabel as String] = label
+        add[kSecValueData as String] = data
         return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
     }
 

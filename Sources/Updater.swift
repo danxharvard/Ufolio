@@ -208,6 +208,8 @@ final class Updater: ObservableObject {
         guard pending != nil else { return }
         launchSwap(relaunch: true)
         NSApp.terminate(nil)
+        // Still here: quitting was cancelled, so the installer stands down; offer it again.
+        if let latest { state = .available(version: latest.version) }
     }
 
     private func installOnQuit() {
@@ -253,6 +255,8 @@ final class Updater: ObservableObject {
         exec >> "$HOME/Library/Logs/Ufolio Browser Update.log" 2>&1
         echo "$(date): installing $NEW over $TARGET"
         for i in $(seq 1 300); do kill -0 "$PID" 2>/dev/null || break; sleep 0.2; done
+        # Never swap the app while it's still running (quitting was cancelled): try another time.
+        if kill -0 "$PID" 2>/dev/null; then echo "Ufolio is still open; not installing now"; rm -rf "$WORK"; exit 0; fi
         if mv "$TARGET" "$BACKUP" && mv "$NEW" "$TARGET"; then
           rm -rf "$BACKUP"
         else

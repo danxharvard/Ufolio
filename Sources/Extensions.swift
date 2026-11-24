@@ -114,6 +114,8 @@ final class ExtensionStore: ObservableObject {
 
     @MainActor
     func install(fromWebStore text: String) async {
+        // One at a time (checked first, so an error below can't mark a running install as done).
+        guard !isWorking else { return }
         guard let id = Self.webStoreID(from: text) else {
             report("That doesn’t look like a Chrome Web Store link. Open the extension’s page in the Web Store and copy its address.", error: true)
             return
@@ -146,6 +148,7 @@ final class ExtensionStore: ObservableObject {
     /// Adds a Safari web extension. It keeps running from inside its own app.
     @MainActor
     func install(safari info: SafariExtensionInfo) async {
+        guard !isWorking else { return }
         guard #available(macOS 15.4, *) else { report("Extensions need macOS 15.4 or later.", error: true); return }
         guard let bundle = Bundle(url: info.appexURL) else { report("Couldn’t open \(info.appName)’s extension.", error: true); return }
         isWorking = true
@@ -173,6 +176,7 @@ final class ExtensionStore: ObservableObject {
     /// Installs an unpacked extension folder (for developers, or extensions from elsewhere).
     @MainActor
     func install(fromFolder url: URL) async {
+        guard !isWorking else { return }
         isWorking = true
         statusIsError = false
         let staging = FileManager.default.temporaryDirectory.appendingPathComponent("hush-ext-\(UUID().uuidString)")

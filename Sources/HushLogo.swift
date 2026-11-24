@@ -251,9 +251,12 @@ struct CrescentShape: Shape {
 /// Drawn from the clock at 30 frames a second; still when Reduce Motion is on.
 struct UFOZapperScene: View {
     @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
+    /// Paused while its window isn't the one you're using (Settings left open behind the browser
+    /// kept drawing 30 frames a second for nobody).
+    @Environment(\.controlActiveState) private var activeState
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || activeState == .inactive)) { context in
             let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
             GeometryReader { geo in
                 let w = geo.size.width, h = geo.size.height

@@ -270,8 +270,18 @@ final class ContentBlocker: ObservableObject {
 
     func importFile(_ url: URL, name customName: String? = nil) {
         let name = customName ?? url.deletingPathExtension().lastPathComponent
+        // One list at a time, as for lists from the web.
+        guard !isWorking else {
+            status = "Another filter list is still being set up. Try again in a moment."
+            statusIsError = true
+            return
+        }
+        isWorking = true
         Task {
             do {
+                // The same limit as lists from the web, so a huge file chosen by mistake isn't read in.
+                let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                guard size < 60_000_000 else { await report("That file is too large to be a filter list.", error: true); return }
                 let data = try Data(contentsOf: url)
                 await importList(data: data, name: name, source: nil)
             } catch {
@@ -297,13 +307,17 @@ final class ContentBlocker: ObservableObject {
             url = parts.url ?? url
         }
         guard url.scheme?.lowercased() == "https", url.host != nil else {
-            Task { await report("Filter lists must come from a secure (https) web address.", error: true) }
+            // Just the message: report() would also mark Ufolio as not busy while another list may be.
+            status = "Filter lists must come from a secure (https) web address."
+            statusIsError = true
             return
         }
         // One list at a time: two building rules at once could overwrite each other's results.
+        // Others wait their turn (several old lists can be refreshed one after another at launch).
         guard !isWorking else {
-            status = "Another filter list is still being set up. Try again in a moment."
-            statusIsError = true
+            if !waiting.contains(where: { $0.url == url }) { waiting.append((url, name)) }
+            status = "Waiting for another filter list to finish…"
+            statusIsError = false
             return
         }
         isWorking = true; statusIsError = false; status = "Downloading…"   // straight away, so a second click can't slip in
@@ -432,8 +446,18 @@ final class ContentBlocker: ObservableObject {
         }
     }
 
+    /// Lists from the web waiting for the one being set up to finish.
+    private var waiting: [(url: URL, name: String?)] = []
+
     private func report(_ message: String, error: Bool) async {
         await MainActor.run {
+            defer {
+                // Next in line, if any (after this one's message has been shown).
+                if !self.waiting.isEmpty {
+                    let next = self.waiting.removeFirst()
+                    self.importFromWeb(next.url, name: next.name)
+                }
+            }
             self.isWorking = false
             self.status = message
             self.statusIsError = error

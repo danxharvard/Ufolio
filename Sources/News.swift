@@ -238,8 +238,12 @@ final class NewsStore: ObservableObject {
             return "That doesn’t look like a web address."
         }
         guard !allSources.contains(where: { $0.feed == url }) else { return "You already have that feed." }
+        // Every refresh fetches every feed: a sensible number keeps the start page quick.
+        guard customSources.count < 30 else { return "You can add up to 30 of your own feeds." }
         guard let (data, response) = try? await Self.session.data(from: url),
               (response as? HTTPURLResponse)?.statusCode == 200 else { return "Ufolio couldn’t reach that feed." }
+        // The same limit as the regular refresh (a huge "feed" would be read in on the main thread).
+        guard data.count < 6_000_000 else { return "That feed is too large." }
         let title = FeedParser.title(of: data) ?? host.strippingWWW
         var source = NewsSource(name: String(title.prefix(60)), feed: url, site: URL(string: "https://\(host)") ?? url, channel: .top, custom: true)
         source.custom = true

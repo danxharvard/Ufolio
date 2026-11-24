@@ -457,9 +457,10 @@ private struct RememberedPermissions: View {
     let kinds: [PermissionKind]
     @ObservedObject private var permissions = SitePermissions.shared
 
-    private var rows: [(host: String, kind: PermissionKind, allowed: Bool)] {
+    private struct Row { let host: String; let kind: PermissionKind; let allowed: Bool; var id: String { host + "|" + kind.rawValue } }
+    private var rows: [Row] {
         permissions.decisions.keys.sorted().flatMap { host in
-            kinds.compactMap { kind in permissions.decisions[host]?[kind.rawValue].map { (host, kind, $0) } }
+            kinds.compactMap { kind in permissions.decisions[host]?[kind.rawValue].map { Row(host: host, kind: kind, allowed: $0) } }
         }
     }
 
@@ -468,7 +469,9 @@ private struct RememberedPermissions: View {
             Text("No websites yet. When you choose Always Allow, the site appears here.")
                 .foregroundStyle(.secondary)
         } else {
-            ForEach(rows, id: \.host) { row in
+            // Site and kind together: a site with camera and microphone answers has two rows,
+            // and identical IDs made SwiftUI mix them up (the menu could change the wrong one).
+            ForEach(rows, id: \.id) { row in
                 HStack(spacing: 10) {
                     Favicon(url: URL(string: "https://\(row.host)"), size: 16)
                     Text(row.host)

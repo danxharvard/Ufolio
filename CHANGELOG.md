@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.43.7: ten more fixes
+
+**Fixes**
+- Quitting while files are still downloading now asks first, instead of cancelling them.
+- The updater never replaces Ufolio while it's still open (for example if you choose not to
+  quit after all), and offers the update again.
+- Saving changes to a payment card can no longer lose the card if the save fails.
+- Clicking "Add" twice on an extension no longer installs it twice at once.
+- Filter lists from the web now wait their turn rather than being refused while another is
+  being set up, and a mistyped address no longer confuses that.
+- Filter list files are checked for size before they're read.
+- Settings › Privacy: sites with both camera and microphone answers list correctly, and each
+  menu changes the right one.
+- Your own news feeds are limited to a sensible size and number (30), so the start page stays quick.
+
+**Smoother**
+- The setup guide's flying saucer pauses when you switch to another app.
+
 ## 0.43.6: ten more fixes
 
 **Privacy**

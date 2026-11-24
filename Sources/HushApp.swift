@@ -59,6 +59,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSWindow.allowsAutomaticWindowTabbing = false
     }
 
+    /// Quitting cancels downloads that are still running, so ask first (as Safari does).
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let running = Downloads.shared.activeCount
+        guard running > 0 else { return .terminateNow }
+        let alert = NSAlert()
+        alert.messageText = running == 1 ? "A download is still in progress." : "\(running) downloads are still in progress."
+        alert.informativeText = "If you quit now, \(running == 1 ? "it" : "they") will be cancelled."
+        alert.addButton(withTitle: "Don’t Quit")
+        alert.addButton(withTitle: "Quit")
+        return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         // Write everything out before Hush exits (background saves might not finish otherwise).
         BrowserModel.all.allObjects.forEach { $0.saveSessionNow() }   // the last second of changes too
