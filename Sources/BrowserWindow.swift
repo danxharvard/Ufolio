@@ -980,12 +980,13 @@ private struct SidebarSlot: View {
     var body: some View {
         Group {
             if built {
-                HStack(spacing: 0) {
-                    // While hidden, the sidebar draws nothing costly (no frosted glass), so it
-                    // doesn't slow scrolling.
-                    LibrarySidebar(model: model, active: slotOpen)
-                    Divider()
-                }
+                // A rounded, frosted card beside the page card (same corners, a small gap), rather
+                // than a square slab. While hidden it draws nothing costly, so scrolling stays smooth.
+                LibrarySidebar(model: model, active: slotOpen)
+                    .frame(width: width - 6)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
+                    .padding(.trailing, 6)
                 .frame(width: width)
                 .offset(x: slidIn ? 0 : -width)
                 .animation(.spring(response: 0.3, dampingFraction: 0.9), value: slidIn)   // only the slide animates

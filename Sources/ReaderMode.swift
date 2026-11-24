@@ -1,7 +1,7 @@
 import SwiftUI
 import WebKit
 
-/// Reader: the article on its own, in calm type, without ads, menus or pop-ups.
+/// Reader: the article on its own, in clean, easy-to-read type, without ads, menus or pop-ups.
 /// Hush copies out only the text and pictures (as plain data) and lays them out itself,
 /// so none of the page's own code runs inside Reader.
 struct ReaderArticle: Equatable {

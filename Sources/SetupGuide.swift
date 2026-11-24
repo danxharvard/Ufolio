@@ -129,9 +129,9 @@ struct SetupGuide: View {
         VStack(spacing: 22) {
             AnimatedHushLogo(size: 120)
             VStack(alignment: .leading, spacing: 14) {
-                Highlight(symbol: "shield.lefthalf.filled", color: .purple, text: "Ads and trackers blocked before they load")
+                Highlight(symbol: "bolt.fill", color: .orange, text: "Blazing fast: ads and trackers stopped before they reach the page")
+                Highlight(symbol: "memorychip.fill", color: .green, text: "Native and light on memory and battery")
                 Highlight(symbol: "hand.raised.fill", color: .blue, text: "No account, no tracking: your data stays on this Mac")
-                Highlight(symbol: "leaf.fill", color: .green, text: "Native, light on memory and battery")
             }
         }
     }
@@ -304,14 +304,14 @@ extension SetupGuide.Step {
 
     var detail: String {
         switch self {
-        case .welcome: return "A calm, private browser for your Mac. Let's set it up. It takes less than a minute."
+        case .welcome: return "Light on your Mac, yet seriously powerful. Ads and trackers are blocked before they ever reach the page. Let's set it up: it takes less than a minute."
         case .bringStuff: return "Pick a browser to bring over your bookmarks and favourite sites, and pick up right where you left off."
         case .search: return "Used when you type in the address bar. You can change it any time."
         case .guardMode: return "Hush Guard blocks ads and trackers before they load, so pages are cleaner and faster."
         case .tabs: return "Tabs along the top, or down the side where long titles have room. Switch any time in Settings."
         case .look: return "Day, Night, or follow your Mac. Then pick an accent colour."
         case .defaultBrowser: return "Links from other apps will open in Hush. You can always change this later."
-        case .done: return "Enjoy the quiet. Here's how Hush is set up."
+        case .done: return "Fast, private and light. Here's how Hush is set up."
         }
     }
 

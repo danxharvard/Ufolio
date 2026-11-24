@@ -66,7 +66,7 @@ No bloat. No tracking. No nonsense. Just *hush*.
 ### 🎨 Gorgeous to look at
 - **Beautiful start pages** (Twilight, Aurora or Plain) in light and dark mode.
 - A moon logo that **eclipses trackers** in a little animation.
-- Frosted glass, soft shadows and smooth animations, with **Reduce Motion** if you prefer calm.
+- Frosted glass, soft shadows and smooth animations, with **Reduce Motion** if you prefer everything instant.
 - A clean, **Safari-style Settings window** with no clutter.
 
 ### 🙂 A pleasure to use
@@ -87,7 +87,7 @@ No bloat. No tracking. No nonsense. Just *hush*.
 3. The first time you open it, macOS says it can't verify Hush, because Hush isn't signed with a
    paid Apple Developer ID. Click **Done**, then go to **System Settings › Privacy & Security**,
    scroll to **Security** and click **Open Anyway** next to Hush Browser. You only do this once.
-4. Done. Enjoy the quiet.
+4. Done. Enjoy a faster, lighter web.
 
 All settings live in **Hush Browser › Settings…** (⌘,).
 

@@ -226,11 +226,16 @@ final class FocusTextField: NSTextField {
     var keepAllSelected = false
     private var selectionObserver: NSObjectProtocol?
     private var eventMonitor: Any?
+    /// The click that gave the field focus. macOS focuses a clicked field *before* handing it
+    /// the click, so without this the focusing click would look like a second click inside.
+    private var focusingClick: TimeInterval?
 
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()
         if ok {
             keepAllSelected = true
+            let event = NSApp.currentEvent
+            focusingClick = event?.type == .leftMouseDown ? event?.timestamp : nil
             onFocus?()
             selectEverything()
             startGuarding()
@@ -241,8 +246,12 @@ final class FocusTextField: NSTextField {
     // The first click into the field selects the whole address, like Safari, so you can copy
     // it or type over it. A second click places the cursor as usual.
     override func mouseDown(with event: NSEvent) {
-        if currentEditor() == nil {
-            window?.makeFirstResponder(self)
+        // The click that focuses the field selects the whole address (and keeps it selected
+        // through the release). Only a later click places the cursor.
+        if currentEditor() == nil || event.timestamp == focusingClick {
+            if currentEditor() == nil { window?.makeFirstResponder(self) }
+            focusingClick = event.timestamp
+            keepAllSelected = true
             selectEverything()
             return
         }
@@ -287,7 +296,9 @@ final class FocusTextField: NSTextField {
                 self.keepAllSelected = false
             } else {
                 let point = self.convert(event.locationInWindow, from: nil)
-                if self.bounds.contains(point), self.currentEditor() != nil { self.keepAllSelected = false }
+                if self.bounds.contains(point), self.currentEditor() != nil, event.timestamp != self.focusingClick {
+                    self.keepAllSelected = false
+                }
             }
             return event
         }

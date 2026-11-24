@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// What a new tab shows: a calm, frosted page with recently closed tabs,
+/// What a new tab shows: a fast, frosted page with recently closed tabs,
 /// your favourites, suggestions from your history and a privacy report.
 struct StartPage: View {
     @ObservedObject var model: BrowserModel
@@ -282,7 +282,7 @@ private struct SuggestionCard: View {
         if let c = icon?.tint?.usingColorSpace(.deviceRGB) {
             var h: CGFloat = 0, sat: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
             c.getHue(&h, saturation: &sat, brightness: &b, alpha: &a)
-            // Near-grey icons stay a calm grey; colourful ones get a clean, even tone.
+            // Near-grey icons stay a soft grey; colourful ones get a clean, even tone.
             let saturation = sat < 0.12 ? sat * 0.5 : min(max(sat * 1.05, 0.38), 0.72)
             return (Double(h), Double(saturation), Double(min(max(b, 0.46), 0.6)))
         }

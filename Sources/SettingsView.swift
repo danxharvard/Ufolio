@@ -763,7 +763,7 @@ private struct AppearanceSettings: View {
 
             Section {
                 DescribedToggle(title: "Reduce motion",
-                                detail: "Turns off Hush’s animations, for a calmer, snappier feel.",
+                                detail: "Turns off Hush’s animations, for an instant, snappier feel.",
                                 isOn: $reduceMotion)
                 LabeledContent("Default page zoom") { Picker("", selection: $zoom) {
                     ForEach(zoomLevels, id: \.self) { Text("\(Int(($0 * 100).rounded()))%").tag($0) }

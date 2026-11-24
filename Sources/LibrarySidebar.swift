@@ -24,7 +24,7 @@ struct LibrarySidebar: View {
             case .history: HistoryList(model: model, query: query)
             }
         }
-        .frame(width: 280)
+        .frame(width: 275)
         .background { if active { VisualEffect(material: .sidebar) } }
     }
 

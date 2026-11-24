@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.34.1
+
+**Fixes**
+- Clicking into the address bar now really does select the whole address, and it stays selected
+  when you let go of the mouse button. (macOS gives the address bar focus just before it hands
+  over the click, so Hush took your click for a second one and placed a cursor.) Click again to
+  place the cursor.
+
+**Polish**
+- The Bookmarks & History sidebar is now a rounded, frosted card beside the page, matching its
+  corners, instead of a square panel.
+- Fresh wording throughout: Hush is light, fast and powerful.
+
 ## 0.34.0
 
 **New: setup guide**
