@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.43.4: ten more fixes
+
+**Security and privacy**
+- Dialogs ignore a key press in their first moment, so a site can't open a camera, microphone
+  or location prompt just as you press Return and get "Always Allow" without you seeing it.
+- Extensions never see a Stealth window's tab, even when a Stealth window is in front.
+- Extension pop-ups never open over a Stealth window.
+- A Stealth download is only resumed through a Stealth window, and a normal one never is.
+- The weather is looked up for your area (to about a kilometre), not your exact spot.
+
+**Fixes**
+- Fixed a crash when a page showed the AutoFill menu while its tab wasn't on screen.
+- Fixed a possible crash if the weather service sent back an impossible temperature.
+- A middle-click on a link opens it in a new tab, as in other browsers.
+- Ufolio recognises that it's your default browser even when run from another copy.
+
+**Smoother**
+- Switching to a sleeping tab no longer decodes its picture again on every redraw while it wakes.
+
 ## 0.43.3: ten more fixes
 
 **Ad blocking**

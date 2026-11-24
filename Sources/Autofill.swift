@@ -369,6 +369,9 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
     private func show(_ options: [Option], kind: String, at rect: [Double], host: String, in tab: BrowserTab) {
         popover?.close()
         let webView = tab.webView
+        // Only for a page that's on screen: a pop-up attached to a page that isn't in a window
+        // (a background tab, or one you've switched away from) makes macOS raise an exception.
+        guard webView.window != nil, !tab.isAsleep else { return }
         let scale = webView.pageZoom * webView.magnification
         let h = rect[3] * scale
         let top = rect[1] * scale

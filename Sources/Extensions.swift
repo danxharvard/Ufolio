@@ -554,7 +554,7 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
         guard let popover = action.popupPopover else { completionHandler(nil); return }
         if let anchor = anchors[context.uniqueIdentifier], anchor.window != nil {
             popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
-        } else if let view = BrowserModel.frontmost?.window?.contentView {
+        } else if let view = BrowserModel.frontmostNormal?.window?.contentView {   // never over a Stealth window
             popover.show(relativeTo: NSRect(x: view.bounds.maxX - 60, y: view.bounds.maxY - 10, width: 1, height: 1), of: view, preferredEdge: .minY)
         }
         completionHandler(nil)
@@ -632,7 +632,8 @@ private struct ExtensionButtonRow: View {
     var body: some View {
         // In the order you added them, skipping ones that are turned off or haven't loaded.
         let running = store.installed.filter { $0.enabled && manager.contexts[$0.id] != nil }
-        let tab = BrowserModel.frontmost?.selectedTab
+        // Never a Stealth window's tab: extensions mustn't see those.
+        let tab = BrowserModel.frontmostNormal?.selectedTab
         HStack(spacing: 2) {
             ForEach(running.prefix(Self.limit)) { ext in
                 if let action = manager.contexts[ext.id]?.action(for: tab) {

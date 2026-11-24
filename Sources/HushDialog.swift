@@ -152,6 +152,9 @@ struct HushDialogCard: View {
     let dialog: HushDialog
     let onFinish: (Int, Bool) -> Void
     @State private var checked = false
+    /// Presses in the first moment are ignored: a site could open a permission prompt just as
+    /// you press Return while typing, and "Always Allow" would be chosen before you saw it.
+    @State private var shownAt = Date()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -228,7 +231,10 @@ struct HushDialogCard: View {
     @ViewBuilder private func button(_ index: Int, _ choice: HushDialog.Choice) -> some View {
         let main = choice.role == .primary || choice.role == .destructive
         let colors = choice.role == .destructive ? HushDialog.Theme.danger.colors : dialog.theme.colors
-        Button { onFinish(index, checked) } label: { Text(choice.title).frame(maxWidth: .infinity) }
+        Button {
+            guard Date().timeIntervalSince(shownAt) > 0.6 else { return }
+            onFinish(index, checked)
+        } label: { Text(choice.title).frame(maxWidth: .infinity) }
             .buttonStyle(DialogButtonStyle(main: main, colors: colors))
             .keyboardShortcut(main && index == dialog.defaultIndex ? .defaultAction
                               : (index == dialog.cancelIndex && choice.role == .cancel ? .cancelAction : nil))

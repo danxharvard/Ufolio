@@ -222,8 +222,9 @@ final class LocalWeather: ObservableObject {
         let fahrenheit = Locale.current.measurementSystem == .us
         var components = URLComponents(string: "https://api.open-meteo.com/v1/forecast")!
         components.queryItems = [
-            .init(name: "latitude", value: String(place.latitude)),
-            .init(name: "longitude", value: String(place.longitude)),
+            // To about a kilometre: the forecast is the same, and your exact spot isn't sent.
+            .init(name: "latitude", value: String(format: "%.2f", place.latitude)),
+            .init(name: "longitude", value: String(format: "%.2f", place.longitude)),
             .init(name: "current", value: "temperature_2m,weather_code,is_day"),
             .init(name: "temperature_unit", value: fahrenheit ? "fahrenheit" : "celsius"),
         ]
@@ -233,7 +234,8 @@ final class LocalWeather: ObservableObject {
               (response as? HTTPURLResponse)?.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let current = json["current"] as? [String: Any],
-              let temp = current["temperature_2m"] as? Double, temp.isFinite else {
+              // A sensible range only: converting a wild value to a whole number would crash.
+              let temp = current["temperature_2m"] as? Double, temp.isFinite, abs(temp) < 200 else {
             await MainActor.run { self.problem = "Couldn’t get the weather right now" }
             return
         }

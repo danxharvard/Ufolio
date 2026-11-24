@@ -271,7 +271,13 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
 
     /// Carries on from where it stopped, or starts again from the beginning if it can't.
     func resume(_ item: DownloadItem) {
-        guard let webView = BrowserModel.frontmostNormal?.selectedTab?.webView ?? BrowserModel.frontmost?.selectedTab?.webView else { return }
+        // Through a window of the same kind: a Stealth download only through a Stealth window (and
+        // not at all once those are closed, as their cookies are gone), a normal one never
+        // through a Stealth window, so neither borrows the other's cookies.
+        let model = item.isPrivate
+            ? BrowserModel.all.allObjects.first { $0.isPrivate && $0.window != nil }
+            : BrowserModel.frontmostNormal
+        guard let webView = model?.selectedTab?.webView else { return }
         if let data = item.resumeData {
             item.resumeData = nil
             resuming = item

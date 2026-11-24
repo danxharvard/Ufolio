@@ -3,7 +3,9 @@ import SwiftUI
 enum DefaultBrowser {
     static var isDefault: Bool {
         guard let handler = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "https://example.com")!) else { return false }
-        return handler.standardizedFileURL == Bundle.main.bundleURL.standardizedFileURL
+        // By app ID, not location: a copy run from elsewhere (the disk image, a backup) is still Ufolio.
+        if handler.standardizedFileURL == Bundle.main.bundleURL.standardizedFileURL { return true }
+        return Bundle(url: handler)?.bundleIdentifier == Bundle.main.bundleIdentifier
     }
 
     /// Asks macOS to make Hush the default browser (macOS shows its own confirmation).

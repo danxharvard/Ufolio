@@ -218,8 +218,14 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     /// history) but release the web page itself, freeing its memory and processor time.
     @Published private(set) var isAsleep = false
     /// A small, compressed picture of a sleeping tab (about 150 KB instead of a full-size bitmap).
-    @Published private(set) var snapshotData: Data?
-    var snapshot: NSImage? { snapshotData.flatMap(NSImage.init(data:)) }
+    @Published private(set) var snapshotData: Data? { didSet { decodedSnapshot = nil } }
+    /// Decoded once (the page area redraws many times while a tab wakes up).
+    private var decodedSnapshot: NSImage?
+    var snapshot: NSImage? {
+        if let decodedSnapshot { return decodedSnapshot }
+        decodedSnapshot = snapshotData.flatMap(NSImage.init(data:))
+        return decodedSnapshot
+    }
     var lastActive = Date()
     private var sleepState: Any?
     private var waking = false
@@ -387,7 +393,8 @@ extension BrowserTab: WKNavigationDelegate {
                  decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
         // ⌘-click opens the link in a new background tab.
         // Only web addresses: anything else goes through the checks below.
-        if action.navigationType == .linkActivated, action.modifierFlags.contains(.command),
+        // (A middle-click does the same, as in every other browser, instead of replacing this page.)
+        if action.navigationType == .linkActivated, action.modifierFlags.contains(.command) || action.buttonNumber == 2,
            let url = action.request.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
             model?.newTab(url: url, select: false)
             decisionHandler(.cancel, preferences)
