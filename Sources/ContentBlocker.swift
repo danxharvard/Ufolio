@@ -415,6 +415,15 @@ final class ContentBlocker: ObservableObject {
 
             let finished = list
             let parts = compiledParts
+            // Removed while it was updating: leave it removed (it used to come straight back).
+            let removedMeanwhile = await MainActor.run { existing != nil && !self.lists.contains { $0.id == finished.id } }
+            if removedMeanwhile {
+                let ids = parts.map(\.0)
+                await MainActor.run { for id in ids { self.store.removeContentRuleList(forIdentifier: id) { _ in } } }
+                for part in 0..<parts.count { try? FileManager.default.removeItem(at: jsonFile(for: finished, part: part)) }
+                await report("“\(finished.name)” was removed.", error: false)
+                return
+            }
             await MainActor.run {
                 for (id, compiledList) in parts { self.compiled[id] = compiledList }
                 // Parts a smaller update no longer needs.
@@ -423,7 +432,10 @@ final class ContentBlocker: ObservableObject {
                     self.store.removeContentRuleList(forIdentifier: id) { _ in }
                 }
                 if let i = self.lists.firstIndex(where: { $0.id == finished.id }) {
-                    self.lists[i] = finished
+                    // Keep the on/off switch as it is now (it may have changed while updating).
+                    var updated = finished
+                    updated.enabled = self.lists[i].enabled
+                    self.lists[i] = updated
                 } else {
                     self.lists.append(finished)
                 }

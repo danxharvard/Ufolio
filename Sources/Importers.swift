@@ -82,7 +82,10 @@ enum PasswordImporter {
     }
 
     static func importCSV(_ url: URL) throws -> Result {
-        let text = try String(contentsOf: url, encoding: .utf8)
+        var text = try String(contentsOf: url, encoding: .utf8)
+        // Some password managers (and anything saved from Excel) start the file with an invisible
+        // byte-order mark, which hid the first column's name ("url") so the file was rejected.
+        if text.hasPrefix("\u{FEFF}") { text.removeFirst() }
         let rows = parseCSV(text)
         guard let header = rows.first?.map({ $0.lowercased().trimmingCharacters(in: .whitespaces) }) else { return Result() }
         func column(_ names: [String]) -> Int? { header.firstIndex { names.contains($0) } }

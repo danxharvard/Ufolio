@@ -93,6 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if !BrowserModel.hasVisibleWindow { WindowOpener.ensureWindow() }
         }
         Lookalike.refreshKnown()   // ready before the first page loads
+        AppearanceMode.apply(Prefs.string(Prefs.appearance))   // before any window shows
         ContentBlocker.shared.prepare()
         ContentBlocker.shared.startListUpdates()
         ExtensionEvents.launch()
@@ -235,7 +236,8 @@ struct HushCommands: Commands {
                 get: { tabLayout == TabLayout.side.rawValue },
                 set: { tabLayout = ($0 ? TabLayout.side : TabLayout.top).rawValue }))
             Toggle("Block Ads", isOn: $adBlockEnabled)
-            Picker("Appearance", selection: $appearance) {
+            Picker("Appearance", selection: Binding(get: { appearance },
+                                                    set: { appearance = $0; AppearanceMode.apply($0) })) {
                 ForEach(AppearanceMode.allCases) { Text($0.label).tag($0.rawValue) }
             }
             Divider()
@@ -386,12 +388,15 @@ enum SettingsWindow {
 
 private struct SettingsRoot: View {
     @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
+    /// Applied from here too: with the browser window closed, changing it in Settings did nothing.
+    @AppStorage(Prefs.appearance) private var appearance = AppearanceMode.system.rawValue
     @ObservedObject private var presence = SettingsWindow.presence
     var body: some View {
         if presence.live {
             SettingsView()
                 .hushDialogs(DialogHost.settings)
                 .transaction { if reduceMotion { $0.animation = nil } }
+                .onChange(of: appearance) { _, mode in AppearanceMode.apply(mode) }
         } else {
             Color.clear
         }

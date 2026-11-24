@@ -378,7 +378,12 @@ final class FeedParser: NSObject, XMLParserDelegate {
         imageURL = imageURL.map(Self.sharper)
         let text = Self.plain(summary.isEmpty ? content : summary)
         items.append(NewsArticle(title: cleanTitle, summary: String(text.prefix(260)), link: url, image: imageURL,
-                                 published: Self.date(date) ?? Date(), sourceID: source.id, sourceName: source.name,
+                                 // No usable date: kept, but below dated stories (as "now" they jumped to
+                                 // the top as the newest story on every refresh).
+                                 // A date in the future (a feed's time-zone mistake) counts as now, rather
+                                 // than keeping the story pinned at the top.
+                                 published: Self.date(date).map { min($0, Date()) } ?? Date().addingTimeInterval(-3 * 86_400),
+                                 sourceID: source.id, sourceName: source.name,
                                  site: source.site, channel: source.channel))
     }
 

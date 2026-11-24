@@ -80,6 +80,9 @@ final class SitePermissions: ObservableObject {
         if remembered.contains(where: { $0 == false }) { completion(false); return }
 
         let site = ContentBlocker.normalize(host)
+        // Only a page you can see may ask: a background tab's request would otherwise pop up over
+        // whatever page is in front, where it's easy to think that page is the one asking.
+        guard window != nil else { completion(false); return }
         // One question at a time: a page asking over and over can't stack up prompts.
         if DialogHost.isBusy(window) { completion(false); return }
         let what: String

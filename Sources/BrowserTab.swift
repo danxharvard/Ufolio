@@ -63,6 +63,10 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     /// See webViewWebContentProcessDidTerminate.
     var crashedWhileHidden = false
 
+    /// Why the last page couldn't load (no connection, no such server, a bad certificate…).
+    /// Before, a failed load showed nothing at all.
+    @Published var loadError: (url: URL?, message: String)?
+
     func recoverFromCrash() {
         crashedWhileHidden = false
         crashed = false
@@ -474,7 +478,12 @@ extension BrowserTab: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse,
                  decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
-        decisionHandler(response.canShowMIMEType ? .allow : .download)
+        // A server marking the file as an attachment wants it downloaded, even if WebKit could
+        // show it (a site's Download button for a PDF or picture used to open it in the tab).
+        let disposition = (response.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Disposition")?
+            .trimmingCharacters(in: .whitespaces).lowercased() ?? ""
+        let attachment = response.isForMainFrame && disposition.hasPrefix("attachment")
+        decisionHandler(response.canShowMIMEType && !attachment ? .allow : .download)
     }
 
     /// A load that failed before anything arrived. If Ufolio guessed the address from what you
@@ -482,10 +491,74 @@ extension BrowserTab: WKNavigationDelegate {
     /// browsers do; otherwise nothing at all used to happen.
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         let failed = (error as NSError).userInfo[NSURLErrorFailingURLErrorKey] as? URL
-        guard (error as? URLError)?.code == .cannotFindHost, let guess = URLResolver.lastGuess,
-              failed?.host == guess.url.host, let search = URLResolver.searchURL(for: guess.text) else { return }
-        URLResolver.lastGuess = nil
-        load(search)
+        if (error as? URLError)?.code == .cannotFindHost, let guess = URLResolver.lastGuess,
+           failed?.host == guess.url.host, let search = URLResolver.searchURL(for: guess.text) {
+            URLResolver.lastGuess = nil
+            load(search)
+            return
+        }
+        // Stopped on purpose (Stop, a new address, a download): nothing to explain.
+        let ns = error as NSError
+        if ns.code == NSURLErrorCancelled || (ns.domain == "WebKitErrorDomain" && [102, 204].contains(ns.code)) { return }
+        loadError = (failed, Self.explain(error))
+    }
+
+    private static func explain(_ error: Error) -> String {
+        let ns = error as NSError
+        if ns.domain == "WebKitErrorDomain" && ns.code == 104 {
+            return "Force Field blocked this page because it’s on a blocking list. If you trust it, turn Force Field off for this site in the shield menu."
+        }
+        switch (error as? URLError)?.code {
+        case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed:
+            return "Your Mac isn’t connected to the internet."
+        case .cannotFindHost, .dnsLookupFailed:
+            return "Ufolio couldn’t find that website. Check the address for typos."
+        case .timedOut:
+            return "The website took too long to answer."
+        case .cannotConnectToHost:
+            return "The website isn’t accepting connections right now."
+        case .serverCertificateUntrusted, .serverCertificateHasBadDate, .serverCertificateHasUnknownRoot,
+             .serverCertificateNotYetValid, .clientCertificateRejected, .secureConnectionFailed:
+            return "This website’s security certificate isn’t valid, so Ufolio didn’t open it. Someone may be trying to impersonate it."
+        default:
+            return error.localizedDescription
+        }
+    }
+
+    /// Sites that ask for a username and password the old way (routers, NAS boxes, staging
+    /// sites): Ufolio never answered, so they just showed an error. Now it asks you, on this
+    /// window, and the answer is kept only until Ufolio quits.
+    func webView(_ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge,
+                 completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        let method = challenge.protectionSpace.authenticationMethod
+        guard [NSURLAuthenticationMethodHTTPBasic, NSURLAuthenticationMethodHTTPDigest, NSURLAuthenticationMethodNTLM].contains(method),
+              challenge.previousFailureCount < 3, let window = webView.window else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        let space = challenge.protectionSpace
+        let alert = NSAlert()
+        alert.messageText = "Sign in to \(space.host)"
+        var info = space.realm.map { "The site says: “\(String($0.prefix(120)))”" } ?? "This site needs a username and password."
+        if space.receivesCredentialSecurely == false { info += "\n\nYour password will be sent without encryption." }
+        if challenge.previousFailureCount > 0 { info = "That didn’t work. Try again.\n\n" + info }
+        alert.informativeText = info
+        let user = NSTextField(frame: NSRect(x: 0, y: 30, width: 260, height: 24))
+        user.placeholderString = "Username"
+        user.stringValue = challenge.proposedCredential?.user ?? ""
+        let password = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        password.placeholderString = "Password"
+        let fields = NSView(frame: NSRect(x: 0, y: 0, width: 260, height: 54))
+        fields.addSubview(user)
+        fields.addSubview(password)
+        alert.accessoryView = fields
+        alert.addButton(withTitle: "Sign In")
+        alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = user.stringValue.isEmpty ? user : password
+        alert.beginSheetModal(for: window) { response in
+            guard response == .alertFirstButtonReturn else { completionHandler(.cancelAuthenticationChallenge, nil); return }
+            completionHandler(.useCredential, URLCredential(user: user.stringValue, password: password.stringValue, persistence: .forSession))
+        }
     }
 
     /// The page's web process crashed or was stopped by macOS.
@@ -500,6 +573,7 @@ extension BrowserTab: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         if crashed { crashed = false }
+        if loadError != nil { loadError = nil }
         // Going back (or anywhere else) from a look-alike warning takes the warning away too.
         if lookalike != nil { lookalike = nil }
         pendingBlocked = 0; pendingAds = 0; pendingTrackers = 0; pendingSites = [:]

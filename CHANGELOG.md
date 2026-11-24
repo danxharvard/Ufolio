@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.43.12: ten more fixes
+
+**Pages that couldn't load**
+- When a page can't load (no connection, no such website, a bad security certificate, or
+  blocked by Force Field), Ufolio now says why, with a Try Again button. Before, nothing happened.
+- Sites that ask for a username and password the old way (routers, NAS boxes, staging sites)
+  now show a sign-in box instead of just failing.
+- A site's Download button for a PDF or picture now downloads it, rather than opening it in the tab.
+
+**Security**
+- Only a page you can see may ask for your camera, microphone or location. A background tab's
+  request used to pop up over whatever page was in front.
+
+**Fixes**
+- Changing Light/Dark appearance in Settings (or the View menu) applies straight away, even with
+  the browser window closed.
+- Password files exported by some password managers or saved from Excel now import (an
+  invisible marker at the start made them look like the wrong kind of file).
+- A filter list removed while it was updating stays removed, and switching a list off during
+  an update is kept.
+- News stories without a date, or dated in the future, no longer sit at the top.
+
 ## 0.43.11: ten more fixes
 
 **Stealth Mode leaves no trace**

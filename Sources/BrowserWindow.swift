@@ -510,6 +510,12 @@ private struct TabPage: View {
                 CrashedPage { tab.recoverFromCrash() }
                     .clipShape(PageCorners.shape)
                     .transition(.opacity)
+            } else if let failure = tab.loadError {
+                LoadErrorPage(url: failure.url, message: failure.message) {
+                    if let url = failure.url ?? tab.url { tab.load(url) } else { tab.reload() }
+                }
+                .clipShape(PageCorners.shape)
+                .transition(.opacity)
             }
             if let article = tab.reader {
                 ReaderView(article: article) { tab.toggleReader() }
@@ -1297,6 +1303,41 @@ private struct SidebarSlot: View {
 }
 
 /// Shown when a page's process crashed, instead of a blank tab.
+/// Shown when a page couldn't load at all.
+private struct LoadErrorPage: View {
+    let url: URL?
+    let message: String
+    let onRetry: () -> Void
+
+    var body: some View {
+        ZStack {
+            ClickBlocker()
+            Color(nsColor: .windowBackgroundColor)
+            VStack(spacing: 14) {
+                ZStack {
+                    Circle().fill(Color.primary.opacity(0.05)).frame(width: 110, height: 110)
+                    Image(systemName: "wifi.exclamationmark").font(.system(size: 40, weight: .light)).foregroundStyle(.secondary)
+                }
+                Text("Ufolio can’t open this page")
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                if let host = url?.host {
+                    Text(host.strippingWWW).font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+                }
+                Text(message)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 400)
+                Button(action: onRetry) { Label("Try Again", systemImage: "arrow.clockwise") }
+                    .controlSize(.large)
+                    .buttonStyle(.borderedProminent)
+                    .padding(.top, 4)
+            }
+            .padding(40)
+        }
+    }
+}
+
 private struct CrashedPage: View {
     let onReload: () -> Void
 
