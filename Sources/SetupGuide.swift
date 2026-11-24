@@ -15,7 +15,9 @@ struct SetupGuide: View {
     @State private var appeared = false
 
     // Answers (each starts from the current setting).
-    @State private var sources = BrowserImporter.available()
+    /// Found when the guide appears. (As starting values these were worked out again, scanning
+    /// for other browsers, every time the window redrew behind the guide.)
+    @State private var sources: [BrowserImporter.Source] = []
     @State private var importChoice: String? = nil          // nil = start fresh
     @State private var importing = false
     @State private var importResult: String?
@@ -25,7 +27,7 @@ struct SetupGuide: View {
     @AppStorage(Prefs.appearance) private var appearance = AppearanceMode.system.rawValue
     @AppStorage(Prefs.accent) private var accent = AccentChoice.system.rawValue
     @State private var makeDefault = !DefaultBrowser.isDefault
-    @State private var isDefault = DefaultBrowser.isDefault
+    @State private var isDefault = false
 
     var body: some View {
         ZStack {
@@ -45,7 +47,11 @@ struct SetupGuide: View {
             .scaleEffect(appeared ? 1 : 0.96)
             .opacity(appeared ? 1 : 0)
         }
-        .onAppear { withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true } }
+        .onAppear {
+            sources = BrowserImporter.available()
+            isDefault = DefaultBrowser.isDefault
+            withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true }
+        }
     }
 
     // MARK: Left: the question

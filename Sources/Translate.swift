@@ -38,7 +38,11 @@ final class PageTranslator: ObservableObject {
     private static let sampleScript = """
     const lang = document.documentElement.lang || '';
     if (lang && lang.toLowerCase().split(/[-_]/)[0] === target) return { lang, text: '' };
-    const text = (document.body ? document.body.innerText : '').slice(0, 3000);
+    // The first paragraphs are plenty to tell the language: reading the whole page's visible
+    // text after every load was slow on long pages. (The page's own text is the fallback.)
+    let text = Array.from(document.querySelectorAll('p, h1, h2, li')).slice(0, 40)
+      .map(e => e.textContent || '').join(' ').replace(/\\s+/g, ' ').slice(0, 3000);
+    if (text.length < 200 && document.body) text = (document.body.textContent || '').replace(/\\s+/g, ' ').slice(0, 3000);
     return { lang, text };
     """
 

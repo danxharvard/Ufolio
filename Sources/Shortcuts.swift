@@ -160,10 +160,14 @@ enum Shortcuts {
     private static let none = "none"
 
     /// Saved as JSON text, so the menus (which watch this setting) redraw when it changes.
+    private static var cached: (text: String, value: [String: String])?
     private static var overrides: [String: String] {
         get {
-            guard let text = UserDefaults.standard.string(forKey: storageKey), let data = text.data(using: .utf8),
-                  let saved = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
+            // Decoded once per change (the menu bar asks for ~30 shortcuts every time it refreshes).
+            let text = UserDefaults.standard.string(forKey: storageKey) ?? ""
+            if let cached, cached.text == text { return cached.value }
+            let saved = text.data(using: .utf8).flatMap { try? JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
+            cached = (text, saved)
             return saved
         }
         set {

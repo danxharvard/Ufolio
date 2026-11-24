@@ -459,6 +459,17 @@ extension BrowserTab: WKNavigationDelegate {
         decisionHandler(response.canShowMIMEType ? .allow : .download)
     }
 
+    /// A load that failed before anything arrived. If Ufolio guessed the address from what you
+    /// typed (like "node.js") and there's no such server, search for it instead, as other
+    /// browsers do; otherwise nothing at all used to happen.
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        let failed = (error as NSError).userInfo[NSURLErrorFailingURLErrorKey] as? URL
+        guard (error as? URLError)?.code == .cannotFindHost, let guess = URLResolver.lastGuess,
+              failed?.host == guess.url.host, let search = URLResolver.searchURL(for: guess.text) else { return }
+        URLResolver.lastGuess = nil
+        load(search)
+    }
+
     /// The page's web process crashed or was stopped by macOS.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         guard webView === self.webView, !isAsleep else { return }

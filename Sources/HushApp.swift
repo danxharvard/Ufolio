@@ -167,7 +167,14 @@ struct HushCommands: Commands {
         }
 
         CommandGroup(replacing: .saveItem) {
-            Button("Close Tab") { browser?.closeSelectedTab() }
+            Button("Close Tab") {
+                // In Settings or History, ⌘W closes that window, not a tab in the browser behind it.
+                if let key = NSApp.keyWindow, !BrowserModel.all.allObjects.contains(where: { $0.window === key }) {
+                    key.performClose(nil)
+                } else {
+                    browser?.closeSelectedTab()
+                }
+            }
                 .keyboardShortcut(Shortcuts.get(.closeTab))
             Button("Close Window") { NSApp.keyWindow?.performClose(nil) }
                 .keyboardShortcut(Shortcuts.get(.closeWindow))
@@ -262,7 +269,9 @@ struct HushCommands: Commands {
                 .keyboardShortcut(Shortcuts.get(.bookmark))
             if !bookmarks.items.isEmpty {
                 Divider()
-                ForEach(bookmarks.items) { bookmark in
+                // The first 40 not in a folder: macOS rebuilds the whole menu bar whenever bookmarks
+                // change, and listing thousands made that a noticeable pause.
+                ForEach(bookmarks.items(in: nil).prefix(40)) { bookmark in
                     Button(bookmark.title) { browser?.open(bookmark.url) }
                 }
             }

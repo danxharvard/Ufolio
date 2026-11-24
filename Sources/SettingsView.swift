@@ -507,7 +507,7 @@ private struct GeneralSettings: View {
     @AppStorage(Prefs.askWhereToSave) private var askWhereToSave = false
     @AppStorage(Prefs.openSafeFiles) private var openSafeFiles = false
     @AppStorage(Prefs.askDefaultBrowser) private var askDefault = true
-    @State private var isDefaultBrowser = DefaultBrowser.isDefault
+    @State private var isDefaultBrowser = false   // checked when the pane appears (asking macOS isn't free)
     @State private var importStatus: String?
     @State private var importing = false
 
@@ -1611,7 +1611,9 @@ private struct PasswordSettings: View {
     @State private var search = ""
     @State private var neverSave = PasswordVault.neverSave
     @State private var showAddCard = false
-    @State private var myName = MyCard.status == .authorized ? MyCard.displayName : nil
+    /// Loaded once when the pane appears. (As a starting value it was worked out again, with a
+    /// Contacts lookup, every time Settings redrew this pane.)
+    @State private var myName: String?
     @State private var copiedID: String?
 
     private var filtered: [SavedLogin] {
@@ -1755,7 +1757,15 @@ private struct PasswordSettings: View {
             }
         }
         .formStyle(SafariFormStyle())
-        .onAppear { cardList = CardVault.list() }
+        .onAppear {
+            cardList = CardVault.list()
+            if MyCard.status == .authorized {
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let name = MyCard.displayName
+                    DispatchQueue.main.async { myName = name }
+                }
+            }
+        }
         .onDisappear { lock() }
         // Lock again as soon as you switch to another app.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in lock() }

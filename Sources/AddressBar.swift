@@ -335,10 +335,16 @@ enum URLResolver {
             // Local servers usually don't do HTTPS.
             let host = input.split(separator: "/").first.map { String($0.split(separator: ":").first ?? "") } ?? ""
             let local = host == "localhost" || host.hasSuffix(".local") || host.split(separator: ".").allSatisfy { Int($0) != nil }
-            return URL(string: (local ? "http://" : "https://") + input)
+            let url = URL(string: (local ? "http://" : "https://") + input)
+            if let url { lastGuess = (url, input) }
+            return url
         }
         return searchURL(for: input)
     }
+
+    /// The last address guessed from typed text (e.g. "node.js" → https://node.js). If no such
+    /// server exists, the tab searches for the text instead (see BrowserTab).
+    static var lastGuess: (url: URL, text: String)?
 
     static func searchURL(for query: String) -> URL? {
         SearchEngine.current.searchURL(query)

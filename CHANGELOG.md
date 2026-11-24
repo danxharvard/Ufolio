@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.43.6: ten more fixes
+
+**Privacy**
+- Fingerprinting protection now varies by the site in the address bar, so a tracker hidden
+  inside many different sites can no longer recognise you from one to the next.
+
+**Fixes**
+- Searching for "c++" or "1+1" now searches for exactly that (the "+" used to become a space).
+- Typing something like "node.js" that isn't a real website now searches for it, instead of
+  doing nothing.
+- ⌘W in Settings or History closes that window, not a tab in the browser behind it.
+- The Bookmarks menu lists up to 40 bookmarks, so a big collection no longer slows the menu bar.
+
+**Smoother**
+- Settings › Passwords no longer looks up your contact card every time Settings redraws.
+- The setup guide no longer rescans for other browsers every time the window redraws.
+- The menu bar no longer re-reads your keyboard shortcuts on every refresh.
+- Working out a page's language reads a sample of its text, not the whole page.
+- Settings › General checks whether Ufolio is your default browser once, when you open it.
+
 ## 0.43.5: ten more fixes
 
 **Stealth Mode leaves no trace**

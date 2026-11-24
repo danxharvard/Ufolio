@@ -247,7 +247,15 @@ enum SearchEngine: String, CaseIterable, Identifiable {
         }
         var components = URLComponents(string: base)
         components?.queryItems = [URLQueryItem(name: "q", value: query)]
-        return components?.url
+        return components.flatMap(Self.encodingPlus)
+    }
+
+    /// URLComponents leaves "+" as it is, and search engines read a bare "+" as a space, so
+    /// "c++" was searched as "c". Encoded here as %2B.
+    private static func encodingPlus(_ components: URLComponents) -> URL? {
+        var c = components
+        c.percentEncodedQuery = c.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        return c.url
     }
 
     /// Each engine's public suggestion endpoint; all answer in the
@@ -271,7 +279,7 @@ enum SearchEngine: String, CaseIterable, Identifiable {
             components = URLComponents(string: "https://ac.ecosia.org/autocomplete")
             components?.queryItems = [.init(name: "q", value: query), .init(name: "type", value: "list")]
         }
-        return components?.url
+        return components.flatMap(Self.encodingPlus)
     }
 }
 

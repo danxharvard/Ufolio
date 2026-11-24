@@ -18,7 +18,11 @@ enum Fingerprinting {
           'use strict';
           var KEY = \(String(reflecting: sessionKey)), STRICT = \(strict ? "true" : "false");
           function hash(s) { var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
-          var seed = hash(KEY + '|' + location.hostname);
+          // Seeded by the site in the address bar, not this frame's: a tracker's frame embedded
+          // on many sites would otherwise see the same noise everywhere and recognise you.
+          var ancestors = location.ancestorOrigins;
+          var topSite = (ancestors && ancestors.length) ? ancestors[ancestors.length - 1] : location.origin;
+          var seed = hash(KEY + '|' + topSite);
           function rand(n) { var x = (seed ^ Math.imul((n | 0) + 1, 0x9E3779B1)) >>> 0; x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; return (x >>> 0) / 4294967296; }
           var rate = STRICT ? 0.08 : 0.015;
           // Fingerprinting uses small canvases; big ones (maps, editors, games, video) are left
