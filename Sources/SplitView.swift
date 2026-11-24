@@ -20,7 +20,10 @@ struct SplitPages: View {
     var body: some View {
         GeometryReader { geo in
             let usable = geo.size.width - 8
-            let leftWidth = max(220, min(usable - 220, usable * (dragRatio ?? model.splitRatio)))
+            // Each side at least 220 points, or half the room when there isn't that much (a narrow
+            // window with a wide side tab bar used to push the right-hand page off the edge).
+            let minPane = max(0, min(220, usable / 2))
+            let leftWidth = max(minPane, min(usable - minPane, usable * (dragRatio ?? model.splitRatio)))
             HStack(spacing: 0) {
                 SplitPane(model: model, tab: left, side: .left)
                     .frame(width: leftWidth)

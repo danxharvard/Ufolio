@@ -584,6 +584,9 @@ extension BrowserTab: WKUIDelegate {
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         guard let model else { return nil }
+        // Its own set of blocking rules and scripts: sharing the opener's meant a pop-up on a
+        // site with Force Field off switched blocking off for the original page too.
+        configuration.userContentController = WKUserContentController()
         return model.newTab(configuration: configuration).webView
     }
 

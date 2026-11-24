@@ -32,6 +32,8 @@ enum SiteForgetter {
             RecentlyClosed.shared.remove(site: site)
             SitePermissions.shared.forget(site: site)
             BookmarkOffer.shared.forget(site: site)
+            PrivacyReport.shared.forget(site: site)   // it lists the sites you visited too
+            Task { await FaviconCache.shared.forget(site: site) }
         }
         // Close the site's tabs (a new tab replaces them if nothing else is left).
         let tabs = model.tabs.filter { Domains.site($0.url?.host ?? "") == site }

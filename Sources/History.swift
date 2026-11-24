@@ -76,11 +76,18 @@ final class HistoryStore: ObservableObject {
     }
 
     func updateTitle(_ url: URL, title: String) {
-        guard !title.isEmpty, let url = Self.key(url), entries[url.absoluteString] != nil,
-              entries[url.absoluteString]?.title != title else { return }
-        entries[url.absoluteString]?.title = title
+        guard !title.isEmpty, let url = Self.key(url), let entry = entries[url.absoluteString],
+              entry.title != title else { return }
+        // Mail and chat sites change their title every few seconds ("(3) Inbox"): at most once a
+        // minute per page, unless it had no title yet, so history isn't redrawn and saved non-stop.
+        let key = url.absoluteString, now = Date()
+        if !entry.title.isEmpty, let last = titleUpdated[key], now.timeIntervalSince(last) < 60 { return }
+        titleUpdated[key] = now
+        if titleUpdated.count > 500 { titleUpdated = titleUpdated.filter { now.timeIntervalSince($0.value) < 60 } }
+        entries[key]?.title = title
         scheduleSave()
     }
+    private var titleUpdated: [String: Date] = [:]
 
     /// The sites you visit most, one tile per site.
     func frequentSites(limit: Int = 8, excluding: Set<String> = []) -> [FrequentSite] {

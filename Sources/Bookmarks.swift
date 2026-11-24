@@ -251,12 +251,29 @@ final class BookmarkStore: ObservableObject {
         }
     }
 
+    /// Saved a moment after the last change, in the background: a drag to reorder changes the
+    /// list once per bookmark you pass, and writing the whole file each time made dragging stutter.
+    private var saveWork: DispatchWorkItem?
+    private let saveQueue = DispatchQueue(label: "ufolio.bookmarks.save", qos: .utility)
+
     private func save() {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted]
-        if let data = try? encoder.encode(items) {
-            try? data.write(to: fileURL, options: .atomic)
+        saveWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.saveNow() }
+        saveWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+    }
+
+    /// Writes straight away (also as Ufolio quits).
+    func saveNow(waiting: Bool = false) {
+        saveWork?.cancel()
+        saveWork = nil
+        let snapshot = items, file = fileURL
+        let write = {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted]
+            if let data = try? encoder.encode(snapshot) { try? data.write(to: file, options: .atomic) }
         }
+        if waiting { saveQueue.sync(execute: write) } else { saveQueue.async(execute: write) }
     }
 }
 
@@ -543,6 +560,17 @@ actor FaviconCache {
 
     /// Lets go of icons kept in memory (they're on disk too), when the Mac is short of memory.
     func purgeMemory() { cache.removeAllObjects() }
+
+    /// Removes a site's saved icons (Forget This Site).
+    func forget(site: String) {
+        misses = misses.filter { Domains.site($0.key) != site }
+        let fm = FileManager.default
+        for file in (try? fm.contentsOfDirectory(at: Self.folder, includingPropertiesForKeys: nil)) ?? []
+        where Domains.site(file.lastPathComponent) == site {
+            cache.removeObject(forKey: file.lastPathComponent as NSString)
+            try? fm.removeItem(at: file)
+        }
+    }
 
     /// Forgets saved icons (they show which sites you've visited), e.g. when history is cleared.
     nonisolated static func clearDisk() {

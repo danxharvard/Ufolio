@@ -230,6 +230,8 @@ final class NewsStore: ObservableObject {
         UserDefaults.standard.set(Array(read), forKey: "news.read")
     }
 
+    private var adding: Set<URL> = []
+
     /// Adds your own feed after checking it really is one. Returns an error message, or nil.
     func addFeed(_ text: String) async -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -237,7 +239,10 @@ final class NewsStore: ObservableObject {
               ["http", "https"].contains(url.scheme?.lowercased() ?? ""), let host = url.host else {
             return "That doesn’t look like a web address."
         }
-        guard !allSources.contains(where: { $0.feed == url }) else { return "You already have that feed." }
+        guard !allSources.contains(where: { $0.feed == url }), !adding.contains(url) else { return "You already have that feed." }
+        // Pressing Add twice quickly used to add the same feed twice (both checks ran before either finished).
+        adding.insert(url)
+        defer { adding.remove(url) }
         // Every refresh fetches every feed: a sensible number keeps the start page quick.
         guard customSources.count < 30 else { return "You can add up to 30 of your own feeds." }
         guard let (data, response) = try? await Self.session.data(from: url),

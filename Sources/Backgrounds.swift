@@ -101,19 +101,33 @@ final class BackgroundStore: ObservableObject {
     }
 
     /// Saves a copy of your own photo (so it still works if you move or delete the original).
-    func usePhoto(from source: URL) -> Bool {
-        let ext = source.pathExtension.isEmpty ? "jpg" : source.pathExtension.lowercased()
-        let dest = Self.folder.appendingPathComponent("photo-\(Int(Date().timeIntervalSince1970)).\(ext)")
-        guard Self.downsampled(source, maxPixels: 64) != nil else { return false }   // really an image
-        do {
-            for old in (try? FileManager.default.contentsOfDirectory(at: Self.folder, includingPropertiesForKeys: nil)) ?? []
-            where old.lastPathComponent.hasPrefix("photo-") { try? FileManager.default.removeItem(at: old) }
-            try FileManager.default.copyItem(at: source, to: dest)
-        } catch { return false }
-        UserDefaults.standard.set(dest.path, forKey: Prefs.startPhoto)
-        UserDefaults.standard.set(StartBackground.photo.rawValue, forKey: Prefs.startBackground)
-        refresh()
-        return true
+    /// Checked and copied in the background (a big camera file used to freeze the window while
+    /// it copied); `completion` gets whether it worked, on the main thread.
+    func usePhoto(from source: URL, completion: @escaping (Bool) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let ext = source.pathExtension.isEmpty ? "jpg" : source.pathExtension.lowercased()
+            let dest = Self.folder.appendingPathComponent("photo-\(Int(Date().timeIntervalSince1970)).\(ext)")
+            let size = (try? source.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            var ok = size < 150_000_000 && Self.downsampled(source, maxPixels: 64) != nil   // really an image, and sensible
+            if ok {
+                // Copy first, then remove the old one, so a failed copy never leaves you with neither.
+                ok = (try? FileManager.default.copyItem(at: source, to: dest)) != nil
+                if ok {
+                    for old in (try? FileManager.default.contentsOfDirectory(at: Self.folder, includingPropertiesForKeys: nil)) ?? []
+                    where old.lastPathComponent.hasPrefix("photo-") && old.lastPathComponent != dest.lastPathComponent {
+                        try? FileManager.default.removeItem(at: old)
+                    }
+                }
+            }
+            DispatchQueue.main.async {
+                if ok {
+                    UserDefaults.standard.set(dest.path, forKey: Prefs.startPhoto)
+                    UserDefaults.standard.set(StartBackground.photo.rawValue, forKey: Prefs.startBackground)
+                    self.refresh()
+                }
+                completion(ok)
+            }
+        }
     }
 
     private static var today: String { Date().formatted(.iso8601.year().month().day()) }
@@ -286,7 +300,9 @@ struct BackgroundPicker: View {
         panel.canChooseDirectories = false
         panel.message = "Choose a photo for the start page."
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        message = BackgroundStore.shared.usePhoto(from: url) ? nil : "That file couldn’t be used as a picture."
+        BackgroundStore.shared.usePhoto(from: url) { ok in
+            message = ok ? nil : "That file couldn’t be used as a picture."
+        }
     }
 }
 

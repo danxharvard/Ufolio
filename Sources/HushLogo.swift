@@ -377,6 +377,8 @@ struct PeekingAlien: View {
 struct FlyingSaucerEgg: View {
     @State private var flying = false
     @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
+    /// It loops forever, so it only flies while Settings is the window you're using.
+    @Environment(\.controlActiveState) private var activeState
 
     var body: some View {
         GeometryReader { geo in
@@ -385,13 +387,22 @@ struct FlyingSaucerEgg: View {
                 .rotationEffect(.degrees(-6))
                 .offset(x: reduceMotion ? geo.size.width - 40 : (flying ? geo.size.width + 50 : -60),
                         y: flying ? 2 : 10)
-                .onAppear {
-                    guard !reduceMotion else { return }
-                    withAnimation(.linear(duration: 9).delay(3).repeatForever(autoreverses: false)) { flying = true }
-                }
+                .onAppear { fly(activeState != .inactive) }
+                .onChange(of: activeState) { _, state in fly(state != .inactive) }
         }
         .frame(height: 40)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    private func fly(_ on: Bool) {
+        guard !reduceMotion else { return }
+        if on {
+            withAnimation(.linear(duration: 9).delay(3).repeatForever(autoreverses: false)) { flying = true }
+        } else {
+            var still = Transaction(animation: nil)   // parks it without an animation
+            still.disablesAnimations = true
+            withTransaction(still) { flying = false }
+        }
     }
 }

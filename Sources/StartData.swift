@@ -142,6 +142,18 @@ final class PrivacyReport: ObservableObject {
         changed()
     }
 
+    /// Removes one site from the report (Forget This Site): as a site you visited, and from
+    /// the list of sites each tracker appeared on.
+    func forget(site: String) {
+        for key in days.keys {
+            days[key]?.visited.remove(site)
+            for tracker in days[key]?.trackers.keys.map({ $0 }) ?? [] {
+                days[key]?.trackers[tracker]?.remove(site)
+            }
+        }
+        changed()
+    }
+
     /// Pages can block hundreds of requests as they load: add up the report at most twice a second.
     private func changed() {
         if !recomputeScheduled {
@@ -204,7 +216,11 @@ enum Domains {
     ]
 
     static func site(_ host: String) -> String {
-        let parts = host.lowercased().strippingWWW.split(separator: ".").map(String.init)
+        // IP addresses are whole sites: 192.168.1.1 used to become "1.1", lumping every local
+        // device ending in .1.1 together (shared settings; Forget This Site forgot them all).
+        let lower = host.lowercased()
+        if lower.contains(":") || (!lower.isEmpty && lower.allSatisfy { $0.isNumber || $0 == "." }) { return lower }
+        let parts = lower.strippingWWW.split(separator: ".").map(String.init)
         guard parts.count > 2 else { return parts.joined(separator: ".") }
         let lastTwo = parts.suffix(2).joined(separator: ".")
         if twoPartSuffixes.contains(lastTwo) { return parts.suffix(3).joined(separator: ".") }

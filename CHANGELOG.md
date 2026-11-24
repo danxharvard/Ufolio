@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.43.8: ten more fixes
+
+**Privacy**
+- Forget This Site now also removes the site from your Privacy Report and deletes its saved icon.
+- A pop-up window on a site where you've turned Force Field off no longer switches blocking off
+  for the page that opened it.
+- Local addresses like 192.168.1.1 are treated as their own sites. They were lumped together
+  with every other address ending in .1.1, sharing settings and being forgotten together.
+
+**Fixes**
+- Choosing a start page photo no longer freezes the window while it copies, and your old photo
+  is only removed once the new one is safely in place.
+- Adding a news feed twice quickly no longer adds it twice.
+- Split View in a narrow window keeps both pages on screen.
+
+**Smoother**
+- Bookmarks are saved in the background a moment after a change, so dragging to reorder a big
+  collection no longer stutters.
+- Mail and chat sites that keep changing their title no longer make history redraw and save
+  every few seconds.
+- The flying saucer in Settings › Orbits only flies while Settings is the window you're using.
+
 ## 0.43.7: ten more fixes
 
 **Fixes**
