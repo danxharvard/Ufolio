@@ -18,11 +18,16 @@ enum FilterConverter {
 
     /// WebKit's limit for one compiled list.
     static let maxRules = 150_000
+    /// At most this many parts per list (600,000 rules).
+    static let maxParts = 4
     /// Element-hiding selectors are grouped so one bad selector can't hide a whole list's worth.
     static let selectorsPerRule = 50
 
     struct Output {
         var json: String
+        /// Lists bigger than WebKit's limit for one compiled list are split; these are the
+        /// parts after the first (each with the list's exceptions too).
+        var extraParts: [String] = []
         var ruleCount: Int
         var skipped: Int
         var format: String
@@ -136,19 +141,25 @@ enum FilterConverter {
             }
         }
 
-        // Exceptions must come last: they cancel the rules before them.
-        var rules = blocks + cosmetic
-        let room = maxRules - min(exceptions.count, maxRules / 10)
-        if rules.count > room {
-            skipped += rules.count - room
-            rules = Array(rules.prefix(room))
+        // Exceptions must come last: they cancel the rules before them. Big lists (like Hushlist's
+        // 240,000 domains) are split into parts of up to WebKit's limit, each ending with the
+        // exceptions, rather than cut off.
+        let rules = blocks + cosmetic
+        let kept = Array(exceptions.prefix(maxRules / 10))
+        let room = maxRules - kept.count
+        var parts: [[[String: Any]]] = []
+        var next = 0
+        while next < rules.count && parts.count < maxParts {
+            parts.append(Array(rules[next..<min(next + room, rules.count)]) + kept)
+            next += room
         }
-        rules += exceptions.prefix(maxRules - rules.count)
+        skipped += max(0, rules.count - next)
+        if parts.isEmpty && !kept.isEmpty { parts = [kept] }
 
-        guard !rules.isEmpty else { throw ConversionError.noUsableRules(skipped: skipped) }
-        let data = try JSONSerialization.data(withJSONObject: rules)
+        guard !parts.isEmpty else { throw ConversionError.noUsableRules(skipped: skipped) }
+        let json = try parts.map { String(decoding: try JSONSerialization.data(withJSONObject: $0), as: UTF8.self) }
         let format = hostLines > abpLines ? "Hosts file" : "Ad-block filter list"
-        return Output(json: String(decoding: data, as: UTF8.self), ruleCount: rules.count,
+        return Output(json: json[0], extraParts: Array(json.dropFirst()), ruleCount: min(next, rules.count) + kept.count,
                       skipped: skipped, format: format, title: title)
     }
 

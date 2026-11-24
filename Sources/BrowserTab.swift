@@ -133,6 +133,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         let zoom = Prefs.double(Prefs.defaultZoom)
         view.pageZoom = zoom > 0 ? zoom : 1
         ContentBlocker.shared.attach(view.configuration.userContentController)
+        HushlistLink.shared.register(view.configuration.userContentController)
         AutofillCenter.shared.register(self)
         ElementZapper.shared.register(self)
         (view as? HushWebView)?.onHideElements = { [weak self] in

@@ -17,6 +17,10 @@ struct FilterList: Codable, Identifiable, Equatable {
     var isOutdated: Bool { (converterVersion ?? 1) < FilterConverter.version }
 
     var identifier: String { "hush-list-\(id.uuidString)" }
+    /// How many extra compiled parts a big list was split into (nil = none).
+    var extraParts: Int?
+    /// Every compiled part's identifier: the first is `identifier`, as before.
+    var identifiers: [String] { [identifier] + (0..<(extraParts ?? 0)).map { "\(identifier)-p\($0 + 2)" } }
 }
 
 /// Everything Hush blocks, built on WebKit's content blocker (the engine behind
@@ -99,8 +103,10 @@ final class ContentBlocker: ObservableObject {
                 store.removeContentRuleList(forIdentifier: list.identifier) { _ in }
                 continue
             }
-            let file = jsonFile(for: list)
-            loadCompiled(list.identifier) { try? String(contentsOf: file, encoding: .utf8) }
+            for (part, id) in list.identifiers.enumerated() {
+                let file = jsonFile(for: list, part: part)
+                loadCompiled(id) { try? String(contentsOf: file, encoding: .utf8) }
+            }
         }
     }
 
@@ -159,7 +165,7 @@ final class ContentBlocker: ObservableObject {
             if shields.blocking == .strict { ids.append(BuiltInRules.strict.identifier) }
             if Prefs.bool(Prefs.blockAnnoyances) { ids.append(BuiltInRules.annoyances.identifier) }
             if Prefs.bool(Prefs.blockChatWidgets) { ids.append(BuiltInRules.chatWidgets.identifier) }
-            ids += lists.filter { $0.enabled && !$0.isOutdated }.map(\.identifier)
+            ids += lists.filter { $0.enabled && !$0.isOutdated }.flatMap(\.identifiers)
         }
         switch shields.cookies {
         case .blockThirdParty: ids.append(BuiltInRules.thirdPartyCookies.identifier)
@@ -216,6 +222,7 @@ final class ContentBlocker: ObservableObject {
         if Prefs.bool(Prefs.globalPrivacyControl) { controller.addUserScript(UserScripts.globalPrivacyControl) }
         if CleanLinks.deAMPEnabled { controller.addUserScript(CleanLinks.deAMPScript) }
         if AutofillCenter.isEnabled { controller.addUserScript(AutofillCenter.script) }
+        controller.addUserScript(HushlistLink.script)   // only does anything on hushlist.online
     }
 
     // MARK: Per-site shields
@@ -243,8 +250,8 @@ final class ContentBlocker: ObservableObject {
 
     // MARK: Filter lists
 
-    private func jsonFile(for list: FilterList) -> URL {
-        folder.appendingPathComponent("\(list.id.uuidString).json")
+    private func jsonFile(for list: FilterList, part: Int = 0) -> URL {
+        folder.appendingPathComponent(part == 0 ? "\(list.id.uuidString).json" : "\(list.id.uuidString)-p\(part + 1).json")
     }
 
     private func saveLists() {
@@ -264,6 +271,14 @@ final class ContentBlocker: ObservableObject {
             }
         }
     }
+
+    // MARK: Hushlist
+
+    static let hushlistURL = URL(string: "https://hushlist.online/lists/hushlist.txt")!
+    var hushlist: FilterList? { lists.first { $0.sourceURL == Self.hushlistURL } }
+
+    /// Adds Hushlist (or refreshes it if it's already connected). It keeps itself up to date weekly.
+    func connectHushlist() { importFromWeb(Self.hushlistURL, name: "Hushlist") }
 
     func importFromWeb(_ address: URL, name: String? = nil) {
         // Always over HTTPS: a list fetched in the clear could be swapped on the way to switch
@@ -351,14 +366,26 @@ final class ContentBlocker: ObservableObject {
             list.format = output.format
             list.updatedAt = Date()
             list.converterVersion = FilterConverter.version
+            let oldIdentifiers = existing?.identifiers ?? []
+            list.extraParts = output.extraParts.isEmpty ? nil : output.extraParts.count
 
             await MainActor.run { self.status = "Compiling \(output.ruleCount.formatted()) rules…" }
-            let compiledList = try await compile(list.identifier, json: output.json)
-            try output.json.write(to: jsonFile(for: list), atomically: true, encoding: .utf8)
+            var compiledParts: [(String, WKContentRuleList)] = []
+            for (part, json) in ([output.json] + output.extraParts).enumerated() {
+                let id = list.identifiers[part]
+                compiledParts.append((id, try await compile(id, json: json)))
+                try json.write(to: jsonFile(for: list, part: part), atomically: true, encoding: .utf8)
+            }
 
             let finished = list
+            let parts = compiledParts
             await MainActor.run {
-                self.compiled[finished.identifier] = compiledList
+                for (id, compiledList) in parts { self.compiled[id] = compiledList }
+                // Parts a smaller update no longer needs.
+                for id in oldIdentifiers where !finished.identifiers.contains(id) {
+                    self.compiled[id] = nil
+                    self.store.removeContentRuleList(forIdentifier: id) { _ in }
+                }
                 if let i = self.lists.firstIndex(where: { $0.id == finished.id }) {
                     self.lists[i] = finished
                 } else {
@@ -408,11 +435,13 @@ final class ContentBlocker: ObservableObject {
 
     func remove(_ list: FilterList) {
         lists.removeAll { $0.id == list.id }
-        compiled[list.identifier] = nil
+        for id in list.identifiers { compiled[id] = nil }
         saveLists()
         refresh()
-        try? FileManager.default.removeItem(at: jsonFile(for: list))
-        store.removeContentRuleList(forIdentifier: list.identifier) { _ in }
+        for (part, id) in list.identifiers.enumerated() {
+            try? FileManager.default.removeItem(at: jsonFile(for: list, part: part))
+            store.removeContentRuleList(forIdentifier: id) { _ in }
+        }
     }
 }
 

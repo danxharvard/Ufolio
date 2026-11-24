@@ -451,7 +451,8 @@ final class BrowserModel: NSObject, ObservableObject {
     }
 
     func focusAddressBar() {
-        addressFocusToken += 1
+        // Just after the current update: a brand-new tab's address bar must exist to take focus.
+        DispatchQueue.main.async { self.addressFocusToken += 1 }
     }
 
     /// Opens a URL in the current tab, or a new background tab when ⌘ is held.

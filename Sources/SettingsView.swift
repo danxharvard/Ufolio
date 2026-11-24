@@ -1077,6 +1077,8 @@ private struct AdBlockerSettings: View {
                 }
             }
 
+            Section { HushlistCard() }
+
             Section {
                 HStack(alignment: .top, spacing: 10) {
                     ForEach(BlockingMode.allCases) { option in

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.36.0
+
+**New: Hushlist**
+- Connect Hush to Hushlist (hushlist.online) for maximum blocking: about 240,000 more ad, tracker,
+  phishing and malware domains, free and with no sign-up. Find it at the top of Settings › Hush
+  Guard; a short guide walks you through it, including blocking in every app on your Mac.
+- Visit hushlist.online in Hush and the site can offer to connect it for you (Hush always asks first).
+- Big filter lists are no longer cut off at 150,000 rules: they're split into parts, so every rule is used.
+
+**Fixes**
+- A new tab puts the cursor in the address bar, so you can start typing straight away.
+
 ## 0.35.2
 
 **Lighter frosting**
