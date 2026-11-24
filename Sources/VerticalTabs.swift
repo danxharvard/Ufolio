@@ -71,6 +71,7 @@ struct SideTabBar: View {
             if !model.isPrivate { ExtensionButtons() }
             SelectedTab(model: model) { ShieldsButton(tab: $0) }
             PrivateWindowButton(isPrivate: model.isPrivate)
+            MoreMenuButton(model: model)
         }
         .padding(.horizontal, 8)
         .padding(.top, 6)

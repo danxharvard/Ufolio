@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.38.0
+
+**New: the ⋯ panel**
+- The ⋯ button (at the end of the toolbar, or in the side tab column) opens a frosted panel
+  with everything you reach for most: New Tab, New Private Window, History, Bookmarks,
+  Downloads, Passwords, Extensions & Themes, Print, Save Page As, Translate Page and Find in Page,
+  each with its icon and keyboard shortcut.
+- A live zoom control (− 100% +, with full screen) right in the panel, plus switching between tabs
+  along the top and down the side, Settings, and Help.
+
 ## 0.37.1
 
 **Smoother start page**

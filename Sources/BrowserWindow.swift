@@ -277,48 +277,180 @@ struct BrowserWindow: View {
     }
 }
 
-/// "⋯" at the end of the toolbar: the everyday commands, one click away.
+/// "⋯" at the end of the toolbar: a frosted panel with the everyday commands, their shortcuts
+/// and a live zoom control.
 struct MoreMenuButton: View {
     @ObservedObject var model: BrowserModel
-    @Environment(\.openWindow) private var openWindow
-    @AppStorage(Prefs.tabLayout) private var tabLayout = TabLayout.top.rawValue
-    @AppStorage(Prefs.showBookmarkBar) private var showBookmarkBar = true
+    @State private var showing = false
     @State private var hovering = false
 
     var body: some View {
-        Menu {
-            Button { model.newTab(focus: true) } label: { Label("New Tab", systemImage: "plus.square") }
-            Button { openWindow(id: "private") } label: { Label("New Private Window", systemImage: "eyeglasses") }
-            Button { model.paletteOpen = true } label: { Label("Command Palette…", systemImage: "command") }
-            Divider()
-            Button { model.find.show() } label: { Label("Find on Page…", systemImage: "text.magnifyingglass") }
-            Button { model.selectedTab?.zoom(by: 0.1) } label: { Label("Zoom In", systemImage: "plus.magnifyingglass") }
-            Button { model.selectedTab?.zoom(by: -0.1) } label: { Label("Zoom Out", systemImage: "minus.magnifyingglass") }
-            Button { model.selectedTab?.printPage() } label: { Label("Print…", systemImage: "printer") }
-            Divider()
-            Button { model.sidebarOpen.toggle() } label: { Label("Bookmarks & History", systemImage: "sidebar.left") }
-            Button { openWindow(id: "history") } label: { Label("Show All History", systemImage: "clock") }
-            Toggle(isOn: $showBookmarkBar) { Label("Show Bookmarks Bar", systemImage: "menubar.rectangle") }
-            Toggle(isOn: Binding(get: { tabLayout == TabLayout.side.rawValue },
-                                 set: { tabLayout = ($0 ? TabLayout.side : TabLayout.top).rawValue })) {
-                Label("Tabs Down the Side", systemImage: "sidebar.squares.left")
-            }
-            Divider()
-            Button { SettingsOpener.open() } label: { Label("Settings…", systemImage: "gearshape") }
-        } label: {
+        Button { showing.toggle() } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: 28, height: 26)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(hovering ? 0.08 : 0)))
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(hovering || showing ? 0.08 : 0)))
                 .contentShape(Rectangle())
         }
-        .menuStyle(.button)
         .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
         .onHover { hovering = $0 }
         .help("More")
+        .popover(isPresented: $showing, arrowEdge: .bottom) {
+            MorePanel(model: model) { showing = false }
+        }
+    }
+}
+
+private struct MorePanel: View {
+    @ObservedObject var model: BrowserModel
+    let close: () -> Void
+    @Environment(\.openWindow) private var openWindow
+    @AppStorage(Prefs.tabLayout) private var tabLayout = TabLayout.top.rawValue
+    @State private var zoomRevision = 0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            group {
+                row("plus.square", "New Tab", .newTab) { model.newTab(focus: true) }
+                row("eyeglasses", "New Private Window", .privateWindow) { openWindow(id: "private") }
+            }
+            divider
+            group {
+                row("clock.arrow.circlepath", "History", .history, chevron: true) { openWindow(id: "history") }
+                row("book", "Bookmarks", .sidebar, chevron: true) { model.sidebarOpen = true }
+                row("arrow.down.circle", "Downloads") { NSWorkspace.shared.open(Downloads.folder) }
+                row("key", "Passwords") { SettingsOpener.open(tab: .passwords) }
+                row("puzzlepiece.extension", "Extensions & Themes") { SettingsOpener.open(tab: .extensions) }
+            }
+            divider
+            group {
+                let hasPage = model.selectedTab?.url != nil
+                row("printer", "Print…", .print, enabled: hasPage) { model.selectedTab?.printPage() }
+                row("square.and.arrow.down", "Save Page As…", .savePage, enabled: hasPage) { model.selectedTab?.savePage() }
+                row("translate", "Translate Page…", .translate, enabled: hasPage) {
+                    if let tab = model.selectedTab {
+                        if tab.translation == .translated { PageTranslator.shared.showOriginal(tab) } else { PageTranslator.shared.translate(tab) }
+                    }
+                }
+                row("text.magnifyingglass", "Find in Page…", .find, enabled: hasPage) { model.find.show() }
+            }
+            divider
+            zoomRow
+            divider
+            group {
+                row(tabLayout == TabLayout.side.rawValue ? "rectangle.topthird.inset.filled" : "sidebar.squares.left",
+                    tabLayout == TabLayout.side.rawValue ? "Tabs Along the Top" : "Tabs Down the Side") {
+                    tabLayout = (tabLayout == TabLayout.side.rawValue ? TabLayout.top : TabLayout.side).rawValue
+                }
+                row("gearshape", "Settings", shortcutText: "⌘,") { SettingsOpener.open() }
+                row("questionmark.circle", "Help and Feedback", chevron: true) {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/danxharvard/hushbrowser")!)
+                }
+            }
+        }
+        .padding(.vertical, 6)
+        .frame(width: 300)
+    }
+
+    // MARK: Pieces
+
+    private func group<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 1) { content() }.padding(.horizontal, 6)
+    }
+
+    private var divider: some View {
+        Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 1).padding(.horizontal, 14).padding(.vertical, 5)
+    }
+
+    private func row(_ symbol: String, _ title: String, _ shortcut: ShortcutAction? = nil, shortcutText: String? = nil,
+                     chevron: Bool = false, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+        PanelRow(symbol: symbol, title: title,
+                 trailing: chevron ? nil : (shortcutText ?? shortcut.flatMap { Shortcuts.combo($0)?.display }),
+                 chevron: chevron, enabled: enabled) {
+            close()
+            DispatchQueue.main.async(execute: action)
+        }
+    }
+
+    private var zoomRow: some View {
+        let zoom = model.selectedTab?.webView.pageZoom ?? 1
+        let _ = zoomRevision
+        return HStack(spacing: 4) {
+            Image(systemName: "plus.magnifyingglass").font(.system(size: 13)).foregroundStyle(.secondary).frame(width: 22)
+            Text("Zoom").font(.system(size: 13))
+            Spacer()
+            ZoomButton(symbol: "minus") { model.selectedTab?.zoom(by: -0.1); zoomRevision += 1 }
+            Button { model.selectedTab?.resetZoom(); zoomRevision += 1 } label: {
+                Text("\(Int((zoom * 100).rounded()))%")
+                    .font(.system(size: 12.5, weight: .medium, design: .rounded)).monospacedDigit()
+                    .frame(width: 48)
+            }
+            .buttonStyle(.plain)
+            .help("Actual Size")
+            ZoomButton(symbol: "plus") { model.selectedTab?.zoom(by: 0.1); zoomRevision += 1 }
+            Rectangle().fill(Color.primary.opacity(0.12)).frame(width: 1, height: 18).padding(.horizontal, 4)
+            ZoomButton(symbol: "arrow.up.left.and.arrow.down.right") { close(); model.window?.toggleFullScreen(nil) }
+                .help("Full Screen")
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 34)
+        .disabled(model.selectedTab?.url == nil)
+    }
+}
+
+private struct PanelRow: View {
+    let symbol: String
+    let title: String
+    let trailing: String?
+    let chevron: Bool
+    let enabled: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: symbol).font(.system(size: 13)).frame(width: 22)
+                    .foregroundStyle(hovering ? Color.white : Color.secondary)
+                Text(title).font(.system(size: 13))
+                Spacer(minLength: 8)
+                if let trailing {
+                    Text(trailing).font(.system(size: 12, design: .rounded))
+                        .foregroundStyle(hovering ? Color.white.opacity(0.85) : Color.secondary)
+                }
+                if chevron {
+                    Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(hovering ? Color.white.opacity(0.85) : Color.secondary)
+                }
+            }
+            .foregroundStyle(hovering ? Color.white : Color.primary)
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(hovering ? Color.accentColor : Color.clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.4)
+        .onHover { hovering = $0 && enabled }
+    }
+}
+
+private struct ZoomButton: View {
+    let symbol: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
+                .frame(width: 28, height: 24)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(hovering ? 0.1 : 0)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }
 
