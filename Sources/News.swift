@@ -172,9 +172,19 @@ final class NewsStore: ObservableObject {
         Task { await refresh() }
     }
 
+    /// A refresh asked for while one was running (say, a topic switched on mid-refresh): it runs
+    /// again afterwards, so the new choice isn't left empty until the next refresh.
+    private var refreshAgain = false
+
     func refresh() async {
-        guard !isLoading else { return }
+        guard !isLoading else { refreshAgain = true; return }
         isLoading = true
+        defer {
+            if refreshAgain {
+                refreshAgain = false
+                Task { await refresh() }
+            }
+        }
         let sources = activeSources
         let fetched = await withTaskGroup(of: [NewsArticle].self) { group in
             for source in sources { group.addTask { await Self.fetch(source) } }

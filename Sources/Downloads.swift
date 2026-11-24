@@ -444,7 +444,12 @@ private struct DownloadRow: View {
                         Text("Paused").font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                 case .finished:
-                    Text(sizeText).font(.system(size: 11)).foregroundStyle(.secondary)
+                    // Says so when the file has been moved or deleted (Open used to do nothing).
+                    if let url = item.destination, !FileManager.default.fileExists(atPath: url.path) {
+                        Text("Moved or deleted").font(.system(size: 11)).foregroundStyle(.secondary)
+                    } else {
+                        Text(sizeText).font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
                 case .failed:
                     Text("Failed").font(.system(size: 11)).foregroundStyle(Color.orange)
                 case .cancelled:

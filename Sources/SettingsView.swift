@@ -511,6 +511,8 @@ private struct GeneralSettings: View {
     @AppStorage(Prefs.openSafeFiles) private var openSafeFiles = false
     @AppStorage(Prefs.askDefaultBrowser) private var askDefault = true
     @State private var isDefaultBrowser = false   // checked when the pane appears (asking macOS isn't free)
+    /// Other browsers to import from, found when the pane appears (not on every redraw).
+    @State private var importSources: [BrowserImporter.Source] = []
     @State private var importStatus: String?
     @State private var importing = false
 
@@ -590,9 +592,11 @@ private struct GeneralSettings: View {
                 LabeledContent("Remove history items") { Picker("", selection: $historyRetention) {
                     ForEach(HistoryRetention.allCases) { Text($0.label).tag($0.rawValue) }
                 }.labelsHidden().fixedSize() }
+                // A shorter time takes effect straight away.
+                .onChange(of: historyRetention) { _, _ in HistoryStore.shared.prune() }
                 HStack {
                     Menu("Import History and Bookmarks") {
-                        ForEach(BrowserImporter.available()) { source in
+                        ForEach(importSources) { source in
                             Button(source.name) { runImport(source) }
                         }
                     }
@@ -630,7 +634,10 @@ private struct GeneralSettings: View {
 
         }
         .formStyle(SafariFormStyle())
-        .onAppear { isDefaultBrowser = DefaultBrowser.isDefault }
+        .onAppear {
+            isDefaultBrowser = DefaultBrowser.isDefault
+            importSources = BrowserImporter.available()
+        }
     }
 
     private func runImport(_ source: BrowserImporter.Source) {

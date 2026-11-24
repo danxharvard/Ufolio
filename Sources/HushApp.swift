@@ -351,6 +351,10 @@ enum SettingsWindow {
         guard let w = window, !w.isVisible else { return }
         w.contentViewController = nil
         window = nil
+        // The old window's close-watcher goes too (a new one is made with the next window).
+        if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
+        closeObserver = nil
+        idleRelease?.cancel()
     }
 
     private static func make() -> NSWindow {

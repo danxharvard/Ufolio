@@ -59,12 +59,16 @@ struct WindowTabBar: View {
 
     var body: some View {
         GeometryReader { geo in
-            let tabs = model.visibleTabs
+            let all = model.visibleTabs
             let selectedID = model.selectedTab?.id
             // Pinned tabs are small fixed icons; the rest share what's left.
-            let pinnedCount = tabs.filter(\.isPinned).count
+            let pinnedCount = all.filter(\.isPinned).count
             let room = geo.size.width - leadingInset - 44 - 24 - spaceWidth - CGFloat(pinnedCount) * Self.pinnedWidth
-            let sizes = Self.widths(room: room, count: tabs.count - pinnedCount)
+            // Too many to fit even at their narrowest: show the ones around the current tab, and
+            // a "+N" menu for the rest (they used to run off the edge, out of reach).
+            let layout = Self.fit(all, selectedID: selectedID, room: room)
+            let tabs = layout.shown
+            let sizes = layout.sizes
             let width = sizes.other
             // Bottom-aligned, so every tab sits right on the toolbar below it.
             HStack(alignment: .bottom, spacing: 0) {
@@ -92,6 +96,11 @@ struct WindowTabBar: View {
                                                 removal: .opacity.animation(.easeOut(duration: 0.12))))
                         .gesture(reorderGesture(for: tab, width: width))
                 }
+                if !layout.hidden.isEmpty {
+                    OverflowTabsButton(model: model, tabs: layout.hidden)
+                        .padding(.leading, 4)
+                        .padding(.bottom, 3)
+                }
                 NewTabButton { model.newTab(focus: true) }
                     .padding(.leading, 6)
                     .padding(.bottom, 3)
@@ -108,6 +117,24 @@ struct WindowTabBar: View {
                 .simultaneousGesture(TapGesture(count: 2).onEnded { model.window?.performZoom(nil) })
         )
         .animation(.spring(response: 0.28, dampingFraction: 0.88), value: model.visibleTabs.map(\.id))
+    }
+
+    /// Which tabs the row shows, and how wide. Pinned tabs always show. When the others can't all
+    /// fit at their narrowest, a run of them around the selected tab shows (the selected one with
+    /// room for its title) and the rest go in the "+N" menu.
+    static func fit(_ all: [BrowserTab], selectedID: UUID?, room: CGFloat)
+        -> (shown: [BrowserTab], hidden: [BrowserTab], sizes: (selected: CGFloat, other: CGFloat)) {
+        let pinned = all.filter(\.isPinned), others = all.filter { !$0.isPinned }
+        let sizes = widths(room: room, count: others.count)
+        let needed = others.isEmpty ? 0 : sizes.selected + CGFloat(others.count - 1) * sizes.other
+        guard needed > room + 1, others.count > 1 else { return (all, [], sizes) }
+        let overflowButton: CGFloat = 40, minOther: CGFloat = 36, selectedWidth: CGFloat = 120
+        let capacity = max(1, min(others.count, Int((room - overflowButton - selectedWidth) / minOther) + 1))
+        let current = others.firstIndex { $0.id == selectedID } ?? 0
+        let start = max(0, min(current - (capacity - 1) / 2, others.count - capacity))
+        let shown = Array(others[start..<start + capacity])
+        let hidden = Array(others[..<start]) + Array(others[(start + capacity)...])
+        return (pinned + shown, hidden, (selected: selectedWidth, other: minOther))
     }
 
     /// Tab widths: shared equally while there's room; when crowded, the selected tab keeps
@@ -313,6 +340,33 @@ struct TabMenuItems: View {
             }
         } label: { Label(vertical ? "Close Tabs Below" : "Close Tabs to the Right", systemImage: vertical ? "arrow.down.to.line" : "arrow.right.to.line") }
         }
+}
+
+/// "+N": the tabs that don't fit in the row, as a menu.
+private struct OverflowTabsButton: View {
+    let model: BrowserModel
+    let tabs: [BrowserTab]
+    @State private var hovering = false
+
+    var body: some View {
+        Menu {
+            ForEach(tabs, id: \.id) { tab in
+                Button(tab.displayTitle) { model.selectedID = tab.id }
+            }
+        } label: {
+            Text("+\(tabs.count)")
+                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 30, minHeight: 26)
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.primary.opacity(hovering ? 0.08 : 0.04)))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .onHover { hovering = $0 }
+        .help("\(tabs.count) more tabs")
+    }
 }
 
 private struct NewTabButton: View {

@@ -103,7 +103,17 @@ private struct HistoryRow: View {
 
     private func open(newTab: Bool) {
         WindowOpener.ensureWindow()
-        BrowserModel.frontmostNormal?.open(entry.url, inNewTab: newTab)
-        BrowserModel.frontmostNormal?.window?.makeKeyAndOrderFront(nil)
+        // If the browser window was closed it takes a moment to come back: wait for it, rather
+        // than opening the page in a window that isn't there yet (which did nothing).
+        let url = entry.url
+        func attempt(_ tries: Int) {
+            if let model = BrowserModel.frontmostNormal, model.window != nil {
+                model.open(url, inNewTab: newTab)
+                model.window?.makeKeyAndOrderFront(nil)
+            } else if tries < 20 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { attempt(tries + 1) }
+            }
+        }
+        attempt(0)
     }
 }

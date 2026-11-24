@@ -237,7 +237,15 @@ final class HushlistLink: NSObject, WKScriptMessageHandler {
             completion: { choice, _ in
                 guard choice == 1 else { return }
                 blocker.connectHushlist()
-                webView.reload()   // the site can show that it's connected
+                // Reload once Hushlist is actually set up (it takes a while), so the site can show
+                // that it's connected; reloading straight away still showed "not connected".
+                weak var page = webView
+                func reloadWhenReady(_ tries: Int) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                        if !blocker.isWorking || tries > 180 { page?.reload() } else { reloadWhenReady(tries + 1) }
+                    }
+                }
+                reloadWhenReady(0)
             }), in: webView.window)
     }
 }

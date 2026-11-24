@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.43.10: ten more fixes
+
+**Tabs**
+- With lots of tabs along the top, the row now shows the tabs around the one you're on and a
+  "+N" button listing the rest. Before, extra tabs (and the + button) ran off the edge, out of reach.
+- A tab whose page macOS closed to free memory reloads by itself when you switch to it, as in
+  Safari, instead of showing the crashed page.
+- A tab that crashed and then went to sleep no longer shows the crashed page after waking.
+
+**Fixes**
+- Opening a page from the History window works even when the browser window was closed.
+- Changing "Remove history items" to a shorter time takes effect straight away.
+- Downloads you've moved or deleted say so in the list.
+- Switching on a news topic while news is refreshing no longer leaves that topic empty.
+- After connecting Hushlist from hushlist.online, the page reloads once it's really connected.
+
+**Smoother**
+- Settings › General no longer rescans for other browsers on every redraw.
+- Settings no longer leaks a little memory each time it's released and rebuilt.
+
 ## 0.43.9: ten more fixes
 
 **Security and privacy**

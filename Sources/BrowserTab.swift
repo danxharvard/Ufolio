@@ -60,7 +60,11 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     /// Set when the page's process crashed: the tab shows a friendly Reload screen.
     @Published private(set) var crashed = false
 
+    /// See webViewWebContentProcessDidTerminate.
+    var crashedWhileHidden = false
+
     func recoverFromCrash() {
+        crashedWhileHidden = false
         crashed = false
         if let url { webView.load(URLRequest(url: url)) } else { webView.reload() }
     }
@@ -295,6 +299,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     func wakeIfNeeded(loading: Bool = true) {
         guard isAsleep else { return }
         waking = true
+        // A fresh page: a crash before it slept no longer applies (the crashed screen used to
+        // stay over the woken page).
+        if crashed { crashed = false; crashedWhileHidden = false }
         setUp(webView)
         if let state = sleepState {
             webView.interactionState = state
@@ -476,6 +483,9 @@ extension BrowserTab: WKNavigationDelegate {
     /// The page's web process crashed or was stopped by macOS.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         guard webView === self.webView, !isAsleep else { return }
+        // Ended while out of sight (usually macOS freeing memory): it reloads by itself when you
+        // come back to it, as in Safari, instead of showing the crashed page.
+        crashedWhileHidden = model?.selectedTab !== self
         crashed = true
         isPlayingAudio = false
     }

@@ -20,6 +20,7 @@ final class BrowserModel: NSObject, ObservableObject {
                 old.webView.setAllMediaPlaybackSuspended(true)
             }
             if let tab = selectedTab, !tab.isAsleep { tab.webView.setAllMediaPlaybackSuspended(false) }
+            if let tab = selectedTab, tab.crashed, tab.crashedWhileHidden { tab.recoverFromCrash() }
             if let tab = selectedTab, tab !== old { ExtensionEvents.activated(tab, previous: old) }
             if selectedTab !== old { PerformanceCenter.shared.tabSwitched() }
         }
