@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>Hush Browser</string>
+	<string>Ufolio Browser</string>
 	<key>CFBundleDisplayName</key>
-	<string>Hush Browser</string>
+	<string>Ufolio Browser</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.danxharvard.hushbrowser</string>
 	<key>CFBundleExecutable</key>

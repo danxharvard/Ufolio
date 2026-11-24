@@ -85,8 +85,8 @@ enum PasswordVault {
             var add = q
             add[kSecValueData as String] = data
             add[kSecAttrProtocol as String] = kSecAttrProtocolHTTPS
-            add[kSecAttrLabel as String] = "\(host) (Hush Browser)"
-            add[kSecAttrDescription as String] = "Hush Browser password"
+            add[kSecAttrLabel as String] = "\(host) (Ufolio Browser)"
+            add[kSecAttrDescription as String] = "Ufolio Browser password"
             return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
         }
         return status == errSecSuccess
@@ -460,7 +460,7 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
             art: .site(tab.url), badge: "key.fill", theme: .save, motion: .rise,
             title: existing == nil ? "Save this password?" : "Update your saved password?",
             message: existing == nil
-                ? "Hush can keep the password\(who) on \(host) in your Mac’s keychain and fill it in for you next time."
+                ? "Ufolio can keep the password\(who) on \(host) in your Mac’s keychain and fill it in for you next time."
                 : "The password\(who) on \(host) has changed. Update it in your keychain?",
             note: ("lock.fill", "Locked with your Mac password or Touch ID"),
             choices: choices,

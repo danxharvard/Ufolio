@@ -219,10 +219,10 @@ struct SetupGuide: View {
     private var defaultChoices: some View {
         VStack(spacing: 12) {
             if isDefault {
-                ChoiceCard(title: "Hush is already your default browser", selected: true,
+                ChoiceCard(title: "Ufolio is already your default browser", selected: true,
                            art: AnyView(Image(systemName: "checkmark.seal.fill").font(.system(size: 24)).foregroundStyle(.green))) {}
             } else {
-                ChoiceCard(title: "Yes, make Hush my default", subtitle: "macOS will ask you to confirm.", selected: makeDefault) { makeDefault = true }
+                ChoiceCard(title: "Yes, make Ufolio my default", subtitle: "macOS will ask you to confirm.", selected: makeDefault) { makeDefault = true }
                 ChoiceCard(title: "Not yet, I'm still exploring", selected: !makeDefault) { makeDefault = false }
             }
         }
@@ -232,12 +232,12 @@ struct SetupGuide: View {
     private var summary: some View {
         VStack(alignment: .leading, spacing: 14) {
             SummaryRow(symbol: "magnifyingglass", text: "Searching with \((SearchEngine(rawValue: engine) ?? .google).name)")
-            SummaryRow(symbol: "shield.lefthalf.filled", text: "Hush Guard: \((BlockingMode(rawValue: blocking) ?? .standard).label)")
+            SummaryRow(symbol: "shield.lefthalf.filled", text: "Force Field: \((BlockingMode(rawValue: blocking) ?? .standard).label)")
             SummaryRow(symbol: tabLayout == TabLayout.side.rawValue ? "sidebar.left" : "rectangle.topthird.inset.filled",
                        text: (TabLayout(rawValue: tabLayout) ?? .top).label)
             SummaryRow(symbol: "paintbrush.fill", text: "\((AppearanceMode(rawValue: appearance) ?? .system).label) theme")
             if let importResult { SummaryRow(symbol: "square.and.arrow.down", text: importResult) }
-            if isDefault { SummaryRow(symbol: "checkmark.seal.fill", text: "Hush is your default browser") }
+            if isDefault { SummaryRow(symbol: "checkmark.seal.fill", text: "Ufolio is your default browser") }
             Text("You can change any of these in Settings (⌘,).")
                 .font(.system(size: 12)).foregroundStyle(.secondary).padding(.top, 6)
         }
@@ -291,13 +291,13 @@ struct SetupGuide: View {
 extension SetupGuide.Step {
     var title: String {
         switch self {
-        case .welcome: return "Welcome to Hush."
+        case .welcome: return "Welcome to Ufolio."
         case .bringStuff: return "Bring your stuff along."
         case .search: return "Pick your search engine."
-        case .guardMode: return "How much should Hush block?"
+        case .guardMode: return "How much should Ufolio block?"
         case .tabs: return "Where should your tabs go?"
         case .look: return "Make it yours."
-        case .defaultBrowser: return "Make Hush your default?"
+        case .defaultBrowser: return "Make Ufolio your default?"
         case .done: return "You're all set."
         }
     }
@@ -307,11 +307,11 @@ extension SetupGuide.Step {
         case .welcome: return "Light on your Mac, yet seriously powerful. Ads and trackers are blocked before they ever reach the page. Let's set it up: it takes less than a minute."
         case .bringStuff: return "Pick a browser to bring over your bookmarks and favourite sites, and pick up right where you left off."
         case .search: return "Used when you type in the address bar. You can change it any time."
-        case .guardMode: return "Hush Guard blocks ads and trackers before they load, so pages are cleaner and faster."
+        case .guardMode: return "Force Field blocks ads and trackers before they load, so pages are cleaner and faster."
         case .tabs: return "Tabs along the top, or down the side where long titles have room. Switch any time in Settings."
         case .look: return "Day, Night, or follow your Mac. Then pick an accent colour."
-        case .defaultBrowser: return "Links from other apps will open in Hush. You can always change this later."
-        case .done: return "Fast, private and light. Here's how Hush is set up."
+        case .defaultBrowser: return "Links from other apps will open in Ufolio. You can always change this later."
+        case .done: return "Fast, private and light. Here's how Ufolio is set up."
         }
     }
 
@@ -512,7 +512,7 @@ private struct ThemePreview: View {
             .padding(6)
             .background(dark ? Color(white: 0.2) : Color(white: 0.9))
             (dark ? Color(white: 0.12) : Color.white)
-                .overlay(Text("Hush").font(.system(size: 13, weight: .light, design: .rounded))
+                .overlay(Text("Ufolio").font(.system(size: 13, weight: .light, design: .rounded))
                     .foregroundStyle(dark ? Color.white.opacity(0.8) : Color.black.opacity(0.7)))
         }
     }

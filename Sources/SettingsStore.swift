@@ -361,7 +361,7 @@ enum DownloadRetention: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .oneDay: return "After one day"
-        case .onQuit: return "When Hush quits"
+        case .onQuit: return "When Ufolio quits"
         case .onSuccess: return "Upon successful download"
         case .manually: return "Manually"
         }

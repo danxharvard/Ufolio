@@ -46,7 +46,7 @@ enum LaunchPrompts {
 // MARK: - Default browser banner
 
 /// A slim bar under the bookmarks bar asking to make Hush the default browser.
-/// Closing it hides it for two weeks; Settings › General › "Ask when Hush opens" turns it off.
+/// Closing it hides it for two weeks; Settings › General › "Ask when Ufolio opens" turns it off.
 struct DefaultBrowserBanner: View {
     let onClose: () -> Void
     @State private var hoveringClose = false
@@ -71,15 +71,15 @@ struct DefaultBrowserBanner: View {
                 .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Make Hush your default browser?")
+                Text("Make Ufolio your default browser?")
                     .font(.system(size: 13, weight: .semibold))
-                Text("Hush blocks ads and trackers, keeps your history on this Mac, and is light on battery.")
+                Text("Ufolio blocks ads and trackers, keeps your history on this Mac, and is light on battery.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 12)
-            Button("Make Hush Default") {
+            Button("Make Ufolio Default") {
                 DefaultBrowser.makeDefault { isDefault in if isDefault { onClose() } }
             }
             .controlSize(.regular)

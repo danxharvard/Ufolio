@@ -1,7 +1,7 @@
 #!/bin/bash
-# Builds "Hush Browser.app" (Intel + Apple Silicon) and a drag-to-install DMG.
+# Builds "Ufolio Browser.app" (Intel + Apple Silicon) and a drag-to-install DMG.
 #
-#   ./scripts/build-app.sh            → build/Hush Browser.app, HushBrowser-<version>.zip (for updates) and .dmg
+#   ./scripts/build-app.sh            → build/Ufolio Browser.app, HushBrowser-<version>.zip (for updates; the old name keeps installed copies updating) and UfolioBrowser-<version>.dmg
 #   ./scripts/build-app.sh --no-dmg   → just the app
 #
 # Works with Apple's Command Line Tools; Xcode is not required.
@@ -9,12 +9,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 VERSION="$(cat VERSION)"
-APP_NAME="Hush Browser"
+APP_NAME="Ufolio Browser"
 BUILD="build"
 APP="$BUILD/$APP_NAME.app"
 SDK="$(xcrun --show-sdk-path)"
 
-echo "→ Building Hush Browser $VERSION"
+echo "→ Building Ufolio Browser $VERSION"
 mkdir -p "$BUILD"
 
 for ARCH in x86_64 arm64; do
@@ -50,10 +50,10 @@ ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 echo "✓ $ZIP ($(du -h "$ZIP" | cut -f1))"
 
 if [ "${1:-}" != "--no-dmg" ]; then
-  DMG="$BUILD/HushBrowser-$VERSION.dmg"
+  DMG="$BUILD/UfolioBrowser-$VERSION.dmg"
   rm -f "$DMG"
   if python3 -c "import dmgbuild" 2>/dev/null; then
-    # The styled installer: drag Hush onto Applications over a custom background.
+    # The styled installer: drag Ufolio onto Applications over a custom background.
     echo "  making installer window"
     ART="$BUILD/dmg-art"
     swift scripts/make-dmg-background.swift "$ART" >/dev/null

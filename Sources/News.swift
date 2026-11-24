@@ -239,7 +239,7 @@ final class NewsStore: ObservableObject {
         }
         guard !allSources.contains(where: { $0.feed == url }) else { return "You already have that feed." }
         guard let (data, response) = try? await Self.session.data(from: url),
-              (response as? HTTPURLResponse)?.statusCode == 200 else { return "Hush couldn’t reach that feed." }
+              (response as? HTTPURLResponse)?.statusCode == 200 else { return "Ufolio couldn’t reach that feed." }
         let title = FeedParser.title(of: data) ?? host.strippingWWW
         var source = NewsSource(name: String(title.prefix(60)), feed: url, site: URL(string: "https://\(host)")!, channel: .top, custom: true)
         source.custom = true

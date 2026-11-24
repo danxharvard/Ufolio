@@ -289,7 +289,7 @@ struct TabMenuItems: View {
                 ForEach(SpaceStore.shared.spaces.filter { $0.id != tab.spaceID }) { space in
                     Button { model.move(tab, toSpace: space.id) } label: { Label(space.name, systemImage: space.symbol) }
                 }
-            } label: { Label("Move to Space", systemImage: "square.stack.3d.up") }
+            } label: { Label("Move to Orbit", systemImage: "square.stack.3d.up") }
         }
         Button { tab.toggleMute() } label: { Label(tab.isMuted ? "Unmute Tab" : "Mute Tab", systemImage: tab.isMuted ? "speaker.wave.2" : "speaker.slash") }
         Button { tab.toggleJavaScript() } label: { Label(tab.javaScriptOff ? "Turn On JavaScript in This Tab" : "Turn Off JavaScript in This Tab", systemImage: "curlybraces") }

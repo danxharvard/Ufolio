@@ -9,9 +9,9 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general: return "General"
         case .appearance: return "Appearance"
-        case .spaces: return "Spaces & Profiles"
+        case .spaces: return "Orbits & Profiles"
         case .performance: return "Performance"
-        case .adBlocker: return "Hush Guard"
+        case .adBlocker: return "Force Field"
         case .extensions: return "Extensions"
         case .privacy: return "Privacy & Security"
         case .passwords: return "Passwords & AutoFill"
@@ -186,7 +186,7 @@ private struct SidebarCard: View {
             HStack(spacing: 11) {
                 HushLogoTile(size: 38)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Hush Browser").font(.system(size: 13, weight: .semibold))
+                    Text("Ufolio Browser").font(.system(size: 13, weight: .semibold))
                     Text(status).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -516,13 +516,13 @@ private struct GeneralSettings: View {
     var body: some View {
         Form {
             Section {
-                SettingsHeader(tab: .general, subtitle: "How Hush starts, searches, remembers and downloads.")
+                SettingsHeader(tab: .general, subtitle: "How Ufolio starts, searches, remembers and downloads.")
             }
 
             Section {
                 HStack(spacing: 10) {
                     Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 28, height: 28)
-                    Text(isDefaultBrowser ? "Hush is your default web browser." : "Hush isn’t your default web browser.")
+                    Text(isDefaultBrowser ? "Ufolio is your default web browser." : "Ufolio isn’t your default web browser.")
                     Spacer()
                     if isDefaultBrowser {
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.green)
@@ -531,7 +531,7 @@ private struct GeneralSettings: View {
                     }
                 }
                 if !isDefaultBrowser {
-                    Toggle("Ask when Hush opens", isOn: $askDefault)
+                    Toggle("Ask when Ufolio opens", isOn: $askDefault)
                 }
             } header: { SectionTitle("Default browser") }
 
@@ -540,7 +540,7 @@ private struct GeneralSettings: View {
                     IconTile(symbol: "sparkles", colors: [Color(red: 0.62, green: 0.48, blue: 1.0), Color(red: 0.42, green: 0.30, blue: 0.88)], size: 26)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Setup guide")
-                        Text("Go through the first-run questions again: importing, search, Hush Guard, tabs and look.")
+                        Text("Go through the first-run questions again: importing, search, Force Field, tabs and look.")
                             .font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -552,7 +552,7 @@ private struct GeneralSettings: View {
             }
 
             Section {
-                LabeledContent("Hush opens with") { Picker("", selection: $launch) {
+                LabeledContent("Ufolio opens with") { Picker("", selection: $launch) {
                     ForEach(LaunchBehavior.allCases) { Text($0.label).tag($0.rawValue) }
                 }.labelsHidden().fixedSize() }
                 LabeledContent("New windows open with") { Picker("", selection: $newWindowPage) {
@@ -601,7 +601,7 @@ private struct GeneralSettings: View {
                     Button("Clear History…") { HushDialogs.clearHistory(in: .settings) }
                 }
                 DescribedToggle(title: "Suggest favourites",
-                                detail: "When you visit a site at least 6 times a day for 3 days in a row, Hush offers to add it to your Favourites.",
+                                detail: "When you visit a site at least 6 times a day for 3 days in a row, Ufolio offers to add it to your Favourites.",
                                 isOn: $offerBookmarks)
             } header: { SectionTitle("History") } footer: {
                 Footnote("History stays on this Mac. It powers Frequently Visited and address-bar suggestions.")
@@ -682,7 +682,7 @@ private struct AppearanceSettings: View {
     var body: some View {
         Form {
             Section {
-                SettingsHeader(tab: .appearance, subtitle: "Make Hush look and feel the way you like.")
+                SettingsHeader(tab: .appearance, subtitle: "Make Ufolio look and feel the way you like.")
             }
             Section {
                 HStack(spacing: 18) {
@@ -738,7 +738,7 @@ private struct AppearanceSettings: View {
                 Toggle("Show Suggestions", isOn: $startFrequent)
                 Toggle("Show Privacy Report", isOn: $startPrivacy)
                 DescribedToggle(title: "Show News",
-                                detail: "Headlines from publishers you choose, fetched privately by Hush. Customise topics from the start page.",
+                                detail: "Headlines from publishers you choose, fetched privately by Ufolio. Customise topics from the start page.",
                                 isOn: $startNews)
             } header: { SectionTitle("Start page") }
 
@@ -752,7 +752,7 @@ private struct AppearanceSettings: View {
 
             Section {
                 DescribedToggle(title: "Reduce motion",
-                                detail: "Turns off Hush’s animations, for an instant, snappier feel.",
+                                detail: "Turns off Ufolio’s animations, for an instant, snappier feel.",
                                 isOn: $reduceMotion)
                 LabeledContent("Default page zoom") { Picker("", selection: $zoom) {
                     ForEach(zoomLevels, id: \.self) { Text("\(Int(($0 * 100).rounded()))%").tag($0) }
@@ -824,7 +824,7 @@ private struct ThemeCard: View {
                 .frame(height: 15)
                 .background(bar)
                 Spacer()
-                Text("Hush")
+                Text("Ufolio")
                     .font(.system(size: 11, weight: .thin, design: .rounded))
                     .foregroundStyle(dark ? Color.white.opacity(0.85) : Color.black.opacity(0.7))
                 Spacer()
@@ -880,16 +880,16 @@ private struct PrivacySettings: View {
     var body: some View {
         Form {
             Section {
-                SettingsHeader(tab: .privacy, subtitle: "Hush keeps what you do on one site from following you to the next.")
+                SettingsHeader(tab: .privacy, subtitle: "Ufolio keeps what you do on one site from following you to the next.")
             }
 
             Section {
                 LabeledContent {
-                    Button("Hush Guard Settings…") { UserDefaults.standard.set(SettingsTab.adBlocker.rawValue, forKey: "settingsTab") }
+                    Button("Force Field Settings…") { UserDefaults.standard.set(SettingsTab.adBlocker.rawValue, forKey: "settingsTab") }
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Cookies, scripts and fingerprinting")
-                        Text("Set for every site, or one site at a time, in Hush Guard.")
+                        Text("Set for every site, or one site at a time, in Force Field.")
                             .font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                 }
@@ -1103,7 +1103,7 @@ private struct AdBlockerSettings: View {
                     }.labelsHidden().fixedSize()
                 }
             } header: { SectionTitle("Defaults for every site") } footer: {
-                Footnote("Each site can be set differently from the Hush Guard panel in the toolbar. Blocking scripts or all cookies makes many sites stop working, so they’re best chosen for single sites.")
+                Footnote("Each site can be set differently from the Force Field panel in the toolbar. Blocking scripts or all cookies makes many sites stop working, so they’re best chosen for single sites.")
             }
 
             Section {
@@ -1159,7 +1159,7 @@ private struct AdBlockerSettings: View {
             Section {
                 let custom = Set(siteShields.sites.keys).union(blocker.shieldsDown).sorted()
                 if custom.isEmpty {
-                    Text("None yet. Change a site’s settings from the Hush Guard panel in the toolbar.")
+                    Text("None yet. Change a site’s settings from the Force Field panel in the toolbar.")
                         .foregroundStyle(.secondary)
                 }
                 ForEach(custom, id: \.self) { site in
@@ -1168,7 +1168,7 @@ private struct AdBlockerSettings: View {
                         Favicon(url: URL(string: "https://\(site)"), size: 16)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(site)
-                            Text(off ? "Hush Guard off" : siteShields.summary(for: site))
+                            Text(off ? "Force Field off" : siteShields.summary(for: site))
                                 .font(.system(size: 11)).foregroundStyle(off ? Color.orange : .secondary)
                                 .lineLimit(2)
                         }
@@ -1395,7 +1395,7 @@ private struct LocationSettings: View {
     var body: some View {
         Form {
             Section {
-                SettingsHeader(tab: .location, subtitle: "Choose which websites can know where you are. Hush itself never uses your Mac’s location.")
+                SettingsHeader(tab: .location, subtitle: "Choose which websites can know where you are. Ufolio itself never uses your Mac’s location.")
             }
 
             Section {
@@ -1435,7 +1435,7 @@ private struct LocationSettings: View {
                     ForEach(PermissionPolicy.allCases) { Text($0.label).tag($0.rawValue) }
                 }.labelsHidden().fixedSize() }
             } header: { SectionTitle("Websites") } footer: {
-                Text("Maps, delivery and weather sites can use your location to show nearby results. Hush asks you first and remembers your answer.")
+                Text("Maps, delivery and weather sites can use your location to show nearby results. Ufolio asks you first and remembers your answer.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1471,7 +1471,7 @@ private struct UpdateSettings: View {
                         .resizable()
                         .frame(width: 64, height: 64)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Hush Browser \(updater.currentVersion)")
+                        Text("Ufolio Browser \(updater.currentVersion)")
                             .font(.system(size: 17, weight: .semibold))
                         statusLine
                     }
@@ -1490,7 +1490,7 @@ private struct UpdateSettings: View {
                 Section {
                     ReleaseNotesView(notes: installed)
                         .padding(.vertical, 6)
-                } header: { SectionTitle("What’s in Hush \(installed.version)") }
+                } header: { SectionTitle("What’s in Ufolio \(installed.version)") }
             }
 
             if let notes = updater.releaseNotes, isShowingRelease {
@@ -1512,7 +1512,7 @@ private struct UpdateSettings: View {
             Section {
                 Toggle("Check for updates automatically", isOn: $autoCheck)
                 DescribedToggle(title: "Download and install updates automatically",
-                                detail: "New versions download in the background and install the next time you quit Hush.",
+                                detail: "New versions download in the background and install the next time you quit Ufolio.",
                                 isOn: $autoInstall)
                     .disabled(!autoCheck)
             } header: { SectionTitle("Automatic updates") } footer: {
@@ -1524,7 +1524,7 @@ private struct UpdateSettings: View {
             if !earlierVersions.isEmpty {
                 Section {
                     ForEach(showAllVersions ? earlierVersions : Array(earlierVersions.prefix(3))) { version in
-                        DisclosureGroup("Hush \(version.version)") {
+                        DisclosureGroup("Ufolio \(version.version)") {
                             ReleaseNotesView(notes: version).padding(.vertical, 6)
                         }
                     }
@@ -1654,7 +1654,7 @@ private struct PasswordSettings: View {
                             .keyboardShortcut(.defaultAction)
                     }
                 } else if logins.isEmpty {
-                    Text("No saved passwords yet. Hush offers to save one when you sign in to a website.")
+                    Text("No saved passwords yet. Ufolio offers to save one when you sign in to a website.")
                         .foregroundStyle(.secondary)
                 } else {
                     TextField("Search", text: $search, prompt: Text("Search passwords"))
@@ -1831,7 +1831,7 @@ private struct AddCardSheet: View {
                 IconTile(symbol: "creditcard.fill", colors: SettingsTab.passwords.colors, size: 40)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Add a Card").font(.system(size: 15, weight: .semibold))
-                    Text("Saved in your Mac’s keychain. Hush never stores the security code.")
+                    Text("Saved in your Mac’s keychain. Ufolio never stores the security code.")
                         .font(.system(size: 11.5)).foregroundStyle(.secondary)
                 }
             }
@@ -1905,7 +1905,7 @@ private struct ExtensionSettings: View {
         Form {
             Section {
                 SettingsHeader(tab: .extensions,
-                               subtitle: "Add Chrome extensions from the Chrome Web Store. Most work in Hush; a few that rely on Chrome-only features may not.")
+                               subtitle: "Add Chrome extensions from the Chrome Web Store. Most work in Ufolio; a few that rely on Chrome-only features may not.")
             }
 
             if !ExtensionStore.isSupported {
@@ -1940,7 +1940,7 @@ private struct ExtensionSettings: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 } header: { SectionTitle("Add an extension") } footer: {
-                    Footnote("Find an extension in the Chrome Web Store, copy the address of its page and paste it here. Hush shows what it can access before adding it.")
+                    Footnote("Find an extension in the Chrome Web Store, copy the address of its page and paste it here. Ufolio shows what it can access before adding it.")
                 }
 
                 Section {
@@ -1953,7 +1953,7 @@ private struct ExtensionSettings: View {
                         SafariExtensionRow(info: info)
                     }
                 } header: { SectionTitle("Safari extensions on this Mac") } footer: {
-                    Footnote("Safari web extensions run in Hush straight from their app. Content blockers can share their rules with Hush Guard when the app includes them as a file.")
+                    Footnote("Safari web extensions run in Ufolio straight from their app. Content blockers can share their rules with Force Field when the app includes them as a file.")
                 }
 
                 Section {
@@ -1965,7 +1965,7 @@ private struct ExtensionSettings: View {
                     }
                 } header: { SectionTitle("Installed") } footer: {
                     if store.installed.filter(\.enabled).count > 3 {
-                        Footnote("The first three extensions that are turned on have a button next to Hush Guard. Choose Show in Toolbar from an extension’s ⋯ menu to give it one.")
+                        Footnote("The first three extensions that are turned on have a button next to Force Field. Choose Show in Toolbar from an extension’s ⋯ menu to give it one.")
                     }
                 }
             }
@@ -2089,7 +2089,7 @@ private struct SafariExtensionRow: View {
                             .disabled(blocker.isWorking)
                     } else {
                         Text("Rules not shareable").font(.system(size: 11)).foregroundStyle(.secondary)
-                            .help("This content blocker keeps its rules inside its own app, so Hush can’t read them.")
+                            .help("This content blocker keeps its rules inside its own app, so Ufolio can’t read them.")
                     }
                 }
             }

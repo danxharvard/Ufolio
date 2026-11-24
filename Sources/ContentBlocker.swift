@@ -97,7 +97,7 @@ final class ContentBlocker: ObservableObject {
                 } else if let i = lists.firstIndex(where: { $0.id == list.id }) {
                     lists[i].enabled = false
                     saveLists()
-                    status = "“\(list.name)” was turned off because an older version of Hush converted it incorrectly. Please import it again."
+                    status = "“\(list.name)” was turned off because an older version of Ufolio converted it incorrectly. Please import it again."
                     statusIsError = true
                 }
                 store.removeContentRuleList(forIdentifier: list.identifier) { _ in }
@@ -120,7 +120,7 @@ final class ContentBlocker: ObservableObject {
             guard let json = source() else { return }
             self?.store.compileContentRuleList(forIdentifier: identifier, encodedContentRuleList: json) { list, error in
                 if let list { self?.install(list, as: identifier) }
-                if let error { NSLog("Hush: couldn't compile \(identifier): \(error)") }
+                if let error { NSLog("Ufolio: couldn't compile \(identifier): \(error)") }
             }
         }
     }
@@ -187,7 +187,7 @@ final class ContentBlocker: ObservableObject {
             return
         }
         store.compileContentRuleList(forIdentifier: id, encodedContentRuleList: json) { [weak self] list, error in
-            if let error { NSLog("Hush: Element Zapper rules failed: \(error)") }
+            if let error { NSLog("Ufolio: Element Zapper rules failed: \(error)") }
             if let list { self?.install(list, as: id) }
         }
     }
@@ -299,10 +299,10 @@ final class ContentBlocker: ObservableObject {
                 request.timeoutInterval = 60
                 let (data, response) = try await URLSession.shared.data(for: request)
                 guard data.count < 60_000_000 else {
-                    throw NSError(domain: "Hush", code: 413, userInfo: [NSLocalizedDescriptionKey: "That list is too large."])
+                    throw NSError(domain: "Ufolio", code: 413, userInfo: [NSLocalizedDescriptionKey: "That list is too large."])
                 }
                 if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                    throw NSError(domain: "Hush", code: http.statusCode, userInfo: [
+                    throw NSError(domain: "Ufolio", code: http.statusCode, userInfo: [
                         NSLocalizedDescriptionKey: "The server answered with error \(http.statusCode).",
                     ])
                 }
@@ -409,7 +409,7 @@ final class ContentBlocker: ObservableObject {
                     if let list {
                         continuation.resume(returning: list)
                     } else {
-                        continuation.resume(throwing: error ?? NSError(domain: "Hush", code: 1, userInfo: [
+                        continuation.resume(throwing: error ?? NSError(domain: "Ufolio", code: 1, userInfo: [
                             NSLocalizedDescriptionKey: "WebKit couldn't use this list.",
                         ]))
                     }

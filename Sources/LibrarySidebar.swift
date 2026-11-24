@@ -282,7 +282,7 @@ private struct HistoryList: View {
         VStack(spacing: 0) {
             let groups = days
             if model.isPrivate {
-                Label("Pages you visit in this Private window aren’t added to history.", systemImage: "eyeglasses")
+                Label("Pages you visit in this Stealth window aren’t added to history.", systemImage: "eyeglasses")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .padding(.horizontal, 14).padding(.bottom, 6)
             }

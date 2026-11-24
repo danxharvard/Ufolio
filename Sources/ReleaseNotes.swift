@@ -130,9 +130,9 @@ struct WhatsNewView: View {
         VStack(spacing: 0) {
             VStack(spacing: 12) {
                 AnimatedHushLogo(size: 72)
-                Text("What’s new in Hush \(notes.version)")
+                Text("What’s new in Ufolio \(notes.version)")
                     .font(.system(size: 24, weight: .semibold, design: .rounded))
-                Text("Hush just updated. Here’s what changed.")
+                Text("Ufolio just updated. Here’s what changed.")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
             }

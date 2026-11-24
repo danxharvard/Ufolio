@@ -14,7 +14,7 @@ struct HushApp: App {
 
     var body: some Scene {
         // ONE WINDOW: Hush has a single browser window with unlimited tabs.
-        Window("Hush Browser", id: "browser") {
+        Window("Ufolio Browser", id: "browser") {
             BrowserWindow()
                 .accentColor(AccentChoice(rawValue: accent)?.color)
                 .transaction { if reduceMotion { $0.animation = nil } }
@@ -26,7 +26,7 @@ struct HushApp: App {
         .commands { HushCommands() }
 
         // Private Browsing windows (⇧⌘N): as many as you like, each forgetting everything when closed.
-        WindowGroup("Private Browsing", id: "private") {
+        WindowGroup("Stealth Mode", id: "private") {
             BrowserWindow(isPrivate: true)
                 .accentColor(Color(red: 0.70, green: 0.60, blue: 1.0))
                 .transaction { if reduceMotion { $0.animation = nil } }
@@ -106,7 +106,7 @@ struct HushCommands: Commands {
     var body: some Commands {
         // SwiftUI refuses to quit while one of its sheets is open, so Quit closes them first.
         CommandGroup(replacing: .appTermination) {
-            Button("Quit Hush Browser") { QuitHelper.quit() }
+            Button("Quit Ufolio Browser") { QuitHelper.quit() }
                 .keyboardShortcut("q")
         }
 
@@ -128,7 +128,7 @@ struct HushCommands: Commands {
                 browser?.newTab(focus: true)
             }
             .keyboardShortcut(Shortcuts.get(.newTab))
-            Button("New Private Window") { openWindow(id: "private") }
+            Button("New Stealth Window") { openWindow(id: "private") }
                 .keyboardShortcut(Shortcuts.get(.privateWindow))
             Button("Open Location…") { browser?.focusAddressBar() }
                 .keyboardShortcut(Shortcuts.get(.openLocation))
@@ -223,10 +223,10 @@ struct HushCommands: Commands {
                 if let model = browser, let tab = model.selectedTab { model.togglePin(tab) }
             }
             Divider()
-            Button("Next Space") { browser?.switchSpace(by: 1) }
+            Button("Next Orbit") { browser?.switchSpace(by: 1) }
                 .keyboardShortcut(Shortcuts.get(.nextSpace))
                 .disabled(browser?.isPrivate != false)
-            Button("Previous Space") { browser?.switchSpace(by: -1) }
+            Button("Previous Orbit") { browser?.switchSpace(by: -1) }
                 .keyboardShortcut(Shortcuts.get(.previousSpace))
                 .disabled(browser?.isPrivate != false)
             ForEach(Array(spaces.spaces.prefix(9).enumerated()), id: \.element.id) { index, space in
@@ -291,7 +291,7 @@ enum WindowOpener {
         }
         // SwiftUI lists the single window in the Window menu; choosing it reopens that window.
         let items = NSApp.mainMenu?.items.flatMap { $0.submenu?.items ?? [] } ?? []
-        if let item = items.first(where: { $0.title == "Hush Browser" && $0.action != nil }), let menu = item.menu {
+        if let item = items.first(where: { $0.title == "Ufolio Browser" && $0.action != nil }), let menu = item.menu {
             menu.performActionForItem(at: menu.index(of: item))
         }
         NSApp.activate(ignoringOtherApps: true)

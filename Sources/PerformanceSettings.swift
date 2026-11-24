@@ -17,7 +17,7 @@ struct PerformanceSettings: View {
     var body: some View {
         Form {
             Section {
-                SettingsHeader(tab: .performance, subtitle: "Choose how Hush balances speed, battery life and energy use, and see how much memory your tabs use.")
+                SettingsHeader(tab: .performance, subtitle: "Choose how Ufolio balances speed, battery life and energy use, and see how much memory your tabs use.")
             }
 
             Section {
@@ -74,7 +74,7 @@ struct PerformanceSettings: View {
                     }
                 }
                 SettingsSwitch(title: "Memory Saver",
-                               detail: "Keeps Hush under its memory limit by putting the tabs you used least recently to sleep, and doesn’t keep old pages in memory just to make Back instant.",
+                               detail: "Keeps Ufolio under its memory limit by putting the tabs you used least recently to sleep, and doesn’t keep old pages in memory just to make Back instant.",
                                symbol: "memorychip", colors: PowerMode.eco.colors, isOn: $memorySaver)
                 if memorySaver {
                     LabeledContent("Memory limit") {
@@ -93,7 +93,7 @@ struct PerformanceSettings: View {
                     Text("After 1 hour").tag(60.0)
                 }.labelsHidden().fixedSize() }
                 SettingsSwitch(title: "Free up memory automatically",
-                               detail: "When your Mac runs low on memory, Hush puts background tabs to sleep straight away.",
+                               detail: "When your Mac runs low on memory, Ufolio puts background tabs to sleep straight away.",
                                symbol: "memorychip.fill", colors: PowerMode.balanced.colors,
                                isOn: $freeMemory)
             } header: { SectionTitle("Memory") } footer: {
@@ -106,7 +106,7 @@ struct PerformanceSettings: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("About \(PerformanceCenter.format(center.dataSavedThisMonth)) of downloads avoided this month")
                             .font(.system(size: 13, weight: .medium))
-                        Text("Every ad and tracker Hush Guard blocks is data your Mac, your network and distant data centres never had to move or power.")
+                        Text("Every ad and tracker Force Field blocks is data your Mac, your network and distant data centres never had to move or power.")
                             .font(.system(size: 11)).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -125,7 +125,7 @@ struct PerformanceSettings: View {
     }
 
     private var usageLine: String {
-        var line = "used by Hush and \(usage.tabCount) \(usage.tabCount == 1 ? "tab" : "tabs")"
+        var line = "used by Ufolio and \(usage.tabCount) \(usage.tabCount == 1 ? "tab" : "tabs")"
         if usage.asleepCount > 0 { line += ", \(usage.asleepCount) asleep" }
         return line
     }
@@ -147,8 +147,8 @@ struct PerformanceSettings: View {
         switch center.effectiveMode {
         case .performance:
             return hasFastDisplay
-                ? "Pages scroll and animate at up to 120 Hz on your ProMotion display, and Hush looks up links before you click them. Applies to tabs you open from now on."
-                : "Hush looks up links before you click them so pages open sooner. On a ProMotion display, pages also scroll at up to 120 Hz. Applies to tabs you open from now on."
+                ? "Pages scroll and animate at up to 120 Hz on your ProMotion display, and Ufolio looks up links before you click them. Applies to tabs you open from now on."
+                : "Ufolio looks up links before you click them so pages open sooner. On a ProMotion display, pages also scroll at up to 120 Hz. Applies to tabs you open from now on."
         case .batterySaver:
             return "Background tabs slow down and sleep sooner, 3D graphics use the energy-saving chip where your Mac has one, and the start page stops animating. Applies to tabs you open from now on."
         case .eco:

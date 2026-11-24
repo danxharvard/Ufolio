@@ -121,7 +121,7 @@ final class PageTranslator: ObservableObject {
             }
             tab.setTranslation(.translated, language: tab.pageLanguage)
         } catch {
-            tab.setTranslation(.failed("Hush couldn’t translate this page."), language: tab.pageLanguage)
+            tab.setTranslation(.failed("Ufolio couldn’t translate this page."), language: tab.pageLanguage)
         }
     }
 

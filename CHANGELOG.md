@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.40.0
+
+**Hush is now Ufolio Browser 🛸**
+- A new name and a new icon: a flying saucer with little green men aboard.
+- Hush Guard is now **Force Field**, Spaces are now **Orbits**, and private windows are now
+  **Stealth Mode**.
+- Nothing else changes: your settings, bookmarks, history, passwords and website sign-ins all
+  come along, and Ufolio keeps updating itself as before. If you installed it before the rename,
+  it may still be called Hush Browser in your Applications folder; rename it in Finder if you like.
+
 ## 0.39.1
 
 - Hush now looks for updates, help and downloads at the project's new home on GitHub

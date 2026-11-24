@@ -22,7 +22,7 @@ enum PowerMode: String, CaseIterable, Identifiable {
         switch self {
         case .automatic: return "Balanced when plugged in, Battery Saver on battery."
         case .performance: return "Smoothest scrolling and the quickest page loads."
-        case .balanced: return "Fast and efficient. Hush’s everyday setting."
+        case .balanced: return "Fast and efficient. Ufolio’s everyday setting."
         case .batterySaver: return "Longer battery life and a cooler, quieter Mac."
         case .eco: return "Uses the least energy and data, for a smaller carbon footprint."
         }

@@ -56,7 +56,7 @@ struct NewsSection: View {
             }
             HStack(spacing: 6) {
                 Image(systemName: "hand.raised.fill")
-                Text("Stories come straight from each publisher’s own feed, fetched privately by Hush. No tracking, no account, no news service in between.")
+                Text("Stories come straight from each publisher’s own feed, fetched privately by Ufolio. No tracking, no account, no news service in between.")
             }
             .font(.system(size: 11))
             .foregroundStyle(.tertiary)
@@ -531,8 +531,8 @@ private struct NewsIntro: View {
                         colors: [Color(red: 0.62, green: 0.49, blue: 1.0), Color(red: 0.38, green: 0.26, blue: 0.86)], motion: .sparkle)
                 .frame(width: 180, height: 130)
             VStack(alignment: .leading, spacing: 8) {
-                Text("Hush News").font(.system(size: 22, weight: .bold, design: .serif))
-                Text("Headlines from the BBC, the Guardian, The Verge, NASA and more, right here on your start page. Fetched privately by Hush, straight from each publisher: no tracking and no account.")
+                Text("Ufolio News").font(.system(size: 22, weight: .bold, design: .serif))
+                Text("Headlines from the BBC, the Guardian, The Verge, NASA and more, right here on your start page. Fetched privately by Ufolio, straight from each publisher: no tracking and no account.")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

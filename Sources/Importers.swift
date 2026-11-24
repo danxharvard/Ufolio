@@ -87,7 +87,7 @@ enum PasswordImporter {
         func column(_ names: [String]) -> Int? { header.firstIndex { names.contains($0) } }
         guard let urlColumn = column(["url", "website", "login_uri", "web site"]),
               let passwordColumn = column(["password", "login_password"]) else {
-            throw NSError(domain: "Hush", code: 1, userInfo: [NSLocalizedDescriptionKey: "That file doesn’t look like a password export (it needs url and password columns)."])
+            throw NSError(domain: "Ufolio", code: 1, userInfo: [NSLocalizedDescriptionKey: "That file doesn’t look like a password export (it needs url and password columns)."])
         }
         let userColumn = column(["username", "user name", "login", "login_username", "email"])
         var result = Result()

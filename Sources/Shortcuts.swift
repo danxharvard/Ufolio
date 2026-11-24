@@ -18,7 +18,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .newTab: return "New Tab"
-        case .privateWindow: return "New Private Window"
+        case .privateWindow: return "New Stealth Window"
         case .openLocation: return "Open Location"
         case .closeTab: return "Close Tab"
         case .closeWindow: return "Close Window"
@@ -47,8 +47,8 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .history: return "Show All History"
         case .sidebar: return "Show Bookmarks & History Sidebar"
         case .commandPalette: return "Command Palette"
-        case .nextSpace: return "Next Space"
-        case .previousSpace: return "Previous Space"
+        case .nextSpace: return "Next Orbit"
+        case .previousSpace: return "Previous Orbit"
         }
     }
 
@@ -61,7 +61,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .zoomIn, .zoomOut, .actualSize: return "Zoom"
         case .splitView, .reader, .pictureInPicture, .translate, .muteTab: return "Views and media"
         case .bookmark, .bookmarksBar, .history, .sidebar: return "Bookmarks and history"
-        case .commandPalette, .nextSpace, .previousSpace: return "Command Palette and Spaces"
+        case .commandPalette, .nextSpace, .previousSpace: return "Command Palette and Orbits"
         }
     }
 
@@ -193,7 +193,7 @@ enum Shortcuts {
     /// Which other action already uses this combination (Hush's own, or one macOS reserves).
     static func conflict(for combo: KeyCombo, except action: ShortcutAction) -> String? {
         if let other = ShortcutAction.allCases.first(where: { $0 != action && self.combo($0) == combo }) { return other.title }
-        let reserved: [(KeyCombo, String)] = [(KeyCombo("q"), "Quit"), (KeyCombo(","), "Settings"), (KeyCombo("h"), "Hide Hush"),
+        let reserved: [(KeyCombo, String)] = [(KeyCombo("q"), "Quit"), (KeyCombo(","), "Settings"), (KeyCombo("h"), "Hide Ufolio"),
                                               (KeyCombo("m"), "Minimise"), (KeyCombo("c"), "Copy"), (KeyCombo("v"), "Paste"),
                                               (KeyCombo("x"), "Cut"), (KeyCombo("a"), "Select All"), (KeyCombo("z"), "Undo")]
         return reserved.first { $0.0 == combo }?.1

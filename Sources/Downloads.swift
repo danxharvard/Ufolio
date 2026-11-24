@@ -193,7 +193,7 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
         DialogHost.show(HushDialog(
             art: .symbol("square.and.arrow.down.on.square.fill"), theme: .caution, motion: .rise,
             title: "Allow \(site) to download several files?",
-            message: "This site is trying to download lots of files one after another. Hush stopped the rest until you say so.",
+            message: "This site is trying to download lots of files one after another. Ufolio stopped the rest until you say so.",
             choices: [.init(title: "Don’t Allow", role: .cancel), .init(title: "Allow", role: .primary)],
             completion: { [weak self] choice, _ in
                 self?.askingSites.remove(site)

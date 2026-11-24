@@ -179,8 +179,8 @@ final class LocalWeather: ObservableObject {
         case notFound, offline
         var message: String {
             switch self {
-            case .notFound: return "Hush couldn’t find that place. Try a town name or a full postcode."
-            case .offline: return "Hush couldn’t look that up. Check your internet connection and try again."
+            case .notFound: return "Ufolio couldn’t find that place. Try a town name or a full postcode."
+            case .offline: return "Ufolio couldn’t look that up. Check your internet connection and try again."
             }
         }
     }

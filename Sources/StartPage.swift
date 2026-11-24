@@ -89,7 +89,7 @@ struct StartPage: View {
         VStack(spacing: 8) {
             AnimatedHushLogo(size: 54)
                 .padding(.bottom, 4)
-            Text("Hush")
+            Text("Ufolio")
                 .font(.system(size: 50, weight: .light, design: .rounded))
                 .tracking(1.5)
                 .foregroundStyle(LinearGradient(colors: [.primary, .primary.opacity(0.7)], startPoint: .top, endPoint: .bottom))
@@ -390,7 +390,7 @@ private struct PrivacyReportSection: View {
             HStack(alignment: .top, spacing: 24) {
                 VStack(alignment: .leading, spacing: 18) {
                     HushLogoTile(size: 52)
-                    Text("Hush stops trackers from following you around the web.")
+                    Text("Ufolio stops trackers from following you around the web.")
                         .font(.system(size: 17))
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)

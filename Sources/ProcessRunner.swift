@@ -35,7 +35,7 @@ enum FolderSafety {
         var total = 0, count = 0
         for case let url as URL in walker {
             let values = try url.resourceValues(forKeys: Set(keys))
-            if values.isSymbolicLink == true { throw ExtensionError("This extension contains links to files outside itself, so Hush didn’t add it.") }
+            if values.isSymbolicLink == true { throw ExtensionError("This extension contains links to files outside itself, so Ufolio didn’t add it.") }
             total += values.fileSize ?? 0
             count += 1
             if total > maxBytes || count > maxFiles { throw ExtensionError("This extension is too large to add.") }

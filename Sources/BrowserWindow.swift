@@ -136,7 +136,7 @@ struct BrowserWindow: View {
         }
         .environment(\.isPrivateWindow, model.isPrivate)
         .focusedSceneObject(model)
-        .navigationTitle(model.selectedTab?.displayTitle ?? "Hush")
+        .navigationTitle(model.selectedTab?.displayTitle ?? "Ufolio")
         .frame(minWidth: 640, minHeight: 420)
     }
 
@@ -172,7 +172,7 @@ struct BrowserWindow: View {
             })
 
             TranslationHost()
-            // "Add to Hush" on Chrome Web Store pages (takes no space anywhere else).
+            // "Add to Ufolio" on Chrome Web Store pages (takes no space anywhere else).
             SelectedTab(model: model) { tab in
                 WebStoreBar(tab: tab).background(VisualEffect(material: .titlebar))
             }
@@ -314,7 +314,7 @@ private struct MorePanel: View {
         VStack(spacing: 0) {
             group {
                 row("plus.square", "New Tab", .newTab) { model.newTab(focus: true) }
-                row("eyeglasses", "New Private Window", .privateWindow) { openWindow(id: "private") }
+                row("eyeglasses", "New Stealth Window", .privateWindow) { openWindow(id: "private") }
             }
             divider
             group {
@@ -619,7 +619,7 @@ struct ShieldsButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(shieldsUp ? "Hush Guard is on" : "Hush Guard is off for this site")
+        .help(shieldsUp ? "Force Field is on" : "Force Field is off for this site")
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.12), value: hovering)
         // A tiny "hush" pulse when something is blocked (at most once a second).
@@ -674,8 +674,8 @@ struct ShieldsPanel: View {
                                                     startPoint: .top, endPoint: .bottom))
                     .monospacedDigit()
                     .contentTransitionIfAvailable()
-                Text(shieldsUp ? (tab.blockedOnPage == 1 ? "thing hushed on this page" : "things hushed on this page")
-                               : "Hush Guard is off for this site")
+                Text(shieldsUp ? (tab.blockedOnPage == 1 ? "thing blocked on this page" : "things blocked on this page")
+                               : "Force Field is off for this site")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
@@ -700,7 +700,7 @@ struct ShieldsPanel: View {
             .padding(.horizontal, 14)
 
             HStack {
-                Label("\(stats.total.formatted()) hushed in total", systemImage: "shield.lefthalf.filled")
+                Label("\(stats.total.formatted()) blocked in total", systemImage: "shield.lefthalf.filled")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -753,7 +753,7 @@ struct ShieldsPanel: View {
                     }))
                 .toggleStyle(.switch)
                 .labelsHidden()
-                .help("Turn Hush Guard off if this site doesn’t work properly")
+                .help("Turn Force Field off if this site doesn’t work properly")
             }
         }
         .padding(10)
@@ -1202,7 +1202,7 @@ private struct CrashedPage: View {
                 }
                 Text("This page stopped working")
                     .font(.system(size: 20, weight: .semibold, design: .rounded))
-                Text("Something on the page made it crash. The rest of Hush is fine, and your other tabs weren’t affected.")
+                Text("Something on the page made it crash. The rest of Ufolio is fine, and your other tabs weren’t affected.")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

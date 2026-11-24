@@ -130,7 +130,7 @@ final class PaletteModel: ObservableObject {
                 let s = max(PaletteSearch.score(q, space.name), PaletteSearch.score(q, "space " + space.name))
                 guard s > 0, !q.isEmpty else { continue }
                 scored.append((s + 10, PaletteItem(id: "space-\(space.id)", kind: .space, title: "Switch to \(space.name)",
-                                                   subtitle: "Space", symbol: space.symbol,
+                                                   subtitle: "Orbit", symbol: space.symbol,
                                                    tint: SpacePalette.color(space.color)) { [weak browser] in
                     browser?.switchSpace(to: space.id)
                 }))
@@ -138,7 +138,7 @@ final class PaletteModel: ObservableObject {
                     let m = PaletteSearch.score(q, "move tab to " + space.name)
                     if m > 0 {
                         scored.append((m, PaletteItem(id: "move-\(space.id)", kind: .space, title: "Move Tab to \(space.name)",
-                                                      subtitle: "Space", symbol: "arrow.right.square",
+                                                      subtitle: "Orbit", symbol: "arrow.right.square",
                                                       tint: SpacePalette.color(space.color)) { [weak browser, weak tab] in
                             if let browser, let tab { browser.move(tab, toSpace: space.id) }
                         }))
@@ -206,7 +206,7 @@ final class PaletteModel: ObservableObject {
     private static let commands: [PaletteCommand] = {
         var list: [PaletteCommand] = [
             .init(title: "New Tab", symbol: "plus.square", shortcut: .newTab) { m, _ in m.newTab(focus: true) },
-            .init(title: "New Private Window", symbol: "eyeglasses", keywords: "incognito", shortcut: .privateWindow) { _, open in open(id: "private") },
+            .init(title: "New Stealth Window", symbol: "eyeglasses", keywords: "incognito", shortcut: .privateWindow) { _, open in open(id: "private") },
             .init(title: "Reopen Closed Tab", symbol: "arrow.uturn.backward", keywords: "undo restore", shortcut: .reopenTab) { m, _ in m.reopenClosedTab() },
             .init(title: "Close Tab", symbol: "xmark.square", shortcut: .closeTab) { m, _ in m.closeSelectedTab() },
             .init(title: "Close Other Tabs", symbol: "xmark.square.fill", available: { $0.visibleTabs.count > 1 }) { m, _ in
@@ -282,11 +282,11 @@ final class PaletteModel: ObservableObject {
                 _ = BookmarkStore.shared.importWithPanel()
             },
             .init(title: "Export Bookmarks", symbol: "square.and.arrow.up", keywords: "html backup") { _, _ in BookmarkStore.shared.exportWithPanel() },
-            .init(title: "Next Space", symbol: "arrow.right.circle", shortcut: .nextSpace,
+            .init(title: "Next Orbit", symbol: "arrow.right.circle", shortcut: .nextSpace,
                   available: { !$0.isPrivate && SpaceStore.shared.spaces.count > 1 }) { m, _ in m.switchSpace(by: 1) },
-            .init(title: "Previous Space", symbol: "arrow.left.circle", shortcut: .previousSpace,
+            .init(title: "Previous Orbit", symbol: "arrow.left.circle", shortcut: .previousSpace,
                   available: { !$0.isPrivate && SpaceStore.shared.spaces.count > 1 }) { m, _ in m.switchSpace(by: -1) },
-            .init(title: "New Space", symbol: "square.stack.3d.up", keywords: "workspace profile", available: { !$0.isPrivate }) { m, _ in
+            .init(title: "New Orbit", symbol: "square.stack.3d.up", keywords: "workspace profile", available: { !$0.isPrivate }) { m, _ in
                 let store = SpaceStore.shared
                 if let space = store.addSpace(name: "", symbol: SpacePalette.symbols[store.spaces.count % SpacePalette.symbols.count],
                                               color: store.spaces.count % SpacePalette.colors.count) {
@@ -299,7 +299,7 @@ final class PaletteModel: ObservableObject {
             },
             .init(title: "Open Settings", symbol: "gearshape", keywords: "preferences options") { _, _ in SettingsOpener.open() },
         ]
-        // Each Settings section, e.g. "Settings: Hush Guard".
+        // Each Settings section, e.g. "Settings: Force Field".
         for tab in SettingsTab.allCases {
             list.append(.init(title: "Settings: \(tab.title)", symbol: tab.symbol == "hush" ? "shield.lefthalf.filled" : tab.symbol,
                               keywords: tab.keywords) { _, _ in SettingsOpener.open(tab: tab) })

@@ -88,7 +88,7 @@ final class SpaceStore: ObservableObject {
     @discardableResult
     func addSpace(name: String, symbol: String, color: Int, profile: UUID? = nil) -> BrowserSpace? {
         guard spaces.count < Self.maxSpaces else { return nil }
-        let space = BrowserSpace(name: Self.clean(name, fallback: "Space \(spaces.count + 1)"), symbol: symbol, color: color, profile: profile)
+        let space = BrowserSpace(name: Self.clean(name, fallback: "Orbit \(spaces.count + 1)"), symbol: symbol, color: color, profile: profile)
         spaces.append(space)
         save()
         return space
@@ -183,13 +183,13 @@ struct SpaceButton: View {
                 }
             }
             Divider()
-            Button("New Space…") {
+            Button("New Orbit…") {
                 editing = BrowserSpace(name: "", symbol: SpacePalette.symbols[store.spaces.count % SpacePalette.symbols.count],
                                        color: store.spaces.count % SpacePalette.colors.count)
             }
             .disabled(store.spaces.count >= SpaceStore.maxSpaces)
             Button("Edit “\(space.name)”…") { editing = space }
-            Button("Spaces & Profiles Settings…") { SettingsOpener.open(tab: .spaces) }
+            Button("Orbits & Profiles Settings…") { SettingsOpener.open(tab: .spaces) }
         } label: {
             ZStack {
                 Circle().fill(SpacePalette.color(space.color).gradient)
@@ -214,7 +214,7 @@ struct SpaceButton: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .onHover { hovering = $0 }
-        .help("\(space.name) — click to switch Space (⌃1–9)")
+        .help("\(space.name) — click to switch Orbit (⌃1–9)")
         .popover(item: $editing, arrowEdge: .bottom) { space in
             SpaceEditor(space: space, isNew: !store.spaces.contains { $0.id == space.id }) { result in
                 if let result {
@@ -248,7 +248,7 @@ struct SpaceEditor: View {
                     Image(systemName: space.symbol).font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
                 }
                 .frame(width: 34, height: 34)
-                TextField("Space name", text: $space.name)
+                TextField("Orbit name", text: $space.name)
                     .textFieldStyle(.roundedBorder)
                     .focused($nameFocused)
                     .onSubmit { done(space) }
@@ -293,7 +293,7 @@ struct SpaceEditor: View {
             HStack {
                 Spacer()
                 Button("Cancel") { done(nil) }.keyboardShortcut(.cancelAction)
-                Button(isNew ? "Create Space" : "Save") { done(space) }.keyboardShortcut(.defaultAction)
+                Button(isNew ? "Create Orbit" : "Save") { done(space) }.keyboardShortcut(.defaultAction)
             }
         }
         .padding(16)
@@ -321,7 +321,7 @@ struct SpacesSettings: View {
     var body: some View {
         Form {
             Section {
-                SettingsHeader(tab: .spaces, subtitle: "Spaces keep sets of tabs apart, such as Work and Personal. Give a Space its own profile to keep its cookies and sign-ins separate too.")
+                SettingsHeader(tab: .spaces, subtitle: "Orbits keep sets of tabs apart, such as Work and Personal. Give an Orbit its own profile to keep its cookies and sign-ins separate too.")
             }
             Section {
                 ForEach(store.spaces) { space in
@@ -350,7 +350,7 @@ struct SpacesSettings: View {
                         Button(role: .destructive) { store.removeSpace(space.id) } label: { Image(systemName: "trash") }
                             .buttonStyle(.borderless)
                             .disabled(store.spaces.count <= 1)
-                            .help(store.spaces.count <= 1 ? "You need at least one Space" : "Remove Space (its tabs move to the first Space)")
+                            .help(store.spaces.count <= 1 ? "You need at least one Orbit" : "Remove Orbit (its tabs move to the first Orbit)")
                     }
                 }
                 .onMove { store.moveSpace(fromOffsets: $0, toOffset: $1) }
@@ -358,19 +358,19 @@ struct SpacesSettings: View {
                     store.addSpace(name: "", symbol: SpacePalette.symbols[store.spaces.count % SpacePalette.symbols.count],
                                    color: store.spaces.count % SpacePalette.colors.count)
                 } label: {
-                    Label("Add Space", systemImage: "plus.circle.fill").foregroundStyle(Color.accentColor)
+                    Label("Add Orbit", systemImage: "plus.circle.fill").foregroundStyle(Color.accentColor)
                 }
                 .buttonStyle(.borderless)
                 .disabled(store.spaces.count >= SpaceStore.maxSpaces)
-            } header: { SectionTitle("Spaces") } footer: {
-                Footnote("Switch Spaces with the button left of your tabs, ⌃1 to ⌃9, or the Command Palette (⌘K). Drag to reorder.")
+            } header: { SectionTitle("Orbits") } footer: {
+                Footnote("Switch Orbits with the button left of your tabs, ⌃1 to ⌃9, or the Command Palette (⌘K). Drag to reorder.")
             }
             Section {
                 HStack {
                     Image(systemName: "person.crop.circle.fill").font(.system(size: 18)).foregroundStyle(.secondary)
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Default")
-                        Text("Used by Spaces without their own profile").font(.system(size: 11)).foregroundStyle(.secondary)
+                        Text("Used by Orbits without their own profile").font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                 }
                 ForEach(store.profiles) { profile in
@@ -386,7 +386,7 @@ struct SpacesSettings: View {
                         }
                         Spacer()
                         let users = store.spaces.filter { $0.profile == profile.id }.count
-                        Text(users == 0 ? "Not used" : users == 1 ? "1 Space" : "\(users) Spaces")
+                        Text(users == 0 ? "Not used" : users == 1 ? "1 Orbit" : "\(users) Orbits")
                             .font(.system(size: 11)).foregroundStyle(.secondary)
                         Button { renaming = profile } label: { Image(systemName: "pencil") }
                             .buttonStyle(.borderless).help("Rename")
@@ -417,7 +417,7 @@ struct SpacesSettings: View {
         DialogHost.settings.present(HushDialog(
             art: .symbol("person.crop.circle.badge.minus"), theme: .danger, motion: .drift,
             title: "Delete “\(profile.name)”?",
-            message: "Signs you out of every site in this profile and erases its website data. Spaces using it switch to the default profile.",
+            message: "Signs you out of every site in this profile and erases its website data. Orbits using it switch to the default profile.",
             choices: [.init(title: "Cancel", role: .cancel), .init(title: "Delete", role: .destructive)],
             completion: { choice, _ in if choice == 1 { store.removeProfile(profile.id) } }))
     }

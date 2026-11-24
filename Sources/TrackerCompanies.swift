@@ -1,6 +1,6 @@
 import Foundation
 
-/// Who's behind a tracker or ad server, for "What Hush Guard blocked" in the panel.
+/// Who's behind a tracker or ad server, for "What Force Field blocked" in the panel.
 enum TrackerCompanies {
     private static let owners: [String: String] = [
         "doubleclick.net": "Google", "googlesyndication.com": "Google", "googleadservices.com": "Google",

@@ -25,11 +25,11 @@ struct HushlistCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 if let list = blocker.hushlist {
                     Text("Hushlist is connected").font(.system(size: 13.5, weight: .semibold))
-                    Text("\(list.ruleCount.formatted()) domains blocked on top of Hush Guard. Updates itself every week.")
+                    Text("\(list.ruleCount.formatted()) domains blocked on top of Force Field. Updates itself every week.")
                         .font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 } else {
                     Text("Get maximum blocking with Hushlist").font(.system(size: 13.5, weight: .semibold))
-                    Text("Connect Hush to Hushlist, a free list of about 240,000 ad, tracker, phishing and malware domains. No sign-up.")
+                    Text("Connect Ufolio to Hushlist, a free list of about 240,000 ad, tracker, phishing and malware domains. No sign-up.")
                         .font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -102,26 +102,26 @@ struct HushlistSetup: View {
         switch step {
         case .intro:
             VStack(alignment: .leading, spacing: 12) {
-                point("hand.raised.slash.fill", "About 240,000 domains of ads, trackers, phishing and malware, blocked on top of Hush Guard.")
+                point("hand.raised.slash.fill", "About 240,000 domains of ads, trackers, phishing and malware, blocked on top of Force Field.")
                 point("checkmark.seal.fill", "Built not to break the sites you use.")
-                point("arrow.triangle.2.circlepath", "Free, no sign-up, and Hush keeps it up to date every week.")
+                point("arrow.triangle.2.circlepath", "Free, no sign-up, and Ufolio keeps it up to date every week.")
             }
         case .choose:
             VStack(spacing: 10) {
-                choice(.hush, "In Hush (recommended)", "Hush Guard uses Hushlist for every page. Nothing to install.")
-                choice(.wholeMac, "In Hush and every app on your Mac", "Also blocks in other apps and browsers, with Hushlist’s Mac installer.")
+                choice(.hush, "In Ufolio (recommended)", "Force Field uses Hushlist for every page. Nothing to install.")
+                choice(.wholeMac, "In Ufolio and every app on your Mac", "Also blocks in other apps and browsers, with Hushlist’s Mac installer.")
             }
         case .connecting:
             VStack(alignment: .leading, spacing: 10) {
                 ProgressView().controlSize(.small)
                 Text(blocker.status ?? "Downloading Hushlist…").font(.system(size: 12.5)).foregroundStyle(.secondary)
-                Text("Hush is turning about 240,000 domains into blocking rules. This only happens once and can take a minute.")
+                Text("Ufolio is turning about 240,000 domains into blocking rules. This only happens once and can take a minute.")
                     .font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         case .done:
             VStack(alignment: .leading, spacing: 12) {
                 if let list = blocker.hushlist {
-                    point("checkmark.circle.fill", "Hush Guard now blocks \(list.ruleCount.formatted()) more domains.")
+                    point("checkmark.circle.fill", "Force Field now blocks \(list.ruleCount.formatted()) more domains.")
                 } else {
                     point("exclamationmark.triangle.fill", blocker.status ?? "Hushlist couldn’t be downloaded. Check your connection and try again.")
                 }
@@ -231,8 +231,8 @@ final class HushlistLink: NSObject, WKScriptMessageHandler {
         guard blocker.hushlist == nil else { return }
         DialogHost.show(HushDialog(
             art: .symbol("shield.lefthalf.filled.badge.checkmark"), theme: .hush, motion: .orbit,
-            title: "Connect Hushlist to Hush Guard?",
-            message: "Hush Guard will also block Hushlist’s 240,000 ad, tracker, phishing and malware domains, and keep the list up to date.",
+            title: "Connect Hushlist to Force Field?",
+            message: "Force Field will also block Hushlist’s 240,000 ad, tracker, phishing and malware domains, and keep the list up to date.",
             choices: [.init(title: "Not Now", role: .cancel), .init(title: "Connect", role: .primary)],
             completion: { choice, _ in
                 guard choice == 1 else { return }

@@ -280,7 +280,7 @@ enum BrowserImporter {
         var errorDescription: String? {
             switch self {
             case .needsFullDiskAccess:
-                return "macOS protects Safari’s history. Give Hush Full Disk Access in System Settings › Privacy & Security, then try again."
+                return "macOS protects Safari’s history. Give Ufolio Full Disk Access in System Settings › Privacy & Security, then try again."
             case .unreadable:
                 return "That browser’s history couldn’t be read."
             }

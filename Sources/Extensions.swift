@@ -167,7 +167,7 @@ final class ExtensionStore: ObservableObject {
             await ExtensionManager.shared.load(record)
             report("Added “\(name)” from \(info.appName).", error: false)
         } catch {
-            report("Hush couldn’t load this Safari extension: \(error.localizedDescription)", error: true)
+            report("Ufolio couldn’t load this Safari extension: \(error.localizedDescription)", error: true)
         }
     }
 
@@ -218,7 +218,7 @@ final class ExtensionStore: ObservableObject {
             await ExtensionManager.shared.load(record)
             report("Added “\(name)”.", error: false)
         } catch {
-            report("Hush couldn’t load this extension: \(error.localizedDescription)", error: true)
+            report("Ufolio couldn’t load this extension: \(error.localizedDescription)", error: true)
         }
     }
 
@@ -236,7 +236,7 @@ final class ExtensionStore: ObservableObject {
         switch le32(4) {
         case 3: start = 12 + le32(8)
         case 2: start = 16 + le32(8) + le32(12)
-        default: throw ExtensionError("This extension uses a format Hush doesn’t recognise.")
+        default: throw ExtensionError("This extension uses a format Ufolio doesn’t recognise.")
         }
         guard start < bytes.count else { throw ExtensionError("The extension download was damaged.") }
         return data.subdata(in: start..<data.count)
@@ -253,12 +253,12 @@ final class ExtensionStore: ObservableObject {
         let names = listing.output.split(whereSeparator: \.isNewline)
         guard names.count < 50_000, !names.contains(where: { name in
             name.hasPrefix("/") || name.hasPrefix("~") || name.split(separator: "/").contains("..") || name.contains("\\")
-        }) else { throw ExtensionError("This extension’s files are packed in an unsafe way, so Hush didn’t add it.") }
+        }) else { throw ExtensionError("This extension’s files are packed in an unsafe way, so Ufolio didn’t add it.") }
         // Nor links: a link to somewhere else on your Mac, followed by a file "inside" it, would
         // write outside the folder too. Extensions never need them.
         let details = try await ProcessRunner.run("/usr/bin/zipinfo", [zipFile.path])
         guard details.succeeded, !details.output.split(whereSeparator: \.isNewline).contains(where: { $0.hasPrefix("l") }) else {
-            throw ExtensionError("This extension’s files are packed in an unsafe way, so Hush didn’t add it.")
+            throw ExtensionError("This extension’s files are packed in an unsafe way, so Ufolio didn’t add it.")
         }
         let unzip = try await ProcessRunner.run("/usr/bin/ditto", ["-x", "-k", zipFile.path, temp.path])
         guard unzip.succeeded else { throw ExtensionError("The extension couldn’t be unpacked.") }
@@ -403,7 +403,7 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
                 if let selected = model.selectedTab { controller.didActivateTab(selected) }
             }
         } catch {
-            NSLog("Hush: couldn't load extension \(record.name): \(error)")
+            NSLog("Ufolio: couldn't load extension \(record.name): \(error)")
         }
     }
 
@@ -443,7 +443,7 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
         return await withCheckedContinuation { continuation in
             DialogHost.active.present(HushDialog(
                 art: art, badge: "plus", theme: .hush, motion: .sparkle,
-                title: "Add “\(name)” to Hush?", message: message,
+                title: "Add “\(name)” to Ufolio?", message: message,
                 choices: [.init(title: "Cancel", role: .cancel), .init(title: "Add Extension", role: .primary)],
                 completion: { choice, _ in continuation.resume(returning: choice == 1) }))
         }
@@ -715,7 +715,7 @@ private struct AnchorReader: NSViewRepresentable {
     func updateNSView(_ view: NSView, context: Context) {}
 }
 
-// MARK: - "Add to Hush" on Chrome Web Store pages
+// MARK: - "Add to Ufolio" on Chrome Web Store pages
 
 /// A slim bar above Chrome Web Store extension pages with a one-click Add to Hush button
 /// (the store only shows its own button to Chrome itself).
@@ -746,7 +746,7 @@ struct WebStoreBar: View {
                     IconTile(symbol: "puzzlepiece.extension.fill",
                              colors: [Color(red: 1.0, green: 0.62, blue: 0.25), Color(red: 0.95, green: 0.42, blue: 0.18)], size: 30)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(installed ? "\(name) is in Hush" : "Add \(name) to Hush")
+                        Text(installed ? "\(name) is in Ufolio" : "Add \(name) to Ufolio")
                             .font(.system(size: 13, weight: .semibold))
                             .lineLimit(1)
                         Text(statusLine(installed: installed))
@@ -764,7 +764,7 @@ struct WebStoreBar: View {
                             .foregroundStyle(Color.green)
                         Button("Manage…") { SettingsOpener.open(tab: .extensions) }
                     } else {
-                        Button("Add to Hush") {
+                        Button("Add to Ufolio") {
                             adding = true
                             let link = tab.url?.absoluteString ?? id
                             Task { @MainActor in await store.install(fromWebStore: link) }
@@ -783,6 +783,6 @@ struct WebStoreBar: View {
     private func statusLine(installed: Bool) -> String {
         if adding, let status = store.status { return status }
         if installed { return "It works on tabs you open from now on." }
-        return "Hush can run most Chrome extensions. You’ll see what it can access first."
+        return "Ufolio can run most Chrome extensions. You’ll see what it can access first."
     }
 }

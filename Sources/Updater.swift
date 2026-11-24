@@ -101,7 +101,7 @@ final class Updater: ObservableObject {
             guard let sigAsset = assets.first(where: { ($0["name"] as? String) == "HushBrowser-\(version).zip.sig" }),
                   let sigLink = (sigAsset["browser_download_url"] as? String).flatMap(URL.init(string:)),
                   Self.isTrustedDownload(sigLink) else {
-                throw UpdateError("Version \(version) is out, but it isn’t signed, so Hush won’t install it.")
+                throw UpdateError("Version \(version) is out, but it isn’t signed, so Ufolio won’t install it.")
             }
             latest = (version, link, asset["digest"] as? String)
             signatureURL = sigLink
@@ -123,7 +123,7 @@ final class Updater: ObservableObject {
     func download() async {
         guard let latest else { return }
         guard canInstallInPlace else {
-            state = .failed("Move Hush into your Applications folder so it can update itself.")
+            state = .failed("Move Ufolio into your Applications folder so it can update itself.")
             return
         }
         state = .downloading(version: latest.version, progress: 0)
@@ -153,7 +153,7 @@ final class Updater: ObservableObject {
                 let data = try Data(contentsOf: zip, options: .mappedIfSafe)
                 return Updater.isSigned(data, signature: signature)
             }.value
-            guard genuine else { throw UpdateError("This update isn’t signed by Hush, so it wasn’t installed.") }
+            guard genuine else { throw UpdateError("This update isn’t signed by Ufolio, so it wasn’t installed.") }
 
             // GitHub publishes a SHA-256 for every release file; refuse anything that doesn't match.
             // (Hashed off the main thread, so the window never stalls.)
@@ -168,12 +168,12 @@ final class Updater: ObservableObject {
             let unpacked = workDir.appendingPathComponent("unpacked", isDirectory: true)
             try await Self.run("/usr/bin/ditto", ["-x", "-k", zip.path, unpacked.path])
             guard let appName = try FileManager.default.contentsOfDirectory(atPath: unpacked.path)
-                    .first(where: { $0.hasSuffix(".app") }) else { throw UpdateError("The download didn’t contain Hush.") }
+                    .first(where: { $0.hasSuffix(".app") }) else { throw UpdateError("The download didn’t contain Ufolio.") }
             let newApp = unpacked.appendingPathComponent(appName)
 
             let info = NSDictionary(contentsOf: newApp.appendingPathComponent("Contents/Info.plist"))
             guard info?["CFBundleIdentifier"] as? String == Bundle.main.bundleIdentifier else {
-                throw UpdateError("The download isn’t Hush Browser.")
+                throw UpdateError("The download isn’t Ufolio Browser.")
             }
             guard info?["CFBundleShortVersionString"] as? String == latest.version else {
                 throw UpdateError("The download is the wrong version.")
@@ -185,7 +185,7 @@ final class Updater: ObservableObject {
                                                     minorVersion: parts.count > 1 ? parts[1] : 0,
                                                     patchVersion: parts.count > 2 ? parts[2] : 0)
                 guard ProcessInfo.processInfo.isOperatingSystemAtLeast(needed) else {
-                    throw UpdateError("Hush \(latest.version) needs macOS \(minimum) or later. Update macOS in System Settings › General › Software Update to get it.")
+                    throw UpdateError("Ufolio \(latest.version) needs macOS \(minimum) or later. Update macOS in System Settings › General › Software Update to get it.")
                 }
             }
             try await Self.run("/usr/bin/codesign", ["--verify", "--deep", "--strict", newApp.path])
@@ -248,7 +248,7 @@ final class Updater: ObservableObject {
         let source = """
         #!/bin/bash
         PID="$1"; NEW="$2"; TARGET="$3"; BACKUP="$4"; RELAUNCH="$5"; WORK="$6"
-        exec >> "$HOME/Library/Logs/Hush Browser Update.log" 2>&1
+        exec >> "$HOME/Library/Logs/Ufolio Browser Update.log" 2>&1
         echo "$(date): installing $NEW over $TARGET"
         for i in $(seq 1 300); do kill -0 "$PID" 2>/dev/null || break; sleep 0.2; done
         if mv "$TARGET" "$BACKUP" && mv "$NEW" "$TARGET"; then
@@ -268,7 +268,7 @@ final class Updater: ObservableObject {
                                  pending.newApp.path, target, backup, relaunch ? "1" : "0", pending.workDir.path]
             try process.run()
         } catch {
-            NSLog("Hush: couldn't start the update: \(error)")
+            NSLog("Ufolio: couldn't start the update: \(error)")
         }
     }
 

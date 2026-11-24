@@ -375,7 +375,7 @@ enum HushDialogs {
         host.present(HushDialog(
             art: .symbol("clock.arrow.circlepath"), badge: "trash.fill", theme: .danger, motion: .drift,
             title: "Clear all history?",
-            message: "This removes every page Hush remembers, including suggestions, recently closed tabs and the privacy report. It can’t be undone.",
+            message: "This removes every page Ufolio remembers, including suggestions, recently closed tabs and the privacy report. It can’t be undone.",
             choices: [.init(title: "Cancel", role: .cancel), .init(title: "Clear History", role: .destructive)],
             completion: { choice, _ in
                 guard choice == 1 else { return }

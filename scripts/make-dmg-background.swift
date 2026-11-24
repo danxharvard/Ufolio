@@ -50,8 +50,8 @@ func render(scale: CGFloat) -> NSBitmapImageRep {
         attributed.draw(in: NSRect(x: 0, y: height - y - h / 2, width: width, height: h))
     }
 
-    text("Hush Browser", size: 26, weight: .semibold, color: NSColor(red: 0.13, green: 0.11, blue: 0.24, alpha: 1), y: 58)
-    text("Drag Hush into your Applications folder to install it.", size: 13.5, weight: .regular,
+    text("Ufolio Browser", size: 26, weight: .semibold, color: NSColor(red: 0.13, green: 0.11, blue: 0.24, alpha: 1), y: 58)
+    text("Drag Ufolio into your Applications folder to install it.", size: 13.5, weight: .regular,
          color: NSColor(red: 0.36, green: 0.34, blue: 0.46, alpha: 1), y: 90)
 
     // The arrow, from Hush towards Applications, with a gentle arc.

@@ -38,7 +38,7 @@ struct HushMark: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .aspectRatio(1, contentMode: .fit)
-        .accessibilityLabel("Hush")
+        .accessibilityLabel("Ufolio")
     }
 }
 

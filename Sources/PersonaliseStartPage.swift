@@ -104,7 +104,7 @@ struct PersonaliseCard: View {
                 }
                 Text("Personalise your start page")
                     .font(.system(size: 22, weight: .semibold, design: .rounded))
-                Text("Tell Hush your town or postcode and your start page will show the local weather. More personal touches are on the way.")
+                Text("Tell Ufolio your town or postcode and your start page will show the local weather. More personal touches are on the way.")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -160,7 +160,7 @@ struct PersonaliseCard: View {
 
             HStack(spacing: 6) {
                 Image(systemName: "hand.raised.fill")
-                Text("Hush never uses your Mac’s location. What you type goes to Apple to find the place, and only its rough position goes to Open-Meteo for the weather.")
+                Text("Ufolio never uses your Mac’s location. What you type goes to Apple to find the place, and only its rough position goes to Open-Meteo for the weather.")
                     .fixedSize(horizontal: false, vertical: true)
             }
             .font(.system(size: 11))

@@ -192,7 +192,7 @@ final class BookmarkStore: ObservableObject {
     @MainActor func exportWithPanel() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.html]
-        panel.nameFieldStringValue = "Hush Bookmarks.html"
+        panel.nameFieldStringValue = "Ufolio Bookmarks.html"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         try? exportHTML().write(to: url, atomically: true, encoding: .utf8)
     }
