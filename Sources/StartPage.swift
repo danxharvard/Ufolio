@@ -3,7 +3,7 @@ import SwiftUI
 /// What a new tab shows: a fast, frosted page with recently closed tabs,
 /// your favourites, suggestions from your history and a privacy report.
 struct StartPage: View {
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel   // only used to open pages; tab changes needn't redraw this
     @ObservedObject private var bookmarks = BookmarkStore.shared
     @ObservedObject private var history = HistoryStore.shared
     @ObservedObject private var closed = RecentlyClosed.shared
@@ -18,6 +18,10 @@ struct StartPage: View {
     @AppStorage(Prefs.startShowAdult) private var showAdult = false
     @State private var personalising = false
     @State private var customisingNews = false
+    /// The measured height of each section (and the header), so the page can tell which
+    /// sections fit without building several copies of itself to find out.
+    @State private var partHeights: [Part: CGFloat] = [:]
+    @State private var headerHeight: CGFloat = 0
 
     var body: some View {
         let favouriteHosts = Set(bookmarks.items.compactMap { $0.url.host?.lowercased().strippingWWW })
@@ -33,16 +37,15 @@ struct StartPage: View {
             // leaving out the least important sections first (News, then the Privacy Report, then
             // Recently Closed) when the window is small.
             let parts = startParts(closedTabs: closedTabs, suggestions: suggestions)
-            ViewThatFits(in: .vertical) {
-                ForEach(Self.layouts(for: parts).indices, id: \.self) { i in
-                    page(Self.layouts(for: parts)[i], closedTabs: closedTabs, suggestions: suggestions)
-                }
-                header
+            GeometryReader { geo in
+                let shown = fitting(parts, available: geo.size.height - 52)
+                page(shown, closedTabs: closedTabs, suggestions: suggestions)
+                    .frame(maxWidth: 940, alignment: .leading)
+                    .padding(.horizontal, 48)
+                    .padding(.vertical, 26)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            .frame(maxWidth: 940, alignment: .leading)
-            .padding(.horizontal, 48)
-            .padding(.vertical, 26)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .clipped()
             // Over a picture, light text reads best.
             .environment(\.colorScheme, background.image != nil ? .dark : scheme)
         }
@@ -104,16 +107,33 @@ struct StartPage: View {
         return result
     }
 
+    /// The fullest layout whose measured sections fit in the height available. A section not
+    /// measured yet counts as nothing, so it's shown once, measured, and dropped if it doesn't fit.
+    private func fitting(_ parts: [Part], available: CGFloat) -> [Part] {
+        for layout in Self.layouts(for: parts) {
+            let total = headerHeight + layout.reduce(0) { $0 + (partHeights[$1] ?? 0) + 30 }
+            if total <= available { return layout }
+        }
+        return []
+    }
+
     private func page(_ parts: [Part], closedTabs: [ClosedTab], suggestions: [FrequentSite]) -> some View {
         VStack(alignment: .leading, spacing: 30) {
             header.riseIn(0)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
             ForEach(parts, id: \.self) { part in
-                switch part {
-                case .closed: RecentlyClosedSection(model: model, tabs: Array(closedTabs.prefix(6))).riseIn(1)
-                case .favourites: favourites.riseIn(2)
-                case .suggestions: suggestionSection(suggestions).riseIn(3)
-                case .privacy: PrivacyReportSection().riseIn(4)
-                case .news: NewsSection(model: model, customising: $customisingNews).riseIn(5)
+                Group {
+                    switch part {
+                    case .closed: RecentlyClosedSection(model: model, tabs: Array(closedTabs.prefix(6))).riseIn(1)
+                    case .favourites: favourites.riseIn(2)
+                    case .suggestions: suggestionSection(suggestions).riseIn(3)
+                    case .privacy: PrivacyReportSection().riseIn(4)
+                    case .news: NewsSection(model: model, customising: $customisingNews).riseIn(5)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self) { ($0.size.height).rounded() } action: { height in
+                    if partHeights[part] != height { partHeights[part] = height }
                 }
             }
         }
@@ -199,7 +219,7 @@ private struct StartSection<Content: View, Accessory: View>: View {
 }
 
 private struct RecentlyClosedSection: View {
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel   // only used to open pages; tab changes needn't redraw this
     let tabs: [ClosedTab]
 
     var body: some View {
@@ -255,7 +275,7 @@ private struct ClosedTabPill: View {
 /// A favourite: an app-icon-style tile. Big site icons fill it; small ones sit centred.
 private struct FavouriteTile: View {
     let bookmark: Bookmark
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel   // only used to open pages; tab changes needn't redraw this
     @State private var icon: SiteIcon?
     @State private var loaded = false
     @State private var hovering = false
@@ -320,7 +340,7 @@ enum StartColors {
 /// A suggestion: a card tinted with the site's own colour.
 private struct SuggestionCard: View {
     let site: FrequentSite
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel   // only used to open pages; tab changes needn't redraw this
     @State private var icon: SiteIcon?
     @State private var hovering = false
 

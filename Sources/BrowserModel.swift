@@ -212,8 +212,17 @@ final class BrowserModel: NSObject, ObservableObject {
     /// Questions waiting to be shown over this window (one at a time).
     let dialogs = DialogHost()
     /// Whether the Bookmarks & History sidebar is showing.
-    @Published var sidebarOpen = UserDefaults.standard.bool(forKey: "sidebar.open") {
-        didSet { UserDefaults.standard.set(sidebarOpen, forKey: "sidebar.open") }
+    /// Whether the Bookmarks & History sidebar is out. It lives in its own small object so that
+    /// opening or closing it only redraws the sidebar and its button, not the whole window.
+    final class SidebarState: ObservableObject {
+        @Published var open = UserDefaults.standard.bool(forKey: "sidebar.open") {
+            didSet { if open != oldValue { UserDefaults.standard.set(open, forKey: "sidebar.open") } }
+        }
+    }
+    let sidebar = SidebarState()
+    var sidebarOpen: Bool {
+        get { sidebar.open }
+        set { if sidebar.open != newValue { sidebar.open = newValue } }
     }
     /// Split View: the two tabs shown side by side, and how much room the left one gets.
     @Published var splitPair: SplitPair?

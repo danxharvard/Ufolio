@@ -10,10 +10,13 @@ struct SideTabBar: View {
     let onGo: (String) -> Void
     @AppStorage(Prefs.sideTabsWidth) private var storedWidth = 250.0
     @State private var dragStart: Double?
+    /// The width while the edge is being dragged; saved to settings only when you let go, so a
+    /// drag doesn't write to disk (and redraw every settings observer) on every frame.
+    @State private var dragWidth: Double?
     @State private var hoveringEdge = false
 
     static let minWidth = 72.0, compactBelow = 150.0, maxWidth = 420.0
-    private var width: Double { min(max(storedWidth, Self.minWidth), Self.maxWidth) }
+    private var width: Double { min(max(dragWidth ?? storedWidth, Self.minWidth), Self.maxWidth) }
     private var compact: Bool { width < Self.compactBelow }
 
     var body: some View {
@@ -53,8 +56,10 @@ struct SideTabBar: View {
         }
         .padding(.trailing, 8)
         .frame(height: Chrome.tabBarHeight)
-        .contentShape(Rectangle())
-        .gesture(WindowDragGesture())
+        // Only the empty space moves the window. With the drag on the whole row, every click on
+        // the sidebar and back/forward buttons had to get past the window drag first, which made
+        // them slow to respond (or miss clicks entirely).
+        .background(Color.clear.contentShape(Rectangle()).gesture(WindowDragGesture()))
     }
 
     private var toolsRow: some View {
@@ -100,9 +105,13 @@ struct SideTabBar: View {
             .gesture(DragGesture(minimumDistance: 1)
                 .onChanged { value in
                     if dragStart == nil { dragStart = width }
-                    storedWidth = min(max((dragStart ?? width) + value.translation.width, Self.minWidth), Self.maxWidth)
+                    dragWidth = min(max((dragStart ?? width) + value.translation.width, Self.minWidth), Self.maxWidth)
                 }
-                .onEnded { _ in dragStart = nil })
+                .onEnded { _ in
+                    if let dragWidth { storedWidth = dragWidth }
+                    dragWidth = nil
+                    dragStart = nil
+                })
             .onTapGesture(count: 2) {
                 // Double-click the edge: switch between icons only and the full column.
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { storedWidth = compact ? 250 : Self.minWidth }
@@ -137,7 +146,7 @@ private struct SideTabList: View {
                     // Drag and drop hold only the tab's ID: macOS can keep these handlers after a
                     // row is redrawn, and holding the tab itself would keep closed tabs in memory.
                     let id = tab.id
-                    SideTabRow(model: model, tab: tab, selected: tab.id == model.selectedTab?.id, compact: compact)
+                    SideTabRow(model: model, inSplit: model.isInSplit(tab), tab: tab, selected: tab.id == model.selectedTab?.id, compact: compact)
                         .opacity(dragging == id ? 0.4 : 1)
                         .onDrag {
                             dragging = id
@@ -178,7 +187,10 @@ private struct SideTabDrop: DropDelegate {
 }
 
 private struct SideTabRow: View {
-    @ObservedObject var model: BrowserModel
+    /// Not observed: a tab only needs redrawing when its own details change (or what's passed in),
+    /// not every time anything in the window changes.
+    let model: BrowserModel
+    let inSplit: Bool
     @ObservedObject var tab: BrowserTab
     let selected: Bool
     let compact: Bool
@@ -188,7 +200,7 @@ private struct SideTabRow: View {
         HStack(spacing: 9) {
             icon
             if !compact {
-                if model.isInSplit(tab) {
+                if inSplit {
                     Image(systemName: "rectangle.split.2x1").font(.system(size: 9.5, weight: .semibold)).foregroundStyle(Color.accentColor)
                 }
                 Text(tab.displayTitle)
@@ -202,6 +214,8 @@ private struct SideTabRow: View {
                         Image(systemName: tab.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(tab.isMuted ? Color.secondary : Color.accentColor)
+                            .frame(width: 20, height: 20)
+                            .contentShape(Rectangle())   // clickable around the icon, not just on it
                     }
                     .buttonStyle(.plain)
                     .help(tab.isMuted ? "Unmute this tab" : "Mute this tab")
@@ -251,7 +265,9 @@ private struct SideTabRow: View {
 }
 
 private struct PinnedTile: View {
-    @ObservedObject var model: BrowserModel
+    /// Not observed: a tab only needs redrawing when its own details change (or what's passed in),
+    /// not every time anything in the window changes.
+    let model: BrowserModel
     @ObservedObject var tab: BrowserTab
     let selected: Bool
     @State private var hovering = false

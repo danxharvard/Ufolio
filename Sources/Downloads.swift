@@ -115,7 +115,9 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
         // A paused or retried download picks up its old place in the list (and its file).
         // (Only briefly: if a retry never starts, a later download mustn't take its place.)
         if resuming != nil, Date().timeIntervalSince(resumingSince) >= 30 { resuming = nil }
-        if let item = resuming {
+        // Only the download that was actually retried may take its place: any other download
+        // starting meanwhile used to take over the slot and overwrite the old file.
+        if let item = resuming, item.sourceURL == nil || download.originalRequest?.url == item.sourceURL {
             resuming = nil
             item.download = download
             item.state = .downloading

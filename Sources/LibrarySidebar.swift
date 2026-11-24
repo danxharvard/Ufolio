@@ -19,9 +19,15 @@ struct LibrarySidebar: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            switch section {
-            case .bookmarks: BookmarksList(model: model, query: query)
-            case .history: HistoryList(model: model, query: query)
+            // While tucked away the lists aren't built at all, so visiting pages (which updates
+            // history) and bookmarking never redraw a sidebar nobody can see.
+            if active {
+                switch section {
+                case .bookmarks: BookmarksList(model: model, query: query)
+                case .history: HistoryList(model: model, query: query)
+                }
+            } else {
+                Spacer(minLength: 0)
             }
         }
         .frame(width: 275)
@@ -262,7 +268,7 @@ private struct BookmarksList: View {
 // MARK: - History
 
 private struct HistoryList: View {
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel   // only used to open pages; the list doesn't redraw for tab changes
     let query: String
     @ObservedObject private var history = HistoryStore.shared
     @Environment(\.openWindow) private var openWindow
@@ -408,11 +414,16 @@ private func copy(_ url: URL) {
 
 /// The toolbar button that shows and hides the sidebar.
 struct SidebarButton: View {
-    @ObservedObject var model: BrowserModel
-    var body: some View {
-        ToolbarIconButton(symbol: "sidebar.left", help: "Show Bookmarks & History (⇧⌘L)",
-                          tint: model.sidebarOpen ? .accentColor : nil) {
-            model.sidebarOpen.toggle()
+    let model: BrowserModel
+    var body: some View { Inner(sidebar: model.sidebar) }
+
+    private struct Inner: View {
+        @ObservedObject var sidebar: BrowserModel.SidebarState
+        var body: some View {
+            ToolbarIconButton(symbol: "sidebar.left", help: "Show Bookmarks & History (⇧⌘L)",
+                              tint: sidebar.open ? .accentColor : nil) {
+                sidebar.open.toggle()
+            }
         }
     }
 }

@@ -80,7 +80,7 @@ struct WindowTabBar: View {
                     let divider = next != nil && tab.id != selectedID && next?.id != selectedID
                         && hoveredID != tab.id && hoveredID != next?.id
                     let dragging = draggingID == tab.id
-                    ChromeTab(model: model, tab: tab, isSelected: tab.id == selectedID,
+                    ChromeTab(model: model, inSplit: model.isInSplit(tab), tab: tab, isSelected: tab.id == selectedID,
                               width: tab.isPinned ? Self.pinnedWidth : tab.id == selectedID ? sizes.selected : width,
                               showsDivider: divider && draggingID == nil, fill: toolbarColor, hoveredID: $hoveredID)
                         .offset(x: dragging ? dragOffset : 0)
@@ -156,7 +156,10 @@ struct WindowTabBar: View {
 }
 
 private struct ChromeTab: View {
-    @ObservedObject var model: BrowserModel
+    /// Not observed: a tab only needs redrawing when its own details change (or what's passed in),
+    /// not every time anything in the window changes.
+    let model: BrowserModel
+    let inSplit: Bool
     @ObservedObject var tab: BrowserTab
     let isSelected: Bool
     let width: CGFloat
@@ -190,7 +193,7 @@ private struct ChromeTab: View {
                 }
             }
             if showsTitle {
-                if model.isInSplit(tab) {
+                if inSplit {
                     Image(systemName: "rectangle.split.2x1")
                         .font(.system(size: 9.5, weight: .semibold))
                         .foregroundStyle(Color.accentColor)
@@ -387,7 +390,8 @@ enum TrafficLights {
             let y = titlebar.isFlipped ? centre - size.height / 2
                                        : titlebar.bounds.height - centre - size.height / 2
             let x = 13 + CGFloat(i) * 20
-            button.setFrameOrigin(NSPoint(x: x, y: y))
+            let origin = NSPoint(x: x, y: y)
+            if button.frame.origin != origin { button.setFrameOrigin(origin) }   // moving them re-lays out the title bar
         }
     }
 }

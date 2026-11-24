@@ -146,7 +146,8 @@ final class PrivacyReport: ObservableObject {
     private func changed() {
         if !recomputeScheduled {
             recomputeScheduled = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            // Recounting 30 days of trackers isn't free: done every couple of seconds at most.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
                 self?.recomputeScheduled = false
                 self?.recompute()
             }

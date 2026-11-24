@@ -3,7 +3,7 @@ import SwiftUI
 /// News on the start page: a hero story, then a varied, editorial layout of picture cards,
 /// wide stories and headline lists, with topics along the top.
 struct NewsSection: View {
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel   // only used to open pages; tab changes needn't redraw this
     @Binding var customising: Bool
     @ObservedObject private var store = NewsStore.shared
     @AppStorage(Prefs.startNews) private var newsOn = false
@@ -155,7 +155,7 @@ private struct NewsChip: View {
 /// A hero story, then a repeating rhythm: two picture cards, a wide story, three compact
 /// cards and a list of headlines, so the page reads like a magazine rather than a grid.
 private struct NewsLayout: View {
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel   // only used to open pages; tab changes needn't redraw this
     let stories: [NewsArticle]
 
     private enum Row: Identifiable {
@@ -216,7 +216,7 @@ private struct NewsLayout: View {
 /// Shared behaviour for every story: open it (⌘-click for a new tab), mark it read, and a
 /// right-click menu.
 private struct StoryButton<Label: View>: View {
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel   // only used to open pages; tab changes needn't redraw this
     let article: NewsArticle
     @ViewBuilder let label: (_ hovering: Bool) -> Label
     @State private var hovering = false
@@ -249,7 +249,7 @@ private struct StoryButton<Label: View>: View {
 }
 
 private struct HeroCard: View {
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel   // only used to open pages; tab changes needn't redraw this
     let article: NewsArticle
     @ObservedObject private var store = NewsStore.shared
 
@@ -286,7 +286,7 @@ private struct HeroCard: View {
 }
 
 private struct StoryCard: View {
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel   // only used to open pages; tab changes needn't redraw this
     let article: NewsArticle
     let imageHeight: CGFloat
     let titleSize: CGFloat
@@ -321,7 +321,7 @@ private struct StoryCard: View {
 }
 
 private struct WideCard: View {
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel   // only used to open pages; tab changes needn't redraw this
     let article: NewsArticle
     @ObservedObject private var store = NewsStore.shared
 
@@ -353,7 +353,7 @@ private struct WideCard: View {
 }
 
 private struct HeadlinesCard: View {
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel   // only used to open pages; tab changes needn't redraw this
     let stories: [NewsArticle]
     @ObservedObject private var store = NewsStore.shared
 

@@ -33,8 +33,11 @@ final class HistoryStore: ObservableObject {
     private static let maxEntries = 10_000
 
     @Published private(set) var entries: [String: HistoryEntry] = [:] {
-        didSet { frequentCache = nil }
+        didSet { frequentCache = nil; searchIndex = nil }
     }
+    /// Lower-cased title and address for every entry, so typing doesn't lower-case all of
+    /// history again on every keystroke. Rebuilt (on the next search) only when history changes.
+    private var searchIndex: [(text: String, id: String)]?
     /// The start page asks for frequent sites on every redraw; work them out once per change.
     private var frequentCache: (key: String, sites: [FrequentSite])?
     /// Saves run one at a time, in order, so an older snapshot never overwrites a newer one.
@@ -113,11 +116,14 @@ final class HistoryStore: ObservableObject {
     func search(_ query: String, limit: Int) -> [HistoryEntry] {
         let q = query.lowercased()
         guard q.count >= 2 else { return [] }
-        return entries.values
-            .filter { $0.title.lowercased().contains(q) || $0.url.absoluteString.lowercased().contains(q) }
+        let index = searchIndex ?? entries.map { (text: $0.value.title.lowercased() + "\n" + $0.value.url.absoluteString.lowercased(), id: $0.key) }
+        searchIndex = index
+        return index
+            .compactMap { $0.text.contains(q) ? entries[$0.id] : nil }
+            .map { (entry: $0, score: $0.score) }   // worked out once each, not on every comparison
             .sorted { $0.score > $1.score }
             .prefix(limit)
-            .map { $0 }
+            .map(\.entry)
     }
 
     /// Removes one page from history.
@@ -183,7 +189,8 @@ final class HistoryStore: ObservableObject {
         saveWork?.cancel()
         var list = Array(entries.values)
         if list.count > Self.maxEntries {
-            list = Array(list.sorted { $0.score > $1.score }.prefix(Self.maxEntries))
+            list = list.map { (entry: $0, score: $0.score) }.sorted { $0.score > $1.score }
+                .prefix(Self.maxEntries).map(\.entry)
         }
         let snapshot = list
         let file = self.file

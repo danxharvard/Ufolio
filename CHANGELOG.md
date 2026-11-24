@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.43.0: the stability release
+
+**Buttons respond instantly**
+- Fixed toolbar and tab bar buttons that could take 2–3 seconds to respond (or miss clicks).
+  In the side tab layout the window-drag area covered the sidebar and back/forward buttons; now
+  only empty space moves the window.
+- The sidebar button no longer redraws the whole window when it opens or closes the sidebar.
+- The window no longer re-lays out its title bar after every change, which was slowing down
+  every click in the toolbar and in Settings.
+- Tabs no longer redraw every time anything else in the window changes.
+- The mute button on side tabs can be clicked around the icon, not only right on it.
+
+**Less work while you browse**
+- Page loading progress, blocked ad counts and the all-time totals now update a few times a
+  second instead of for every single request, so busy pages don't redraw the window constantly.
+- Page details (title, address, padlock and so on) only redraw things when they really change.
+- The loading bar and dragging the Split View divider or the side tab bar's edge are smoother.
+- The start page works out which sections fit without building several copies of itself.
+- Address bar and Command Palette suggestions search your history much faster as you type.
+- A closed Settings window stops updating in the background after half a minute.
+- The hidden Bookmarks & History sidebar no longer updates while it's tucked away.
+- Settings › Performance measures memory calmly every few seconds, only while Settings is in front.
+
+**Fixes**
+- A new download started just after retrying another could take its place and overwrite its file.
+- Filter lists now set up one at a time, so two can't overwrite each other.
+- Going back from a look-alike site warning now takes the warning away.
+- The resize cursor could get stuck after closing Split View.
+- Websites can no longer try to open files on your Mac (file:// addresses).
+- Fixed a possible crash when adding some news feeds.
+
 ## 0.42.1
 
 **Smoother sidebar**

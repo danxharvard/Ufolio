@@ -11,7 +11,7 @@ struct PerformanceSettings: View {
     @AppStorage(Prefs.pauseBackgroundMedia) private var pauseMedia = false
     @ObservedObject private var center = PerformanceCenter.shared
     @State private var usage = PerformanceCenter.Usage()
-    private let tick = Timer.publish(every: 3, tolerance: 1, on: .main, in: .common).autoconnect()
+    private let tick = Timer.publish(every: 5, tolerance: 2, on: .main, in: .default).autoconnect()
 
     private var hasFastDisplay: Bool { NSScreen.screens.contains { $0.maximumFramesPerSecond > 60 } }
 
@@ -126,7 +126,12 @@ struct PerformanceSettings: View {
         }
         .formStyle(SafariFormStyle())
         .onAppear { usage = center.measure() }
-        .onReceive(tick) { _ in withAnimation(.easeOut(duration: 0.3)) { usage = center.measure() } }
+        // Re-measured every few seconds with no animation (an animated refresh redrew the whole
+        // pane each time), and only while the window is in front.
+        .onReceive(tick) { _ in
+            guard NSApp.isActive, NSApp.keyWindow?.identifier?.rawValue == "settings" else { return }
+            usage = center.measure()
+        }
     }
 
     private func remeasureSoon() {

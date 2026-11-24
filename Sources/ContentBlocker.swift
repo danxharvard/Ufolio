@@ -292,8 +292,14 @@ final class ContentBlocker: ObservableObject {
             Task { await report("Filter lists must come from a secure (https) web address.", error: true) }
             return
         }
+        // One list at a time: two building rules at once could overwrite each other's results.
+        guard !isWorking else {
+            status = "Another filter list is still being set up. Try again in a moment."
+            statusIsError = true
+            return
+        }
+        isWorking = true; statusIsError = false; status = "Downloading…"   // straight away, so a second click can't slip in
         Task {
-            await MainActor.run { self.isWorking = true; self.statusIsError = false; self.status = "Downloading…" }
             do {
                 var request = URLRequest(url: url)
                 request.timeoutInterval = 60
@@ -846,17 +852,35 @@ final class BlockStats: ObservableObject {
         }
     }
 
+    /// Counted straight away but shown at most twice a second: on busy pages this is called for
+    /// every blocked request, and each change redrew everything showing the totals.
+    private var pending = (ads: 0, trackers: 0, lists: 0)
+    private var publishScheduled = false
+
     func record(_ identifier: String) {
         switch BuiltInRules.category(of: identifier) {
-        case .ads: ads += 1
-        case .trackers: trackers += 1
-        case .lists: fromLists += 1
+        case .ads: pending.ads += 1
+        case .trackers: pending.trackers += 1
+        case .lists: pending.lists += 1
         case .other: return
         }
-        scheduleSave()
+        guard !publishScheduled else { return }
+        publishScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.publishPending() }
+    }
+
+    private func publishPending() {
+        publishScheduled = false
+        let p = pending
+        pending = (0, 0, 0)
+        if p.ads > 0 { ads += p.ads }
+        if p.trackers > 0 { trackers += p.trackers }
+        if p.lists > 0 { fromLists += p.lists }
+        if p.ads + p.trackers + p.lists > 0 { scheduleSave() }
     }
 
     func reset() {
+        pending = (0, 0, 0)
         ads = 0; trackers = 0; fromLists = 0; since = Date()
         save()
     }
@@ -871,6 +895,11 @@ final class BlockStats: ObservableObject {
     }
 
     func save() {
+        // Include anything counted but not shown yet (this also runs as Ufolio quits).
+        if pending.ads + pending.trackers + pending.lists > 0 {
+            ads += pending.ads; trackers += pending.trackers; fromLists += pending.lists
+            pending = (0, 0, 0)
+        }
         let d = UserDefaults.standard
         d.set(ads, forKey: "stats.ads")
         d.set(trackers, forKey: "stats.trackers")

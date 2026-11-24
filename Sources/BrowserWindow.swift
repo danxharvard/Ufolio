@@ -56,6 +56,9 @@ struct BrowserWindow: View {
             model.window = window
             TrafficLights.align(in: window)
         })
+        .onChange(of: tabLayout) { _, _ in
+            DispatchQueue.main.async { TrafficLights.align(in: model.window) }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResizeNotification)) { note in
             if (note.object as? NSWindow) === model.window { TrafficLights.align(in: model.window) }
         }
@@ -481,7 +484,7 @@ struct TabPageContent: View {
 }
 
 private struct TabPage: View {
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel   // not observed: the page doesn't need redrawing when other tabs change
     @ObservedObject var tab: BrowserTab
 
     var body: some View {
@@ -1175,7 +1178,9 @@ struct ProgressLine: View {
             Rectangle()
                 .fill(LinearGradient(colors: [.accentColor.opacity(0.6), .accentColor],
                                      startPoint: .leading, endPoint: .trailing))
-                .frame(width: geo.size.width * max(0.05, tab.progress), height: 2)
+                .frame(width: geo.size.width, height: 2)
+                // Scaled rather than resized: animating a scale is only drawing, not layout.
+                .scaleEffect(x: max(0.05, tab.progress), y: 1, anchor: .leading)
                 .opacity(tab.isLoading ? 1 : 0)
                 .animation(.easeOut(duration: 0.25), value: tab.progress)
                 .animation(.easeOut(duration: 0.4), value: tab.isLoading)
@@ -1212,7 +1217,9 @@ struct VisualEffect: NSViewRepresentable {
 /// the sidebar itself slides; the page takes its new width in a single step rather than being
 /// re-laid out on every frame of the animation.
 private struct SidebarSlot: View {
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel
+    @ObservedObject var sidebar: BrowserModel.SidebarState
+    init(model: BrowserModel) { self.model = model; sidebar = model.sidebar }
     @State private var built = false
     @State private var slotOpen = false
     @State private var slidIn = false
@@ -1243,7 +1250,7 @@ private struct SidebarSlot: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) { built = true }
             }
         }
-        .onChange(of: model.sidebarOpen) { _, isOpen in isOpen ? open() : close() }
+        .onChange(of: sidebar.open) { _, isOpen in isOpen ? open() : close() }
     }
 
     private func open() {
@@ -1322,15 +1329,28 @@ struct AddressFrameKey: PreferenceKey {
     }
 }
 
+/// Reports the window only when the view moves into a (different) window, not on every redraw.
+/// It used to call back after every update of the window's contents, re-running window setup
+/// and repositioning the traffic lights each time, which made the title bar lay itself out
+/// again and slowed down every click in the toolbar.
 struct WindowReader: NSViewRepresentable {
     let onWindow: (NSWindow?) -> Void
     func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async { onWindow(view.window) }
+        let view = ReportingView()
+        view.onWindow = onWindow
         return view
     }
     func updateNSView(_ view: NSView, context: Context) {
-        DispatchQueue.main.async { onWindow(view.window) }
+        (view as? ReportingView)?.onWindow = onWindow
+    }
+
+    final class ReportingView: NSView {
+        var onWindow: ((NSWindow?) -> Void)?
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            let window = self.window
+            DispatchQueue.main.async { [weak self] in self?.onWindow?(window) }
+        }
     }
 }
 

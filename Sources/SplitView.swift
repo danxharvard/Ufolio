@@ -13,11 +13,14 @@ struct SplitPages: View {
     let left: BrowserTab
     let right: BrowserTab
     @State private var dragStart: CGFloat?
+    /// The ratio while dragging, kept here so only the split redraws (not the whole window);
+    /// handed to the window when you let go.
+    @State private var dragRatio: CGFloat?
 
     var body: some View {
         GeometryReader { geo in
             let usable = geo.size.width - 8
-            let leftWidth = max(220, min(usable - 220, usable * model.splitRatio))
+            let leftWidth = max(220, min(usable - 220, usable * (dragRatio ?? model.splitRatio)))
             HStack(spacing: 0) {
                 SplitPane(model: model, tab: left, side: .left)
                     .frame(width: leftWidth)
@@ -28,14 +31,19 @@ struct SplitPages: View {
                 }
                 .frame(width: 8)
                 .contentShape(Rectangle())
-                .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
+                // (A pushed cursor stayed stuck as the resize arrows if Split View closed under the pointer.)
+                .pointerStyle(.frameResize(position: .trailing))
                 .gesture(DragGesture(minimumDistance: 1)
                     .onChanged { value in
                         let start = dragStart ?? leftWidth
                         if dragStart == nil { dragStart = leftWidth }
-                        model.splitRatio = max(0.2, min(0.8, (start + value.translation.width) / usable))
+                        dragRatio = max(0.2, min(0.8, (start + value.translation.width) / usable))
                     }
-                    .onEnded { _ in dragStart = nil })
+                    .onEnded { _ in
+                        if let dragRatio { model.splitRatio = dragRatio }
+                        dragRatio = nil
+                        dragStart = nil
+                    })
                 .onTapGesture(count: 2) { withAnimation(.easeOut(duration: 0.2)) { model.splitRatio = 0.5 } }
                 SplitPane(model: model, tab: right, side: .right)
             }

@@ -17,6 +17,25 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     @Published private(set) var isSecure = false
     /// Ads and trackers blocked on the current page.
     @Published private(set) var blockedOnPage = 0
+    /// Blocked things not yet shown (see scheduleBlockedFlush).
+    private var pendingBlocked = 0, pendingAds = 0, pendingTrackers = 0
+    private var pendingSites: [String: Int] = [:]
+    private var flushScheduled = false
+
+    private func scheduleBlockedFlush() {
+        guard !flushScheduled else { return }
+        flushScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            guard let self else { return }
+            self.flushScheduled = false
+            guard self.pendingBlocked > 0 else { return }
+            self.blockedOnPage += self.pendingBlocked
+            self.adsOnPage += self.pendingAds
+            self.trackersOnPage += self.pendingTrackers
+            for (site, n) in self.pendingSites { self.blockedSites[site, default: 0] += n }
+            self.pendingBlocked = 0; self.pendingAds = 0; self.pendingTrackers = 0; self.pendingSites = [:]
+        }
+    }
     @Published private(set) var adsOnPage = 0
     @Published private(set) var trackersOnPage = 0
     /// What was blocked on this page: blocked site → requests (for the Hush Guard panel).
@@ -81,7 +100,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     @Published private(set) var siteColor: NSColor?
 
     fileprivate func updateSiteColor() {
-        guard url != nil, !isAsleep else { siteColor = nil; return }
+        guard url != nil, !isAsleep else { if siteColor != nil { siteColor = nil }; return }
         let color = (webView.themeColor ?? webView.underPageBackgroundColor)?.usingColorSpace(.sRGB)
         // Ignore see-through colours: they'd show the frame, not the site.
         let usable = (color?.alphaComponent ?? 0) > 0.9 ? color : nil
@@ -155,7 +174,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         bind(\.title) { tab, title in
             // A sleeping or lazily restored tab's empty web view has no title yet; keep the saved one.
             if (tab.waking || tab.isAsleep) && (title ?? "").isEmpty { return }
-            tab.title = title ?? ""
+            if tab.title != (title ?? "") { tab.title = title ?? "" }
             if !tab.isPrivate, let url = tab.url, let title, !title.isEmpty { HistoryStore.shared.updateTitle(url, title: title) }
         }
         bind(\.url) { tab, url in
@@ -163,16 +182,23 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             // The same goes for a tab restored from last time, which hasn't loaded yet.
             if (tab.waking || tab.isAsleep) && url == nil { return }
             if url != nil { tab.waking = false }
+            guard tab.url != url else { return }
             tab.url = url
             tab.updateSiteColor()
             tab.model?.scheduleSessionSave()
             ExtensionEvents.changed(tab)
         }
-        bind(\.isLoading) { $0.isLoading = $1 }
-        bind(\.estimatedProgress) { $0.progress = $1 }
-        bind(\.canGoBack) { tab, value in if !tab.waking { tab.canGoBack = value } }
-        bind(\.canGoForward) { tab, value in if !tab.waking { tab.canGoForward = value } }
-        bind(\.hasOnlySecureContent) { $0.isSecure = $1 }
+        bind(\.isLoading) { tab, value in if tab.isLoading != value { tab.isLoading = value } }
+        // Progress arrives many times a second; only noticeable steps are passed on, so the tab
+        // bar, address bar and toolbar aren't redrawn for every tiny change.
+        bind(\.estimatedProgress) { tab, value in
+            if value == 0 || value >= 1 || abs(value - tab.progress) >= 0.08 { tab.progress = value }
+        }
+        bind(\.canGoBack) { tab, value in if !tab.waking && tab.canGoBack != value { tab.canGoBack = value } }
+        bind(\.canGoForward) { tab, value in if !tab.waking && tab.canGoForward != value { tab.canGoForward = value } }
+        // A published value announces a change even when set to the same thing, so each one is
+        // only set when it really changes; otherwise every observer redraws for nothing.
+        bind(\.hasOnlySecureContent) { tab, value in if tab.isSecure != value { tab.isSecure = value } }
         // Magic Theme: the site's own colour (its theme-color, or else its page background).
         bind(\.themeColor) { tab, _ in tab.updateSiteColor() }
         bind(\.underPageBackgroundColor) { tab, _ in tab.updateSiteColor() }
@@ -361,6 +387,13 @@ extension BrowserTab: WKNavigationDelegate {
                 decisionHandler(.cancel, preferences)
                 return
             }
+            // Websites may never open files on your Mac (file:// addresses); only you can.
+            // (sourceFrame can really be missing for loads you start, despite what Swift says.)
+            if scheme == "file", let source = action.sourceFrame as WKFrameInfo?,
+               ["http", "https"].contains(source.securityOrigin.protocol.lowercased()) {
+                decisionHandler(.cancel, preferences)
+                return
+            }
             // Links to other apps (mailto:, zoommtg:, facetime:…) open only after you say so.
             if !["http", "https", "about", "blob", "data", "file", "javascript"].contains(scheme) {
                 decisionHandler(.cancel, preferences)
@@ -416,10 +449,13 @@ extension BrowserTab: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         if crashed { crashed = false }
-        blockedOnPage = 0
-        adsOnPage = 0
-        trackersOnPage = 0
-        blockedSites = [:]
+        // Going back (or anywhere else) from a look-alike warning takes the warning away too.
+        if lookalike != nil { lookalike = nil }
+        pendingBlocked = 0; pendingAds = 0; pendingTrackers = 0; pendingSites = [:]
+        if blockedOnPage != 0 { blockedOnPage = 0 }
+        if adsOnPage != 0 { adsOnPage = 0 }
+        if trackersOnPage != 0 { trackersOnPage = 0 }
+        if !blockedSites.isEmpty { blockedSites = [:] }
         if translation != .none { setTranslation(.none, language: nil) }
         if reader != nil { reader = nil }
         if readerAvailable { readerAvailable = false }
@@ -487,18 +523,25 @@ extension BrowserTab: WKNavigationDelegate {
         let category = BuiltInRules.category(of: identifier)
         guard category != .other else { return }
         DispatchQueue.main.async {
-            self.blockedOnPage += 1
-            if category == .trackers { self.trackersOnPage += 1 } else { self.adsOnPage += 1 }
-            if let host = url.host, self.blockedSites.count < 300 || self.blockedSites[Domains.site(host)] != nil {
-                self.blockedSites[Domains.site(host), default: 0] += 1
+            // Busy pages block dozens of things a second: counts are gathered and shown at most
+            // four times a second, so the window isn't redrawn for every single one.
+            self.pendingBlocked += 1
+            if category == .trackers { self.pendingTrackers += 1 } else { self.pendingAds += 1 }
+            if let host = url.host {
+                let site = Domains.site(host)
+                if self.blockedSites.count + self.pendingSites.count < 300
+                    || self.blockedSites[site] != nil || self.pendingSites[site] != nil {
+                    self.pendingSites[site, default: 0] += 1
+                }
             }
+            self.scheduleBlockedFlush()
             BlockStats.shared.record(identifier)
             if !self.isPrivate, category == .trackers || category == .ads || category == .lists {
                 PrivacyReport.shared.recordBlocked(tracker: url, on: self.host)
             }
             // Tell the page's ad-space collapser that ads really were blocked here.
             // (Again at the 5th and 20th, in case the first came before the page's script was ready.)
-            if [1, 5, 20].contains(self.blockedOnPage) && Prefs.bool(Prefs.collapseAdSpace) {
+            if [1, 5, 20].contains(self.blockedOnPage + self.pendingBlocked) && Prefs.bool(Prefs.collapseAdSpace) {
                 webView.evaluateJavaScript("window.__hushAdsBlocked = true; window.__hushSweep && window.__hushSweep();",
                                            in: nil, in: .defaultClient) { _ in }
             }

@@ -306,9 +306,18 @@ enum WindowOpener {
 enum SettingsWindow {
     private static var window: NSWindow?
 
+    /// Whether the window's contents are live. A closed Settings window would otherwise keep
+    /// redrawing in the background whenever ads are blocked, stats change or memory is measured.
+    final class Presence: ObservableObject { @Published var live = true }
+    static let presence = Presence()
+    private static var closeObserver: NSObjectProtocol?
+    private static var idleRelease: DispatchWorkItem?
+
     static func show() {
         let w = window ?? make()
         window = w
+        idleRelease?.cancel()
+        if !presence.live { presence.live = true }
         NSApp.activate(ignoringOtherApps: true)
         w.makeKeyAndOrderFront(nil)
     }
@@ -331,15 +340,29 @@ enum SettingsWindow {
         w.tabbingMode = .disallowed
         if !w.setFrameUsingName("HushSettings") { w.center() }
         w.setFrameAutosaveName("HushSettings")
+        closeObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: w, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                // Reopening within half a minute is instant; after that the contents are put away.
+                let work = DispatchWorkItem { if !(window?.isVisible ?? false) { presence.live = false } }
+                idleRelease?.cancel()
+                idleRelease = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 30, execute: work)
+            }
+        }
         return w
     }
 }
 
 private struct SettingsRoot: View {
     @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
+    @ObservedObject private var presence = SettingsWindow.presence
     var body: some View {
-        SettingsView()
-            .hushDialogs(DialogHost.settings)
-            .transaction { if reduceMotion { $0.animation = nil } }
+        if presence.live {
+            SettingsView()
+                .hushDialogs(DialogHost.settings)
+                .transaction { if reduceMotion { $0.animation = nil } }
+        } else {
+            Color.clear
+        }
     }
 }

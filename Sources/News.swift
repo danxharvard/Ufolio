@@ -241,7 +241,7 @@ final class NewsStore: ObservableObject {
         guard let (data, response) = try? await Self.session.data(from: url),
               (response as? HTTPURLResponse)?.statusCode == 200 else { return "Ufolio couldn’t reach that feed." }
         let title = FeedParser.title(of: data) ?? host.strippingWWW
-        var source = NewsSource(name: String(title.prefix(60)), feed: url, site: URL(string: "https://\(host)")!, channel: .top, custom: true)
+        var source = NewsSource(name: String(title.prefix(60)), feed: url, site: URL(string: "https://\(host)") ?? url, channel: .top, custom: true)
         source.custom = true
         guard !FeedParser.parse(data, source: source).isEmpty else {
             return "That address isn’t an RSS or Atom news feed."
