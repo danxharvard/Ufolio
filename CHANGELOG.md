@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.43.2: security and stability fixes
+
+**Security**
+- Extensions can now only open or load web and extension pages. Before, an extension could
+  load a javascript: address into a tab and so run code on sites it had no access to, or open
+  files on your Mac.
+- Deleting an Orbit profile now always wipes its cookies and logins, even if you hadn't used it
+  since Ufolio started.
+- Clear History now also clears the saved site icons, which also showed where you'd been.
+
+**Stability**
+- Sleeping tabs now really free their memory: the page's web process ends straight away.
+- An extension loading an address into a sleeping tab now wakes it properly first, so the
+  page gets ad blocking and works normally.
+- A tab opened in Split View plays its video again (it stayed paused from when you left it).
+
 ## 0.43.1: more stability
 
 **Smoother**

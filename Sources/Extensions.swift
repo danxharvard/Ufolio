@@ -469,6 +469,11 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
         BrowserModel.frontmostNormal.map { [$0] } ?? []
     }
 
+    /// The only addresses an extension may open or load: web pages and extension pages.
+    static func allowedToOpen(_ url: URL) -> Bool {
+        ["http", "https", "webkit-extension"].contains(url.scheme?.lowercased() ?? "")
+    }
+
     func webExtensionController(_ controller: WKWebExtensionController, focusedWindowFor extensionContext: WKWebExtensionContext) -> (any WKWebExtensionWindow)? {
         BrowserModel.frontmostNormal
     }
@@ -477,7 +482,8 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
                                 for extensionContext: WKWebExtensionContext,
                                 completionHandler: @escaping ((any WKWebExtensionTab)?, (any Error)?) -> Void) {
         guard let model = BrowserModel.frontmostNormal else { completionHandler(nil, nil); return }
-        let tab = model.newTab(url: configuration.url, select: configuration.shouldBeActive)
+        let address = configuration.url.flatMap { Self.allowedToOpen($0) ? $0 : nil }
+        let tab = model.newTab(url: address, select: configuration.shouldBeActive)
         completionHandler(tab, nil)
     }
 
@@ -486,7 +492,7 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
                                 for extensionContext: WKWebExtensionContext,
                                 completionHandler: @escaping ((any WKWebExtensionWindow)?, (any Error)?) -> Void) {
         guard let model = BrowserModel.frontmostNormal else { completionHandler(nil, nil); return }
-        let urls = configuration.tabURLs.filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") || $0.scheme == "webkit-extension" }
+        let urls = configuration.tabURLs.filter(Self.allowedToOpen)
         if urls.isEmpty { model.newTab(focus: true) } else { for (i, url) in urls.prefix(20).enumerated() { model.newTab(url: url, select: i == 0) } }
         completionHandler(model, nil)
     }
@@ -590,6 +596,12 @@ extension BrowserTab: WKWebExtensionTab {
         completionHandler(nil)
     }
     func loadURL(_ url: URL, for context: WKWebExtensionContext, completionHandler: @escaping ((any Error)?) -> Void) {
+        // Web and extension pages only. load() treats an address as typed by you, so a
+        // javascript: one would run in the page: an extension could reach sites it has no access to.
+        guard ExtensionManager.allowedToOpen(url) else {
+            completionHandler(NSError(domain: "Ufolio", code: 1, userInfo: [NSLocalizedDescriptionKey: "That address can't be opened by an extension."]))
+            return
+        }
         load(url)
         completionHandler(nil)
     }

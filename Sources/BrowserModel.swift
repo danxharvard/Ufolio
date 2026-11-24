@@ -236,6 +236,8 @@ final class BrowserModel: NSObject, ObservableObject {
         if let tab, tab !== current {
             splitPair = SplitPair(left: current.id, right: tab.id)
             tab.wakeIfNeeded()
+            // It's on screen now: video paused when you left it plays again.
+            if !tab.isAsleep { tab.webView.setAllMediaPlaybackSuspended(false) }
         } else {
             let fresh = newTab(select: false, usePreferredPage: true)
             splitPair = SplitPair(left: current.id, right: fresh.id)

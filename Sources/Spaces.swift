@@ -143,9 +143,11 @@ final class SpaceStore: ObservableObject {
         profiles.removeAll { $0.id == id }
         save()
         for space in affected { BrowserModel.all.allObjects.forEach { $0.spaceChangedProfile(space) } }
-        let store = stores.removeValue(forKey: id)
+        // Opened just to wipe it if it wasn't used since launch (otherwise its cookies and
+        // logins stayed on disk for good).
+        let store = stores.removeValue(forKey: id) ?? WKWebsiteDataStore(forIdentifier: id)
         // Wipe the data straight away, then remove the store itself once nothing uses it.
-        store?.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) {
+        store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                 WKWebsiteDataStore.remove(forIdentifier: id) { _ in }
             }

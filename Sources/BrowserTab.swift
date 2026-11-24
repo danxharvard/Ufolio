@@ -233,6 +233,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             old.navigationDelegate = nil
             old.uiDelegate = nil
             old.removeFromSuperview()
+            WebKitExtras.close(old)   // ends its web process now, so the memory really comes back
             // An empty web view starts no web process until it loads something.
             self.webView = HushWebView(frame: .zero, configuration: BrowserTab.makeConfiguration(
                 privately: self.isPrivate, store: old.configuration.websiteDataStore))
@@ -280,13 +281,13 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         objectWillChange.send()
     }
 
-    func wakeIfNeeded() {
+    func wakeIfNeeded(loading: Bool = true) {
         guard isAsleep else { return }
         waking = true
         setUp(webView)
         if let state = sleepState {
             webView.interactionState = state
-        } else if let url {
+        } else if loading, let url {
             webView.load(URLRequest(url: url))
         }
         sleepState = nil
@@ -314,6 +315,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     private var lastAppPrompt = Date.distantPast
 
     func load(_ url: URL) {
+        // A sleeping tab's page isn't connected yet (no blocking, no delegates): wake it first,
+        // going straight to the new address rather than restoring the old page.
+        if isAsleep { sleepState = nil; wakeIfNeeded(loading: false) }
         lookalike = nil
         userLoadedURL = url
         webView.load(URLRequest(url: url))
