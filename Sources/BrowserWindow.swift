@@ -208,10 +208,12 @@ struct BrowserWindow: View {
                 .background(tint?.frame ?? .clear)
                 .environment(\.colorScheme, tint?.scheme ?? systemScheme)
             VStack(spacing: 0) {
-                if showBookmarkBar {
-                    BookmarkBar(model: model)
-                        .frame(height: 34)
+                // The top row: bookmarks (if shown), and the ⋯ panel at the top right.
+                HStack(spacing: 0) {
+                    if showBookmarkBar { BookmarkBar(model: model) } else { Color.clear.contentShape(Rectangle()).gesture(WindowDragGesture()) }
+                    MoreMenuButton(model: model).padding(.horizontal, 8)
                 }
+                .frame(height: 34)
                 if showDefaultBanner {
                     DefaultBrowserBanner {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) { showDefaultBanner = false }
@@ -230,11 +232,10 @@ struct BrowserWindow: View {
                     }
                     .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.08)).allowsHitTesting(false))
                 }
-                .padding(.top, showBookmarkBar ? 0 : 8)
                 .padding(.trailing, 8)
                 .padding(.bottom, 8)
             }
-            .padding(.top, showBookmarkBar ? 4 : 0)
+            .padding(.top, 4)
         }
         .background(SelectedTab(model: model) { tab in
             SiteColorReader(tab: tab) { color in if color != siteColor { siteColor = color } }
@@ -669,6 +670,8 @@ struct ShieldsPanel: View {
             VStack(spacing: 1) {
                 Text("\(tab.blockedOnPage)")
                     .font(.system(size: 40, weight: .bold, design: .rounded))
+                    .foregroundStyle(LinearGradient(colors: shieldsUp ? [.primary, Color(red: 0.55, green: 0.42, blue: 1.0)] : [.secondary, .secondary],
+                                                    startPoint: .top, endPoint: .bottom))
                     .monospacedDigit()
                     .contentTransitionIfAvailable()
                 Text(shieldsUp ? (tab.blockedOnPage == 1 ? "thing hushed on this page" : "things hushed on this page")
@@ -697,7 +700,7 @@ struct ShieldsPanel: View {
             .padding(.horizontal, 14)
 
             HStack {
-                Text("\(stats.total.formatted()) hushed in total")
+                Label("\(stats.total.formatted()) hushed in total", systemImage: "shield.lefthalf.filled")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -709,8 +712,15 @@ struct ShieldsPanel: View {
             .padding(.vertical, 12)
         }
         .frame(width: 340)
-        // A solid backdrop so the panel stays readable over bright (white) pages.
-        .background(Color(nsColor: .windowBackgroundColor).opacity(0.97))
+        // A solid backdrop (readable over bright pages) with a soft glow behind the moon.
+        .background {
+            ZStack(alignment: .top) {
+                Color(nsColor: .windowBackgroundColor).opacity(0.97)
+                RadialGradient(colors: [Color(red: 0.50, green: 0.36, blue: 1.0).opacity(shieldsUp ? 0.22 : 0.08), .clear],
+                               center: .top, startRadius: 0, endRadius: 260)
+                    .frame(height: 300)
+            }
+        }
         .animation(.easeOut(duration: 0.2), value: shieldsUp)
     }
 
@@ -747,7 +757,7 @@ struct ShieldsPanel: View {
             }
         }
         .padding(10)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.045)))
+        .guardCard()
     }
 
     /// "What was blocked": the companies behind this page's blocked ads and trackers.
@@ -798,7 +808,7 @@ struct ShieldsPanel: View {
             }
         }
         .padding(.horizontal, 10)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.045)))
+        .guardCard()
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
@@ -806,7 +816,7 @@ struct ShieldsPanel: View {
     private var siteSettings: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("THIS SITE").font(.system(size: 10, weight: .semibold)).tracking(0.8).foregroundStyle(.secondary)
+                Text("This site").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
                 Spacer()
                 if let host = tab.host, !siteShields.overrides(for: host).isEmpty {
                     Button("Use Defaults") { siteShields.reset(host); tab.webView.reload() }
@@ -832,7 +842,7 @@ struct ShieldsPanel: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 2)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.045)))
+            .guardCard()
         }
     }
 
@@ -936,8 +946,9 @@ private struct GuardAction: View {
             .foregroundStyle(active ? Color.accentColor : Color.primary.opacity(0.8))
             .frame(maxWidth: .infinity)
             .frame(height: 46)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .background(RoundedRectangle(cornerRadius: 11, style: .continuous)
                 .fill(Color.primary.opacity(hovering ? 0.08 : 0.045)))
+            .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(Color.primary.opacity(0.07)))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -946,6 +957,12 @@ private struct GuardAction: View {
 }
 
 private extension View {
+    /// The Hush Guard panel's cards: a soft fill with a hairline edge, like Settings.
+    func guardCard() -> some View {
+        background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.045)))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.07)))
+    }
+
     /// Rolling-number animation.
     func contentTransitionIfAvailable() -> some View {
         contentTransition(.numericText())

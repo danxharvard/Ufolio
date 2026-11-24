@@ -28,6 +28,8 @@ struct LibrarySidebar: View {
         .background { if active { VisualEffect(material: .sidebar) } }
     }
 
+    @Namespace private var sectionSlide
+
     private var header: some View {
         VStack(spacing: 10) {
             HStack(spacing: 4) {
@@ -42,9 +44,14 @@ struct LibrarySidebar: View {
                         }
                         .foregroundStyle(selected ? Color.primary : Color.secondary)
                         .frame(maxWidth: .infinity).frame(height: 28)
-                        .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(selected ? Color(nsColor: .controlBackgroundColor) : Color.clear)
-                            .shadow(color: .black.opacity(selected ? 0.12 : 0), radius: 1.5, y: 0.5))
+                        .background {
+                            if selected {
+                                // A soft frosted highlight that slides between Bookmarks and History.
+                                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                    .fill(SideColors.selected)
+                                    .matchedGeometryEffect(id: "librarySection", in: sectionSlide)
+                            }
+                        }
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -225,8 +232,10 @@ private struct BookmarksList: View {
                     model.toggleBookmarkForSelectedTab()
                 } label: {
                     Label(saved ? "Bookmarked" : "Bookmark This Page", systemImage: saved ? "star.fill" : "star")
-                        .font(.system(size: 11.5, weight: .medium))
+                        .font(.system(size: 11.5, weight: .semibold))
                         .foregroundStyle(saved ? Color.yellow : Color.accentColor)
+                        .padding(.horizontal, 10).frame(height: 24)
+                        .background(Capsule().fill((saved ? Color.yellow : Color.accentColor).opacity(0.14)))
                 }
                 .buttonStyle(.plain)
             }
@@ -237,13 +246,16 @@ private struct BookmarksList: View {
                 Button("Import Bookmarks…") { message = store.importWithPanel() }
                 Button("Export Bookmarks…") { store.exportWithPanel() }
             } label: {
-                Image(systemName: "ellipsis.circle").font(.system(size: 13))
+                Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 26, height: 24)
+                    .background(Capsule().fill(Color.primary.opacity(0.07)))
             }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             .help("New folder, import and export")
         }
-        .padding(.horizontal, 14).frame(height: 36)
-        .overlay(alignment: .top) { Divider() }
+        .padding(.horizontal, 12).frame(height: 40)
+        .overlay(alignment: .top) { Rectangle().fill(Color.primary.opacity(0.07)).frame(height: 1) }
     }
 }
 

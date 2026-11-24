@@ -436,7 +436,9 @@ actor NewsImages {
                   let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
             let options: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true,
                                             kCGImageSourceThumbnailMaxPixelSize: maxPixels,
-                                            kCGImageSourceCreateThumbnailWithTransform: true]
+                                            kCGImageSourceCreateThumbnailWithTransform: true,
+                                            // Decode now, here in the background, not on first draw (mid-scroll).
+                                            kCGImageSourceShouldCacheImmediately: true]
             guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
             return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
         }

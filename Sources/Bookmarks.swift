@@ -1,4 +1,5 @@
 import SwiftUI
+import ImageIO
 import AppKit
 
 struct Bookmark: Codable, Identifiable, Equatable {
@@ -556,10 +557,23 @@ actor FaviconCache {
         try? data.write(to: file, options: .atomic)
     }
 
+    /// Decodes the icon fully here, off the main thread and at no more than 256 px, so drawing
+    /// it later (while you scroll the start page) is instant. Uses the sharpest version in the file.
     private static func makeIcon(_ data: Data) -> SiteIcon? {
-        guard let image = NSImage(data: data), image.isValid, image.size.width > 0 else { return nil }
-        let pixels = image.representations.map(\.pixelsWide).max() ?? Int(image.size.width)
-        return SiteIcon(image: image, pixels: pixels, tint: mainColor(of: image))
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(source) > 0 else { return nil }
+        var best = 0, bestWidth = 0
+        for i in 0..<CGImageSourceGetCount(source) {
+            let props = CGImageSourceCopyPropertiesAtIndex(source, i, nil) as? [CFString: Any]
+            let width = props?[kCGImagePropertyPixelWidth] as? Int ?? 0
+            if width > bestWidth { best = i; bestWidth = width }
+        }
+        let options: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                        kCGImageSourceThumbnailMaxPixelSize: 256,
+                                        kCGImageSourceCreateThumbnailWithTransform: true,
+                                        kCGImageSourceShouldCacheImmediately: true]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(source, best, options as CFDictionary), cg.width > 0 else { return nil }
+        let image = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+        return SiteIcon(image: image, pixels: max(bestWidth, cg.width), tint: mainColor(of: image))
     }
 
     /// The average of the icon's coloured pixels (ignoring transparent and near-white ones).

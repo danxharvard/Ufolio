@@ -227,17 +227,38 @@ struct HushDialogCard: View {
 
     @ViewBuilder private func button(_ index: Int, _ choice: HushDialog.Choice) -> some View {
         let main = choice.role == .primary || choice.role == .destructive
-        let label = Text(choice.title).fontWeight(main ? .semibold : .regular).frame(maxWidth: .infinity)
-        let action = { onFinish(index, checked) }
-        if main {
-            Button(action: action) { label }
-                .buttonStyle(.borderedProminent)
-                .tint(choice.role == .destructive ? HushDialog.Theme.danger.colors[1] : dialog.theme.colors[1])
-                .keyboardShortcut(index == dialog.defaultIndex ? .defaultAction : nil)
-        } else {
-            Button(action: action) { label }
-                .keyboardShortcut(index == dialog.cancelIndex && choice.role == .cancel ? .cancelAction : nil)
-        }
+        let colors = choice.role == .destructive ? HushDialog.Theme.danger.colors : dialog.theme.colors
+        Button { onFinish(index, checked) } label: { Text(choice.title).frame(maxWidth: .infinity) }
+            .buttonStyle(DialogButtonStyle(main: main, colors: colors))
+            .keyboardShortcut(main && index == dialog.defaultIndex ? .defaultAction
+                              : (index == dialog.cancelIndex && choice.role == .cancel ? .cancelAction : nil))
+    }
+}
+
+/// Hush's dialog buttons: rounded, the main one in the dialog's own colours, the others a soft
+/// glass button. They look the same whether or not the window is in front.
+private struct DialogButtonStyle: ButtonStyle {
+    let main: Bool
+    let colors: [Color]
+    @State private var hovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: main ? .semibold : .medium))
+            .foregroundStyle(main ? Color.white : Color.primary)
+            .frame(height: 34)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(main ? AnyShapeStyle(LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom))
+                               : AnyShapeStyle(Color.primary.opacity(hovering ? 0.12 : 0.08)))
+            )
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(main ? Color.white.opacity(0.18) : Color.primary.opacity(0.06)))
+            .brightness(configuration.isPressed ? -0.06 : (main && hovering ? 0.04 : 0))
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 

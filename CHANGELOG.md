@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.39.0
+
+**More beautiful**
+- The ⋯ panel now sits at the top right of the window with tabs down the side too.
+- The Hush Guard panel has a soft glow behind the moon, matching cards with fine edges, and a
+  livelier count.
+- The Bookmarks & History sidebar: a frosted highlight that slides between Bookmarks and History,
+  and tidy pill buttons along the bottom.
+- Dialog buttons are Hush's own: rounded, in each dialog's colours, and crisp even when the window
+  isn't in front.
+
+**Smoother start page**
+- Site icons and news pictures are now fully prepared in the background, at the size they're
+  shown, so nothing is decoded while you scroll. Icons also use less memory.
+
 ## 0.38.0
 
 **New: the ⋯ panel**
