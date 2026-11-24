@@ -1885,7 +1885,9 @@ private struct AddCardSheet: View {
     }
 
     private func save() {
-        let digits = number.filter(\.isNumber)
+        // Plain 0–9 only: full-width digits (some keyboards, pasted text) passed the check but
+        // were filled into checkout forms as characters sites reject.
+        let digits = number.filter { $0.isASCII && $0.isNumber }
         guard (12...19).contains(digits.count), Self.luhn(digits) else {
             error = "That card number doesn’t look right."
             return

@@ -785,7 +785,9 @@ struct WebStoreBar: View {
                             let link = tab.url?.absoluteString ?? id
                             Task { @MainActor in await store.install(fromWebStore: link) }
                         }
-                        .keyboardShortcut(.defaultAction)
+                        // No Return shortcut: pressing Return in the store's own search box would
+                        // have installed the extension.
+                        .buttonStyle(.borderedProminent)
                         .disabled(store.isWorking)
                     }
                 }

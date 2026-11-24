@@ -303,12 +303,13 @@ struct TabMenuItems: View {
         Divider()
         Button { model.close(tab) } label: { Label("Close Tab", systemImage: "xmark") }
         Button {
-            for other in model.visibleTabs where other !== tab { model.close(other) }
+            // Pinned tabs stay, as in Safari and Chrome.
+            for other in model.visibleTabs where other !== tab && !other.isPinned { model.close(other) }
         } label: { Label("Close Other Tabs", systemImage: "xmark.square") }
         Button {
             let mine = model.visibleTabs
             if let i = mine.firstIndex(where: { $0 === tab }) {
-                for other in mine.suffix(from: i + 1) { model.close(other) }
+                for other in mine.suffix(from: i + 1) where !other.isPinned { model.close(other) }
             }
         } label: { Label(vertical ? "Close Tabs Below" : "Close Tabs to the Right", systemImage: vertical ? "arrow.down.to.line" : "arrow.right.to.line") }
         }

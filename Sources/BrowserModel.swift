@@ -502,6 +502,20 @@ final class BrowserModel: NSObject, ObservableObject {
         }
     }
 
+    /// Opens several pages as tabs (Open All in Tabs): the first loads now, the rest wait until
+    /// you click them, like tabs restored from last time. Opening a folder of hundreds used to
+    /// start hundreds of pages loading at once.
+    func openAll(_ urls: [URL]) {
+        for (index, url) in urls.prefix(200).enumerated() {
+            if index == 0 {
+                newTab(url: url, select: false, atEnd: true)
+            } else {
+                let tab = newTab(select: false, usePreferredPage: false, atEnd: true)
+                tab.restoreLazily(url)
+            }
+        }
+    }
+
     func toggleBookmarkForSelectedTab() {
         guard let tab = selectedTab, let url = tab.url else { return }
         BookmarkStore.shared.toggle(url: url, title: tab.displayTitle)

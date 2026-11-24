@@ -92,6 +92,8 @@ private struct BookmarksList: View {
     @State private var dragging: UUID?
     @State private var collapsed: Set<String> = []
     @State private var newFolder: String?
+    /// The bookmark waiting to go into the folder being made (Move to Folder › New Folder…).
+    @State private var movingIntoNewFolder: Bookmark?
     @State private var renamingFolder: String?
     @State private var folderDraft = ""
     @State private var message: String?
@@ -112,8 +114,14 @@ private struct BookmarksList: View {
                             Image(systemName: "folder.badge.plus").foregroundStyle(Color.accentColor)
                             TextField("Folder name", text: Binding(get: { name }, set: { newFolder = $0 }))
                                 .textFieldStyle(.roundedBorder)
-                                .onSubmit { store.makeFolder(name); newFolder = nil }
-                                .onExitCommand { newFolder = nil }
+                                .onSubmit {
+                                    store.makeFolder(name)
+                                    let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    if let moving = movingIntoNewFolder, !clean.isEmpty { store.setFolder(moving, clean) }
+                                    movingIntoNewFolder = nil
+                                    newFolder = nil
+                                }
+                                .onExitCommand { newFolder = nil; movingIntoNewFolder = nil }
                         }
                         .padding(.horizontal, 8).padding(.vertical, 4)
                     }
@@ -178,7 +186,7 @@ private struct BookmarksList: View {
                         Button(folder) { store.setFolder(bookmark, folder) }.disabled(bookmark.folder == folder)
                     }
                     Divider()
-                    Button { newFolder = "" } label: { Label("New Folder…", systemImage: "folder.badge.plus") }
+                    Button { movingIntoNewFolder = bookmark; newFolder = "" } label: { Label("New Folder…", systemImage: "folder.badge.plus") }
                 }
                 Divider()
                 Button("Remove", role: .destructive) { store.remove(bookmark) }
@@ -223,7 +231,7 @@ private struct BookmarksList: View {
         .buttonStyle(.plain)
         .contextMenu {
             let marks = store.items(in: folder)
-            Button { for b in marks { model.open(b.url, inNewTab: true) } } label: { Label("Open All in Tabs", systemImage: "square.stack") }.disabled(marks.isEmpty)
+            Button { model.openAll(marks.map(\.url)) } label: { Label("Open All in Tabs", systemImage: "square.stack") }.disabled(marks.isEmpty)
             Divider()
             Button { folderDraft = folder; renamingFolder = folder } label: { Label("Rename Folder…", systemImage: "pencil") }
             Button { store.removeFolder(folder) } label: { Label("Remove Folder (Keep Bookmarks)", systemImage: "folder.badge.minus") }
@@ -247,7 +255,7 @@ private struct BookmarksList: View {
             }
             Spacer()
             Menu {
-                Button("New Folder") { newFolder = "" }
+                Button("New Folder") { movingIntoNewFolder = nil; newFolder = "" }
                 Divider()
                 Button("Import Bookmarks…") { message = store.importWithPanel() }
                 Button("Export Bookmarks…") { store.exportWithPanel() }

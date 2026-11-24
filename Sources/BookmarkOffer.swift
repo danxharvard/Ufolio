@@ -157,8 +157,10 @@ struct BookmarkOfferBar: View {
                         withAnimation { offer.notNow() }
                     }
                     .fixedSize()
+                    // No Return shortcut: this bar sits over web pages, and pressing Return in any
+                    // site's form would have added the favourite.
                     Button("Add to Favourites") { withAnimation { offer.add(from: tab) } }
-                        .keyboardShortcut(.defaultAction)
+                        .buttonStyle(.borderedProminent)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 9)

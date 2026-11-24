@@ -248,14 +248,7 @@ private struct ReaderBlockView: View {
             Text(block.text).font(.system(size: size * 0.75)).foregroundStyle(theme.text.opacity(0.6))
         case .image:
             if let url = block.image {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image.resizable().aspectRatio(contentMode: .fit)
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    } else {
-                        EmptyView()
-                    }
-                }
+                ReaderImage(url: url)
                 .frame(maxWidth: .infinity)
                 .accessibilityLabel(block.text)
             }
@@ -297,5 +290,24 @@ private struct SmallBarButton: View {
         }
         .buttonStyle(.plain)
         .help(help)
+    }
+}
+
+
+/// A picture in Reader: loaded without cookies, kept in memory only (never in a disk cache, so
+/// nothing is left behind from a Stealth window) and shrunk to the size shown, rather than
+/// decoding the full original.
+private struct ReaderImage: View {
+    let url: URL
+    @State private var image: NSImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+        }
+        .task(id: url) { image = await NewsImages.shared.image(url, maxPixels: 1400) }
     }
 }

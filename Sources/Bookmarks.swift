@@ -15,8 +15,14 @@ final class BookmarkStore: ObservableObject {
     static let shared = BookmarkStore()
 
     @Published private(set) var items: [Bookmark] = [] {
-        didSet { keys = Set(items.map { Self.key($0.url) }) }
+        didSet {
+            keys = Set(items.map { Self.key($0.url) })
+            byFolder = Dictionary(grouping: items, by: \.folder)
+        }
     }
+    /// Bookmarks grouped by folder, worked out once per change: the sidebar, bookmarks bar and
+    /// menus ask for each folder's bookmarks several times per redraw.
+    private var byFolder: [String?: [Bookmark]] = [:]
     /// Every bookmark's address in comparable form, so "is this page bookmarked?" (asked on every
     /// redraw of the address bar) is a quick lookup rather than a pass over every bookmark.
     private var keys: Set<String> = []
@@ -78,7 +84,7 @@ final class BookmarkStore: ObservableObject {
     /// Folders made in the sidebar that don't have a bookmark yet.
     @Published private(set) var emptyFolders: [String] = []
 
-    func items(in folder: String?) -> [Bookmark] { items.filter { $0.folder == folder } }
+    func items(in folder: String?) -> [Bookmark] { byFolder[folder] ?? [] }
 
     func makeFolder(_ name: String) {
         let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -321,7 +327,7 @@ private struct FolderChip: View {
             if marks.isEmpty { Text("Empty") }
             if marks.count > 1 {
                 Divider()
-                Button("Open All in Tabs") { for b in marks { model.open(b.url, inNewTab: true) } }
+                Button("Open All in Tabs") { model.openAll(marks.map(\.url)) }
             }
         } label: {
             HStack(spacing: 5) {

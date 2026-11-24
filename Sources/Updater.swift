@@ -51,10 +51,13 @@ final class Updater: ObservableObject {
                                                object: nil, queue: .main) { [weak self] _ in
             self?.installOnQuit()
         }
-        guard Prefs.bool(Prefs.autoCheckUpdates) else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
-            Task { @MainActor in await Updater.shared.check(userInitiated: false) }
+        if Prefs.bool(Prefs.autoCheckUpdates) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+                Task { @MainActor in await Updater.shared.check(userInitiated: false) }
+            }
         }
+        // Always running, checking the setting each time: turning automatic checks on later
+        // used to do nothing until Ufolio restarted.
         timer = Timer.scheduledTimer(withTimeInterval: 6 * 60 * 60, repeats: true) { _ in
             guard Prefs.bool(Prefs.autoCheckUpdates) else { return }
             Task { @MainActor in await Updater.shared.check(userInitiated: false) }

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.43.9: ten more fixes
+
+**Security and privacy**
+- Pressing Return in a website's form or search box can no longer trigger "Add to Favourites"
+  or "Add to Ufolio" in the bars above the page.
+- Reader mode loads its pictures privately (no cookies, nothing saved to disk), so reading in a
+  Stealth window leaves nothing behind. They're also shrunk to the size shown.
+
+**Fixes**
+- Open All in Tabs loads the first page straight away and the rest when you click them, instead
+  of starting every page in a big folder at once.
+- Close Other Tabs and Close Tabs to the Right keep your pinned tabs.
+- Move to Folder › New Folder… now moves the bookmark into the new folder.
+- Turning on automatic update checks takes effect straight away, not after a restart.
+- Card numbers keep only the digits 0–9 (full-width digits from some keyboards were accepted
+  but rejected by checkout pages).
+
+**Smoother**
+- Folders of bookmarks are worked out once per change, so the sidebar and bookmarks bar stay
+  quick with lots of folders.
+- Save Page As writes big pages in the background.
+
 ## 0.43.8: ten more fixes
 
 **Privacy**

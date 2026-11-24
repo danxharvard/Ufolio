@@ -368,7 +368,10 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         panel.beginSheetModal(for: window) { [weak self] response in
             guard response == .OK, let destination = panel.url, let self else { return }
             self.webView.createWebArchiveData { result in
-                if case .success(let data) = result { try? data.write(to: destination, options: .atomic) }
+                // Written in the background: a big page's archive can be tens of megabytes.
+                if case .success(let data) = result {
+                    DispatchQueue.global(qos: .userInitiated).async { try? data.write(to: destination, options: .atomic) }
+                }
             }
         }
     }
