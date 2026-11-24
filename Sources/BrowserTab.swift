@@ -630,7 +630,7 @@ extension BrowserTab: WKUIDelegate {
         case .microphone: kinds = [.microphone]
         default: kinds = [.camera, .microphone]
         }
-        SitePermissions.shared.request(kinds, host: origin.host, window: webView.window) {
+        SitePermissions.shared.request(kinds, host: origin.host, window: webView.window, privately: isPrivate) {
             decisionHandler($0 ? .grant : .deny)
         }
     }
@@ -640,7 +640,7 @@ extension BrowserTab: WKUIDelegate {
     @objc(_webView:requestGeolocationPermissionForOrigin:initiatedByFrame:decisionHandler:)
     func hush_requestLocation(_ webView: WKWebView, origin: WKSecurityOrigin, frame: WKFrameInfo,
                               decisionHandler: @escaping (WKPermissionDecision) -> Void) {
-        SitePermissions.shared.request([.location], host: origin.host, window: webView.window) {
+        SitePermissions.shared.request([.location], host: origin.host, window: webView.window, privately: isPrivate) {
             decisionHandler($0 ? .grant : .deny)
         }
     }
@@ -649,7 +649,7 @@ extension BrowserTab: WKUIDelegate {
     func hush_requestLocationLegacy(_ webView: WKWebView, frame: WKFrameInfo,
                                     decisionHandler: @escaping (Bool) -> Void) {
         SitePermissions.shared.request([.location], host: frame.securityOrigin.host, window: webView.window,
-                                       completion: decisionHandler)
+                                       privately: isPrivate, completion: decisionHandler)
     }
 }
 

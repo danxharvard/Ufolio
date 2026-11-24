@@ -58,6 +58,7 @@ struct SetupGuide: View {
                         Label("Back", systemImage: "arrow.left").font(.system(size: 13, weight: .medium))
                     }
                     .buttonStyle(.plain)
+                    .disabled(importing)
                     .foregroundStyle(Color.accentColor)
                     .keyboardShortcut(.leftArrow, modifiers: [])
                 } else {
@@ -270,7 +271,7 @@ struct SetupGuide: View {
                 DispatchQueue.main.async {
                     importing = false
                     importResult = message
-                    go(1)
+                    if step == .bringStuff { go(1) }   // you might have gone back meanwhile
                 }
             }
         case .defaultBrowser:

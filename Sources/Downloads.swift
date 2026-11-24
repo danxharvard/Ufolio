@@ -94,7 +94,12 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
 
     static var folder: URL {
         let saved = Prefs.string(Prefs.downloadFolder)
-        if !saved.isEmpty { return URL(fileURLWithPath: saved, isDirectory: true) }
+        // A chosen folder that's gone (an unplugged drive, say) falls back to Downloads,
+        // rather than every download quietly failing.
+        var isFolder: ObjCBool = false
+        if !saved.isEmpty, FileManager.default.fileExists(atPath: saved, isDirectory: &isFolder), isFolder.boolValue {
+            return URL(fileURLWithPath: saved, isDirectory: true)
+        }
         return FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
     }
 
@@ -339,7 +344,9 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
 
     private func save() {
         // Private windows' downloads are never written down (the files themselves stay, as in Safari).
-        let saved = items.filter { $0.state != .downloading && !$0.isPrivate }.map(\.saved)
+        // The newest 300 at most: with "Manually" chosen the list could otherwise grow forever,
+        // and it's written out whole on every change.
+        let saved = items.filter { $0.state != .downloading && !$0.isPrivate }.prefix(300).map(\.saved)
         UserDefaults.standard.set(try? JSONEncoder().encode(saved), forKey: "downloadList")
     }
 }

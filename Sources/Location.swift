@@ -67,7 +67,10 @@ final class SitePermissions: ObservableObject {
     }
 
     /// Decides a site's request: remembered answer, the global policy, or a prompt.
-    func request(_ kinds: [PermissionKind], host: String?, window: NSWindow?, completion: @escaping (Bool) -> Void) {
+    /// Answers given in a Stealth window (`privately`) last until Ufolio quits and are never
+    /// written down, so the permissions list can't record a site you visited there.
+    func request(_ kinds: [PermissionKind], host: String?, window: NSWindow?, privately: Bool = false,
+                 completion: @escaping (Bool) -> Void) {
         guard let host, !host.isEmpty else { completion(false); return }
         if kinds.contains(where: { policy(for: $0) == .never }) { completion(false); return }
         let siteKey = ContentBlocker.normalize(host)
@@ -99,10 +102,11 @@ final class SitePermissions: ObservableObject {
                     for kind in kinds { self?.sessionAllowed.insert(site + "|" + kind.rawValue) }
                     completion(true)
                 case 1:                                  // Always Allow: remembered for this site
-                    self?.set(true, for: site, kinds)
+                    if privately { for kind in kinds { self?.sessionAllowed.insert(site + "|" + kind.rawValue) } }
+                    else { self?.set(true, for: site, kinds) }
                     completion(true)
                 default:                                 // Don't Allow: remembered, so the site stops asking
-                    self?.set(false, for: site, kinds)
+                    if !privately { self?.set(false, for: site, kinds) }
                     completion(false)
                 }
             })

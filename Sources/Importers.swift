@@ -44,6 +44,7 @@ extension BrowserImporter {
             walk(plist)
         }
         let web = found.filter { ["http", "https"].contains($0.url.scheme?.lowercased() ?? "") }
+        if Thread.isMainThread { return BookmarkStore.shared.add(imported: web) }   // a sync hop would deadlock
         return DispatchQueue.main.sync { BookmarkStore.shared.add(imported: web) }
     }
 

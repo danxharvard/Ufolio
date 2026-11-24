@@ -66,6 +66,7 @@ final class HistoryStore: ObservableObject {
 
     func record(_ url: URL, title: String) {
         guard let url = Self.key(url) else { return }
+        if Date().timeIntervalSince(lastPrune) > 3600 { prune() }
         var entry = entries[url.absoluteString] ?? HistoryEntry(url: url, title: title, visits: 0, lastVisit: Date())
         entry.visits += 1
         entry.lastVisit = Date()
@@ -112,6 +113,16 @@ final class HistoryStore: ObservableObject {
     }
 
     /// History entries matching what's typed in the address bar, best first.
+    /// Every entry whose title or address contains `query` (all of them when it's empty), using
+    /// the prepared search index rather than lower-casing all of history on every keystroke.
+    func entries(matching query: String) -> [HistoryEntry] {
+        let q = query.lowercased()
+        guard !q.isEmpty else { return Array(entries.values) }
+        let index = searchIndex ?? entries.map { (text: $0.value.title.lowercased() + "\n" + $0.value.url.absoluteString.lowercased(), id: $0.key) }
+        searchIndex = index
+        return index.compactMap { $0.text.contains(q) ? entries[$0.id] : nil }
+    }
+
     func search(_ query: String, limit: Int) -> [HistoryEntry] {
         let q = query.lowercased()
         guard q.count >= 2 else { return [] }
@@ -154,24 +165,31 @@ final class HistoryStore: ObservableObject {
 
     /// Removes entries older than the chosen limit (Settings › General).
     func prune() {
+        lastPrune = Date()
         guard let maxAge = HistoryRetention.current.maxAge else { return }
         let cutoff = Date().addingTimeInterval(-maxAge)
-        let before = entries.count
-        entries = entries.filter { $0.value.lastVisit >= cutoff }
-        if entries.count != before { scheduleSave() }
+        let kept = entries.filter { $0.value.lastVisit >= cutoff }
+        guard kept.count != entries.count else { return }   // nothing old: no redraw, no save
+        entries = kept
+        scheduleSave()
     }
+    /// Old history is also removed while Ufolio stays open (it used to happen only at launch,
+    /// so "after one day" could keep pages for as long as Ufolio was left running).
+    private var lastPrune = Date()
 
     func add(imported: [HistoryEntry]) -> Int {
         var added = 0
+        var updated = entries   // changed as one, so it's announced (and copied) once
         for item in imported {
             guard let url = Self.key(item.url) else { continue }
-            var entry = entries[url.absoluteString] ?? HistoryEntry(url: url, title: item.title, visits: 0, lastVisit: item.lastVisit)
+            var entry = updated[url.absoluteString] ?? HistoryEntry(url: url, title: item.title, visits: 0, lastVisit: item.lastVisit)
             entry.visits += item.visits
             entry.lastVisit = max(entry.lastVisit, item.lastVisit)
             if entry.title.isEmpty { entry.title = item.title }
-            entries[url.absoluteString] = entry
+            updated[url.absoluteString] = entry
             added += 1
         }
+        entries = updated
         scheduleSave()
         return added
     }
@@ -353,6 +371,8 @@ enum BrowserImporter {
             imported.append(HistoryEntry(url: url, title: title, visits: max(1, visits),
                                          lastVisit: last > 0 ? min(toDate(last), Date()) : Date()))
         }
+        // (Straight away if already on the main thread: a sync hop from there would deadlock.)
+        if Thread.isMainThread { return HistoryStore.shared.add(imported: imported) }
         return DispatchQueue.main.sync { HistoryStore.shared.add(imported: imported) }
     }
 }

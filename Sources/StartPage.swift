@@ -24,7 +24,8 @@ struct StartPage: View {
     @State private var headerHeight: CGFloat = 0
 
     var body: some View {
-        let favouriteHosts = Set(bookmarks.items.compactMap { $0.url.host?.lowercased().strippingWWW })
+        // Only the favourites actually shown (all bookmarks made a huge cache key on every redraw).
+        let favouriteHosts = Set(bookmarks.items(in: nil).prefix(16).compactMap { $0.url.host?.lowercased().strippingWWW })
         // Adult sites stay off the start page unless you've chosen to show them.
         let hideAdult = !showAdult
         let suggestions = showSuggestions ? history.frequentSites(limit: hideAdult ? 12 : 6, excluding: favouriteHosts)
@@ -89,7 +90,7 @@ struct StartPage: View {
     private func startParts(closedTabs: [ClosedTab], suggestions: [FrequentSite]) -> [Part] {
         var parts: [Part] = []
         if showClosed && !closedTabs.isEmpty { parts.append(.closed) }
-        if showFavourites && !bookmarks.items.isEmpty { parts.append(.favourites) }
+        if showFavourites && bookmarks.items.contains(where: { $0.folder == nil }) { parts.append(.favourites) }
         if !suggestions.isEmpty { parts.append(.suggestions) }
         if showPrivacy { parts.append(.privacy) }
         if Prefs.bool(Prefs.startNews) { parts.append(.news) }
@@ -165,7 +166,10 @@ struct StartPage: View {
         StartSection(title: "Favourites") {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 92, maximum: 104), spacing: 14)],
                       alignment: .leading, spacing: 20) {
-                ForEach(bookmarks.items) { bookmark in
+                // Two rows' worth, from bookmarks not in a folder: showing every bookmark (after
+                // importing hundreds) made the section too tall to fit, so it vanished, and
+                // fetched every one of their icons each time a new tab opened.
+                ForEach(bookmarks.items(in: nil).prefix(16)) { bookmark in
                     FavouriteTile(bookmark: bookmark, model: model)
                 }
             }

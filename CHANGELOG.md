@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.43.5: ten more fixes
+
+**Stealth Mode leaves no trace**
+- Choosing "Always Allow" or "Don't Allow" for a camera, microphone or location prompt in a
+  Stealth window now lasts only until Ufolio quits, instead of saving the site to your
+  permissions list.
+- Choosing to visit a look-alike site anyway from a Stealth window is no longer written down.
+
+**Start page and bookmarks**
+- The start page shows up to 16 Favourites (bookmarks not in a folder). With lots of
+  bookmarks, Favourites used to vanish because they didn't fit, and every bookmark's icon was
+  fetched each time a new tab opened.
+- The bookmarks bar only builds the bookmarks in view, so it stays quick however many you have.
+
+**Fixes**
+- "Remove history after…" now also applies while Ufolio stays open, not only when it starts.
+- If your chosen download folder is gone (an unplugged drive, say), downloads go to your
+  Downloads folder instead of failing.
+- The downloads list is kept to the newest 300, so it can't grow forever.
+- In the setup guide, going back during an import no longer jumps you forward when it finishes.
+
+**Smoother**
+- Searching in History and in the sidebar is much faster as you type.
+- The start page's suggestions no longer do extra work for every bookmark you have.
+
 ## 0.43.4: ten more fixes
 
 **Security and privacy**

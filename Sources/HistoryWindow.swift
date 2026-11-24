@@ -7,8 +7,7 @@ struct HistoryWindowView: View {
 
     private var days: [(day: Date, entries: [HistoryEntry])] {
         let q = query.lowercased()
-        let matching = history.entries.values
-            .filter { q.isEmpty || $0.title.lowercased().contains(q) || $0.url.absoluteString.lowercased().contains(q) }
+        let matching = history.entries(matching: q)
             .sorted { $0.lastVisit > $1.lastVisit }
             .prefix(2000)
         let calendar = Calendar.current

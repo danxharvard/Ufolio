@@ -262,12 +262,13 @@ final class BookmarkStore: ObservableObject {
 
 /// The row of bookmarks under the toolbar.
 struct BookmarkBar: View {
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel   // only opens pages: tab changes don't redraw the bar
     @ObservedObject private var store = BookmarkStore.shared
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 2) {
+            // Lazy: only the chips in view are built (and fetch their icons), however many you have.
+            LazyHStack(spacing: 2) {
                 if store.items.isEmpty {
                     Text("Press ⌘D to bookmark a page — it appears here")
                         .font(.system(size: 11.5))
@@ -289,7 +290,7 @@ struct BookmarkBar: View {
 
 /// A folder in the bookmarks bar: a menu of its bookmarks.
 private struct FolderChip: View {
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel
     let folder: String
     @ObservedObject private var store = BookmarkStore.shared
     @State private var hovering = false
@@ -323,7 +324,7 @@ private struct FolderChip: View {
 }
 
 private struct BookmarkChip: View {
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel
     let bookmark: Bookmark
     @State private var hovering = false
     @State private var renaming = false

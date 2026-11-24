@@ -43,10 +43,14 @@ enum Lookalike {
     }
 
     static func allowedAnyway(_ site: String) -> Bool {
-        (UserDefaults.standard.stringArray(forKey: "lookalikeAllowed") ?? []).contains(site)
+        sessionAllowed.contains(site) || (UserDefaults.standard.stringArray(forKey: "lookalikeAllowed") ?? []).contains(site)
     }
 
-    static func allow(_ site: String) {
+    /// Allowed from Stealth windows: until Ufolio quits only, never written down.
+    private static var sessionAllowed: Set<String> = []
+
+    static func allow(_ site: String, remember: Bool = true) {
+        guard remember else { sessionAllowed.insert(site); return }
         let list = UserDefaults.standard.stringArray(forKey: "lookalikeAllowed") ?? []
         UserDefaults.standard.set(Array(Set(list + [site])), forKey: "lookalikeAllowed")
     }

@@ -521,7 +521,7 @@ private struct TabPage: View {
                     // The real site comes from your own bookmarks and history: never assume it's a tidy address.
                     if let real = URL(string: "https://\(block.match.real)") { tab.load(real) } else { tab.lookalike = nil }
                 } onContinue: {
-                    Lookalike.allow(Domains.site(block.url.host ?? ""))
+                    Lookalike.allow(Domains.site(block.url.host ?? ""), remember: !tab.isPrivate)   // Stealth leaves no record
                     tab.load(block.url)
                 }
                 .clipShape(PageCorners.shape)
