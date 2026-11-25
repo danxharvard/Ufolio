@@ -49,8 +49,16 @@ enum WebCryptoKey {
         let file = folder.appendingPathComponent("WebCrypto.key")
         if let data = try? Data(contentsOf: file), data.count == 16 { return data }
         let key = random()
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: file.path, contents: key, attributes: [.posixPermissions: 0o600])
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true,
+                                                    attributes: [.posixPermissions: 0o700])
+            // Atomic write also replaces a damaged/empty key file. createFile() silently fails
+            // when that path already exists, which previously made every launch invent a new key.
+            try key.write(to: file, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        } catch {
+            NSLog("Ufolio: couldn't persist its WebCrypto key: \(error)")
+        }
         return key
     }()
 
@@ -58,7 +66,12 @@ enum WebCryptoKey {
 
     private static func random() -> Data {
         var bytes = [UInt8](repeating: 0, count: 16)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        if SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) != errSecSuccess {
+            // Keep a cryptographically secure system-RNG fallback rather than silently returning
+            // an all-zero or partially filled key if Security.framework reports an error.
+            var generator = SystemRandomNumberGenerator()
+            bytes = (0..<16).map { _ in UInt8.random(in: .min ... .max, using: &generator) }
+        }
         return Data(bytes)
     }
 }

@@ -151,9 +151,10 @@ final class Updater: ObservableObject {
             var sigRequest = URLRequest(url: sigURL)
             sigRequest.timeoutInterval = 20
             let (sigData, sigResponse) = try await URLSession.shared.data(for: sigRequest)
-            guard (sigResponse as? HTTPURLResponse)?.statusCode == 200, sigData.count < 1024,
+            guard let finalSignatureURL = sigResponse.url, Self.isTrustedDownload(finalSignatureURL),
+                  (sigResponse as? HTTPURLResponse)?.statusCode == 200, sigData.count < 1024,
                   let sigText = String(data: sigData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  let signature = Data(base64Encoded: sigText) else { throw UpdateError("This update’s signature couldn’t be read.") }
+                  let signature = Data(base64Encoded: sigText) else { throw UpdateError("This update’s signature couldn’t be read from a trusted address.") }
             let genuine = try await Task.detached(priority: .utility) {
                 let data = try Data(contentsOf: zip, options: .mappedIfSafe)
                 return Updater.isSigned(data, signature: signature)
@@ -232,7 +233,7 @@ final class Updater: ObservableObject {
     }
 
     /// Release files must come from GitHub over HTTPS (or the local test server).
-    private static func isTrustedDownload(_ url: URL) -> Bool {
+    static func isTrustedDownload(_ url: URL) -> Bool {
         let host = url.host?.lowercased() ?? ""
         if apiBase != "https://api.github.com" { return host == "127.0.0.1" || host == "localhost" }
         return url.scheme == "https" && (host == "github.com" || host.hasSuffix(".githubusercontent.com"))
@@ -317,6 +318,7 @@ private final class FileDownload: NSObject, URLSessionDownloadDelegate {
     private let onProgress: (Double) -> Void
     private var continuation: CheckedContinuation<Void, Error>?
     private var failure: Error?
+    private static let maximumDownloadBytes: Int64 = 1_073_741_824
 
     private init(destination: URL, onProgress: @escaping (Double) -> Void) {
         self.destination = destination
@@ -335,14 +337,32 @@ private final class FileDownload: NSObject, URLSessionDownloadDelegate {
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
                     totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        if totalBytesExpectedToWrite > Self.maximumDownloadBytes || totalBytesWritten > Self.maximumDownloadBytes {
+            failure = UpdateError("This update is larger than the 1 GB safety limit.")
+            downloadTask.cancel()
+            return
+        }
         if totalBytesExpectedToWrite > 0 {
             onProgress(min(1, Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)))
         }
     }
 
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
+                    completionHandler: @escaping (URLRequest?) -> Void) {
+        guard let url = request.url, Updater.isTrustedDownload(url) else {
+            failure = UpdateError("The update download redirected to an untrusted address.")
+            completionHandler(nil)
+            task.cancel()
+            return
+        }
+        completionHandler(request)
+    }
+
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        guard (downloadTask.response as? HTTPURLResponse)?.statusCode == 200 else {
-            failure = UpdateError("The download failed.")
+        guard let finalURL = downloadTask.response?.url, Updater.isTrustedDownload(finalURL),
+              (downloadTask.response as? HTTPURLResponse)?.statusCode == 200 else {
+            failure = UpdateError("The download did not finish at a trusted address.")
             return
         }
         do {
