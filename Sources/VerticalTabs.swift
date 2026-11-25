@@ -252,7 +252,7 @@ private struct SideTabRow: View {
         .onHover { hovering = $0 }
         .contextMenu { TabMenuItems(model: model, tab: tab, vertical: true) }
         .tabPreview(tab, selected: selected, edge: .trailing)
-        .animation(.easeOut(duration: 0.12), value: hovering)
+        .animation(.snappy(duration: 0.16), value: hovering)
     }
 
     @ViewBuilder private var icon: some View {

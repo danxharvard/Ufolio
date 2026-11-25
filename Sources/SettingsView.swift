@@ -200,7 +200,7 @@ private struct SidebarCard: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.12), value: hovering)
+        .animation(.snappy(duration: 0.16), value: hovering)
     }
 }
 
@@ -1822,11 +1822,11 @@ private struct PasswordSettings: View {
                                 if revealed[login.id] != nil { revealed[login.id] = nil }
                                 else { revealed[login.id] = PasswordVault.password(for: login) ?? "" }
                             } label: { Image(systemName: revealed[login.id] == nil ? "eye" : "eye.slash") }
-                                .buttonStyle(.borderless).help("Show password")
+                                .buttonStyle(.borderless).accessibilityLabel("Show password")
                             Button { copy(login) } label: {
                                 Image(systemName: copiedID == login.id ? "checkmark" : "doc.on.doc")
                             }
-                            .buttonStyle(.borderless).help("Copy password (cleared from the clipboard after 90 seconds)")
+                            .buttonStyle(.borderless).accessibilityLabel("Copy password (cleared from the clipboard after 90 seconds)")
                             Button {
                                 // Asks first: one stray click used to delete a saved password for good.
                                 DialogHost.settings.present(HushDialog(

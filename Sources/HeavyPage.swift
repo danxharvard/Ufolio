@@ -21,14 +21,19 @@ struct HeavyPageBar: View {
         }
     }
 
+    /// In the same style as Ufolio's other bars: a hairline above, an icon tile, sliding in.
     private func bar<Buttons: View>(symbol: String, text: String, @ViewBuilder buttons: () -> Buttons) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: symbol).foregroundStyle(Color.orange)
-            Text(text).font(.system(size: 12)).lineLimit(1)
-            Spacer()
-            buttons().controlSize(.small)
+        VStack(spacing: 0) {
+            Hairline()
+            HStack(spacing: 10) {
+                IconTile(symbol: symbol, colors: [Color(red: 1.0, green: 0.72, blue: 0.25), Color(red: 0.95, green: 0.50, blue: 0.12)], size: 22)
+                Text(text).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
+                Spacer(minLength: 8)
+                buttons().controlSize(.small)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
         }
-        .padding(.horizontal, 12)
-        .frame(height: 30)
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 }

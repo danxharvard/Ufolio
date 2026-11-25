@@ -143,10 +143,10 @@ private struct DialogOverlay: ViewModifier {
                         }
                     }
                     .id(dialog.id)
-                    .transition(.opacity)
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
                 }
             }
-            .animation(.easeOut(duration: 0.2), value: host.current?.id)
+            .animation(.smooth(duration: 0.26), value: host.current?.id)
             .onReceive(NotificationCenter.default.publisher(for: QuitHelper.closeSheets)) { _ in host.cancelAll() }
     }
 }
@@ -268,7 +268,7 @@ private struct DialogButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .contentShape(Rectangle())
             .onHover { hovering = $0 }
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .animation(.snappy(duration: 0.16), value: configuration.isPressed)
     }
 }
 

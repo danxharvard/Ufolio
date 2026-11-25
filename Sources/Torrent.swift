@@ -596,18 +596,23 @@ struct TorrentGuardBar: View {
     var body: some View {
         let stopped = tab.torrentPopupsBlocked, marked = tab.torrentTrapsMarked
         if (stopped > 0 || marked > 0), dismissedFor != stopped + marked {
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.shield.fill").foregroundStyle(Color.accentColor)
-                Text(summary(stopped: stopped, marked: marked)).font(.system(size: 12)).lineLimit(1)
-                Spacer()
-                Button { dismissedFor = stopped + marked } label: {
-                    Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
+            VStack(spacing: 0) {
+                Hairline()
+                HStack(spacing: 10) {
+                    IconTile(symbol: "checkmark.shield.fill",
+                             colors: [Color(red: 0.55, green: 0.40, blue: 1.0), Color(red: 0.36, green: 0.26, blue: 0.86)], size: 22)
+                    Text(summary(stopped: stopped, marked: marked)).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
+                    Spacer(minLength: 8)
+                    Button { dismissedFor = stopped + marked } label: {
+                        Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Dismiss")
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
             }
-            .padding(.horizontal, 12)
-            .frame(height: 28)
+            .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
 

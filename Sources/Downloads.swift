@@ -429,7 +429,7 @@ private struct ActiveRing: View {
                 .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .frame(width: 21, height: 21)
-                .animation(.easeOut(duration: 0.25), value: progress)
+                .animation(.smooth(duration: 0.26), value: progress)
         }
     }
 }

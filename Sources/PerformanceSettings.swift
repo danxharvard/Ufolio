@@ -282,7 +282,7 @@ private struct MemoryRow: View {
             Button("Sleep", action: onSleep)
                 .controlSize(.small)
                 .disabled(item.isSelected)
-                .help(item.isSelected ? "The tab you’re looking at stays awake." : "Free this tab’s memory. It wakes when you go back to it.")
+                .accessibilityLabel(item.isSelected ? "The tab you’re looking at stays awake." : "Free this tab’s memory. It wakes when you go back to it.")
         }
     }
 }

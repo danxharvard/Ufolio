@@ -114,7 +114,7 @@ struct AddressBar: View {
             if !isEditing { text = display(model.selectedTab?.url, hovering: inside) }
         }
         .animation(.easeOut(duration: 0.15), value: isEditing)
-        .animation(.easeOut(duration: 0.12), value: hovering)
+        .animation(.snappy(duration: 0.16), value: hovering)
         .onAppear { text = displayText }
         // onChange actions can still see the previous values, so always use the new value
         // or read the selected tab from the model, never the captured `tab`.

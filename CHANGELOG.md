@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.51.0-beta.6: Send to iPhone, steadier, smoother (beta)
+
+**Send to iPhone** (⋯ menu, or File › Send to iPhone…)
+- Send the page you're on to your iPhone by AirDrop, through the Mac's Share menu (Messages,
+  Mail, Notes…), or with a QR code your iPhone's camera can read. No account, no server: the
+  QR code is made on your Mac only when you ask, and nothing runs in the background.
+
+**Steadier**
+- Removed hover tooltips from things that disappear under the mouse (address-bar suggestions,
+  start-page favourites and suggestions, bookmark bar items, password rows, Orbit buttons and
+  more). macOS could try to show a tooltip for something already gone and crash Ufolio.
+
+**Smoother** (how things move, not what they do)
+- Hover highlights settle with a crisp, quick spring instead of a plain fade.
+- Panels, bars and cards appear and disappear with a smooth spring: a soft start and stop,
+  and fluid if you change your mind halfway.
+- Dialogs settle in with the faintest scale as they fade in.
+- The start page's sections rise in more smoothly, with a slightly tighter stagger.
+- All of it still switches off with Reduce Motion.
+
+**Look**
+- The heavy page and torrent site bars now match Ufolio's other bars: a hairline above, an icon
+  tile, and they slide in.
+
 ## 0.51.0-beta.5: six new features (beta)
 
 **Tab previews**

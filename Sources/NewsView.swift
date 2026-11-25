@@ -63,7 +63,7 @@ struct NewsSection: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 6)
         }
-        .animation(.easeOut(duration: 0.25), value: channel)
+        .animation(.smooth(duration: 0.26), value: channel)
     }
 
     private var header: some View {

@@ -128,8 +128,8 @@ struct BrowserWindow: View {
                 .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.25), value: showWelcome)
-        .animation(.easeOut(duration: 0.25), value: whatsNew?.version)
+        .animation(.smooth(duration: 0.26), value: showWelcome)
+        .animation(.smooth(duration: 0.26), value: whatsNew?.version)
         // Links opened from other apps (when Hush is the default browser) arrive here.
         .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         .onOpenURL { url in
@@ -398,6 +398,9 @@ private struct MorePanel: View {
                 let hasPage = model.selectedTab?.url != nil
                 row("printer", "Print…", .print, enabled: hasPage) { model.selectedTab?.printPage() }
                 row("square.and.arrow.down", "Save Page As…", .savePage, enabled: hasPage) { model.selectedTab?.savePage() }
+                row("iphone.and.arrow.forward", "Send to iPhone…", enabled: hasPage && !model.isPrivate) {
+                    if let tab = model.selectedTab, let url = tab.url { Beam.show(url, title: tab.displayTitle, in: model.window) }
+                }
                 row("translate", "Translate Page…", .translate, enabled: hasPage) {
                     if let tab = model.selectedTab {
                         if tab.translation == .translated { PageTranslator.shared.showOriginal(tab) } else { PageTranslator.shared.translate(tab) }
@@ -675,7 +678,7 @@ struct ToolbarIconButton: View {
         .buttonStyle(.plain)
         .help(help)
         .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.12), value: hovering)
+        .animation(.snappy(duration: 0.16), value: hovering)
     }
 }
 
@@ -716,7 +719,7 @@ struct ShieldsButton: View {
         .buttonStyle(.plain)
         .help(shieldsUp ? "Force Field: blocking ads and trackers on this site" : "Force Field is off for this site")
         .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.12), value: hovering)
+        .animation(.snappy(duration: 0.16), value: hovering)
         // A tiny "hush" pulse when something is blocked (at most once a second).
         .onChange(of: tab.blockedOnPage) { _, count in
             guard count > 0, !reduceMotion, Date().timeIntervalSince(lastPulse) > 1 else { return }
@@ -816,7 +819,7 @@ struct ShieldsPanel: View {
                     .frame(height: 300)
             }
         }
-        .animation(.easeOut(duration: 0.2), value: shieldsUp)
+        .animation(.smooth(duration: 0.26), value: shieldsUp)
     }
 
     /// This site, its status, and the on/off switch.
@@ -1274,7 +1277,7 @@ struct ProgressLine: View {
                 // Scaled rather than resized: animating a scale is only drawing, not layout.
                 .scaleEffect(x: max(0.05, tab.progress), y: 1, anchor: .leading)
                 .opacity(tab.isLoading ? 1 : 0)
-                .animation(.easeOut(duration: 0.25), value: tab.progress)
+                .animation(.smooth(duration: 0.26), value: tab.progress)
                 .animation(.easeOut(duration: 0.4), value: tab.isLoading)
         }
         .frame(height: 2)

@@ -355,7 +355,7 @@ struct SpacesSettings: View {
                         Spacer()
                         Button { editing = space } label: { Image(systemName: "slider.horizontal.3") }
                             .buttonStyle(.borderless)
-                            .help("Edit name, icon, colour and profile")
+                            .accessibilityLabel("Edit name, icon, colour and profile")
                             .popover(isPresented: Binding(get: { editing?.id == space.id }, set: { if !$0 { editing = nil } })) {
                                 SpaceEditor(space: space, isNew: false) { result in
                                     if let result { store.update(result) }
@@ -407,7 +407,7 @@ struct SpacesSettings: View {
                         Text(users == 0 ? "Not used" : users == 1 ? "1 Orbit" : "\(users) Orbits")
                             .font(.system(size: 11)).foregroundStyle(.secondary)
                         Button { renaming = profile } label: { Image(systemName: "pencil") }
-                            .buttonStyle(.borderless).help("Rename")
+                            .buttonStyle(.borderless).accessibilityLabel("Rename")
                         Button(role: .destructive) { confirmDelete(profile) } label: { Image(systemName: "trash") }
                             .buttonStyle(.borderless)
                     }

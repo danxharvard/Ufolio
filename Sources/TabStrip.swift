@@ -289,7 +289,7 @@ private struct ChromeTab: View {
         // just been closed under the pointer and crash Ufolio (a SwiftUI fault).
         .contextMenu { TabMenuItems(model: model, tab: tab) }
         .tabPreview(tab, selected: isSelected, edge: .bottom)
-        .animation(.easeOut(duration: 0.12), value: hovering)
+        .animation(.snappy(duration: 0.16), value: hovering)
     }
 }
 

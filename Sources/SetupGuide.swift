@@ -419,7 +419,7 @@ private struct ChoiceCard: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.12), value: hovering)
+        .animation(.snappy(duration: 0.16), value: hovering)
         .animation(.easeOut(duration: 0.15), value: selected)
     }
 }

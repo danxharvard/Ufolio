@@ -403,7 +403,7 @@ private struct FolderChip: View {
         .frame(height: 24)
         .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.primary.opacity(hovering ? 0.08 : 0)))
         .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.1), value: hovering)
+        .animation(.snappy(duration: 0.16), value: hovering)
     }
 }
 
@@ -437,12 +437,11 @@ private struct BookmarkChip: View {
                 Preloader.preloadSoon(bookmark.url, for: model.selectedTab)   // rested on it: load it
             } else { Preloader.cancelSoon() }
         }
-        .animation(.easeOut(duration: 0.1), value: hovering)
+        .animation(.snappy(duration: 0.16), value: hovering)
         .onTapGesture {
             let newTab = NSEvent.modifierFlags.contains(.command)
             model.open(bookmark.url, inNewTab: newTab)
         }
-        .help(bookmark.url.absoluteString)
         .contextMenu {
             Button { model.open(bookmark.url, inNewTab: true) } label: { Label("Open in New Tab", systemImage: "plus.square.on.square") }
             Button("Copy Address") {
@@ -467,7 +466,7 @@ private struct BookmarkChip: View {
             }
             .padding(12)
         }
-        .animation(.easeOut(duration: 0.1), value: hovering)
+        .animation(.snappy(duration: 0.16), value: hovering)
     }
 
     private func commitRename() {

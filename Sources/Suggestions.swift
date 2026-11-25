@@ -241,7 +241,7 @@ private struct SuggestionRow: View {
                 Image(systemName: badge)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(isSelected ? Color.white.opacity(0.8) : Color.secondary.opacity(0.7))
-                    .help(item.kind == .bookmark ? "Bookmark" : "From your history")
+                    .accessibilityLabel(item.kind == .bookmark ? "Bookmark" : "From your history")
             }
             if isSelected {
                 Image(systemName: "return")

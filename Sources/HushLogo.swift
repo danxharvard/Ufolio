@@ -369,7 +369,7 @@ struct PeekingAlien: View {
             .offset(y: hovering ? -4 : 0)
             .animation(.spring(response: 0.35, dampingFraction: 0.5), value: hovering)
             .onHover { hovering = $0 }
-            .help("Greetings, Earthling")
+            .accessibilityLabel("Greetings, Earthling")
             .accessibilityHidden(true)
     }
 }

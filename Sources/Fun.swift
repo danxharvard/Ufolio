@@ -240,7 +240,7 @@ struct AbductionCounter: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .help("See what the saucer abducted today")
+        .accessibilityLabel("See what the saucer abducted today")
         .popover(isPresented: $showing, arrowEdge: .bottom) { AbductionLog(summary: report.summary) }
     }
 }
@@ -316,7 +316,7 @@ struct WeeklyReportCard: View {
                         .padding(.horizontal, 9).padding(.vertical, 4)
                         .foregroundStyle(badge.earned ? Color.accentColor : Color.secondary.opacity(0.6))
                         .background(Capsule().fill(Color.primary.opacity(badge.earned ? 0.08 : 0.04)))
-                        .help(badge.detail + (badge.earned ? "" : " (not yet)"))
+                        .accessibilityLabel(badge.detail + (badge.earned ? "" : " (not yet)"))
                     }
                 }
             }

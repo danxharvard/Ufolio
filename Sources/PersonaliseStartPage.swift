@@ -73,7 +73,7 @@ struct PersonaliseButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.15), value: hovering)
+        .animation(.snappy(duration: 0.16), value: hovering)
         .help("Show your local weather on the start page")
     }
 }
@@ -186,7 +186,7 @@ struct PersonaliseCard: View {
             .padding(.vertical, 22)
         }
         .frame(width: 460)
-        .animation(.easeOut(duration: 0.2), value: error)
+        .animation(.smooth(duration: 0.26), value: error)
         .animation(.easeOut(duration: 0.15), value: search.suggestions)
         .onChange(of: query) { _, text in
             error = nil

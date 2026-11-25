@@ -71,7 +71,6 @@ struct StartPage: View {
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Capsule().fill(.black.opacity(0.25)))
                     .padding(14)
-                    .help(credit)
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -90,9 +89,9 @@ struct StartPage: View {
                     .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.2), value: customisingNews)
-        .animation(.easeOut(duration: 0.25), value: closed.tabs.count)
-        .animation(.easeOut(duration: 0.2), value: personalising)
+        .animation(.smooth(duration: 0.26), value: customisingNews)
+        .animation(.smooth(duration: 0.26), value: closed.tabs.count)
+        .animation(.smooth(duration: 0.26), value: personalising)
         .onAppear { weather.refreshIfNeeded(); GalaxyRank.recordToday() }
         .onReceive(NotificationCenter.default.publisher(for: QuitHelper.closeSheets)) { _ in personalising = false }
     }
@@ -328,7 +327,7 @@ private struct ClosedTabPill: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.12), value: hovering)
+        .animation(.snappy(duration: 0.16), value: hovering)
     }
 }
 
@@ -370,7 +369,6 @@ private struct FavouriteTile: View {
             } else { Preloader.cancelSoon() }
         }
         .animation(.spring(response: 0.25, dampingFraction: 0.75), value: hovering)
-        .help(bookmark.url.absoluteString)
         .task(id: bookmark.url) {
             icon = await FaviconCache.shared.info(for: bookmark.url)
             loaded = true
@@ -483,7 +481,6 @@ private struct SuggestionCard: View {
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.8), value: hovering)
         .animation(.easeOut(duration: 0.3), value: icon?.pixels)
-        .help(site.url.absoluteString)
         .task(id: site.host) { icon = await FaviconCache.shared.info(for: site.url) }
         .contextMenu {
             Button { model.open(site.url, inNewTab: true) } label: { Label("Open in New Tab", systemImage: "plus.square.on.square") }
@@ -619,7 +616,7 @@ private struct RiseIn: ViewModifier {
             .offset(y: shown || reduceMotion ? 0 : 14)
             .onAppear {
                 guard !reduceMotion else { return }
-                withAnimation(.spring(response: 0.55, dampingFraction: 0.85).delay(0.05 + Double(order) * 0.06)) { shown = true }
+                withAnimation(.smooth(duration: 0.5).delay(0.04 + Double(order) * 0.05)) { shown = true }
             }
     }
 }
