@@ -171,7 +171,9 @@ struct CookieCleanerSection: View {
     private func addSite() {
         let text = newSite.trimmingCharacters(in: .whitespaces).lowercased()
         let host = URL(string: text.contains("://") ? text : "https://" + text)?.host ?? text
-        guard !host.isEmpty else { return }
+        // A real site name only (it accepted anything, so a typo like "examplecom" was kept as a
+        // site that matches nothing).
+        guard !host.isEmpty, host.contains("."), !host.contains(" ") else { return }
         kept = Array(Set(kept + [Domains.site(host)])).sorted()
         CookieCleaner.kept = kept
         newSite = ""

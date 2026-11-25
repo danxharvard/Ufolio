@@ -790,7 +790,15 @@ extension BrowserTab: WKNavigationDelegate {
         let disposition = (response.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Disposition")?
             .trimmingCharacters(in: .whitespaces).lowercased() ?? ""
         let attachment = response.isForMainFrame && disposition.hasPrefix("attachment")
-        decisionHandler(response.canShowMIMEType && !attachment ? .allow : .download)
+        let wantsDownload = !response.canShowMIMEType || attachment
+        // A frame inside the page (an ad, say) may only start a download just after you clicked or
+        // typed in the page: files used to arrive from frames with no click at all.
+        if wantsDownload, !response.isForMainFrame,
+           Date().timeIntervalSince((webView as? HushWebView)?.lastInteraction ?? .distantPast) > 10 {
+            decisionHandler(.cancel)
+            return
+        }
+        decisionHandler(wantsDownload ? .download : .allow)
     }
 
     /// A load that failed before anything arrived. If Ufolio guessed the address from what you
@@ -1204,7 +1212,12 @@ final class HushWebView: WKWebView {
         if let superview, covered(superview.convert(point, to: nil)) { return nil }
         return super.hitTest(point)
     }
-    override func mouseDown(with event: NSEvent) { if !covered(event) { super.mouseDown(with: event) } }
+    override func mouseDown(with event: NSEvent) {
+        if !covered(event) { lastInteraction = Date(); super.mouseDown(with: event) }
+    }
+    override func keyDown(with event: NSEvent) { lastInteraction = Date(); super.keyDown(with: event) }
+    /// When you last clicked or typed in this page (frames may only start a download just after).
+    var lastInteraction = Date.distantPast
     override func mouseUp(with event: NSEvent) { if !covered(event) { super.mouseUp(with: event) } }
     override func mouseDragged(with event: NSEvent) { if !covered(event) { super.mouseDragged(with: event) } }
     override func rightMouseDown(with event: NSEvent) { if !covered(event) { super.rightMouseDown(with: event) } }
