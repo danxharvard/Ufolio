@@ -31,7 +31,11 @@ enum FolderSafety {
     /// other files) or is unreasonably large.
     static func check(_ folder: URL, maxBytes: Int = 500_000_000, maxFiles: Int = 50_000) throws {
         let keys: [URLResourceKey] = [.isSymbolicLinkKey, .fileSizeKey]
-        guard let walker = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: keys, options: []) else {
+        var inspectionError: Error?
+        guard let walker = FileManager.default.enumerator(
+            at: folder, includingPropertiesForKeys: keys, options: [],
+            errorHandler: { _, error in inspectionError = error; return false }
+        ) else {
             throw ExtensionError("Ufolio couldn’t inspect this extension folder, so it wasn’t added.")
         }
         var total = 0, count = 0
@@ -43,6 +47,9 @@ enum FolderSafety {
             total = sum
             count += 1
             if total > maxBytes || count > maxFiles { throw ExtensionError("This extension is too large to add.") }
+        }
+        if inspectionError != nil {
+            throw ExtensionError("Ufolio couldn’t inspect every file in this extension folder, so it wasn’t added.")
         }
     }
 }
