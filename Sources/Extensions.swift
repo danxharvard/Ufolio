@@ -226,10 +226,7 @@ final class ExtensionStore: ObservableObject {
             let destination = directory(for: record)
             let replacement = folder.appendingPathComponent(".\(id).new-\(UUID().uuidString)", isDirectory: true)
             let backup = folder.appendingPathComponent(".\(id).old-\(UUID().uuidString)", isDirectory: true)
-            defer {
-                try? FileManager.default.removeItem(at: replacement)
-                try? FileManager.default.removeItem(at: backup)
-            }
+            defer { try? FileManager.default.removeItem(at: replacement) }
 
             // Prepare the complete new copy before touching the installed extension. If anything
             // fails during the swap, restore the old directory and put its extension back online.
@@ -249,6 +246,7 @@ final class ExtensionStore: ObservableObject {
                 if let previous { await ExtensionManager.shared.load(previous) }
                 throw error
             }
+            try? FileManager.default.removeItem(at: backup)
             installed.removeAll { $0.id == id }
             installed.append(record)
             save()
