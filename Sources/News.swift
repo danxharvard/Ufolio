@@ -407,10 +407,9 @@ final class FeedParser: NSObject, XMLParserDelegate {
     /// Strips tags and decodes entities, for showing as plain text.
     static func plain(_ html: String) -> String {
         var s = html.replacingOccurrences(of: #"<[^>]+>"#, with: " ", options: .regularExpression)
-        let entities = ["&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", "&#39;": "'", "&#039;": "'", "&apos;": "'",
-                        "&nbsp;": " ", "&#8217;": "’", "&#8216;": "‘", "&#8220;": "“", "&#8221;": "”", "&#8211;": "–",
-                        "&#8212;": "—", "&#8230;": "…", "&hellip;": "…", "&rsquo;": "’", "&lsquo;": "‘", "&ldquo;": "“", "&rdquo;": "”"]
-        for (k, v) in entities { s = s.replacingOccurrences(of: k, with: v) }
+        // One pass, knowing every numeric entity: a fixed list replaced in random order missed
+        // many (headlines showed "&#x2019;") and could decode "&amp;lt;" twice.
+        s = BookmarkStore.decodeEntities(s)
         return s.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
     }
 

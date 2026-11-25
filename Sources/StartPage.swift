@@ -38,7 +38,8 @@ struct StartPage: View {
         let hideAdult = !showAdult
         let suggestions = showSuggestions ? history.frequentSites(limit: hideAdult ? 12 : 6, excluding: favouriteHosts)
             .filter { !hideAdult || !AdultSites.isAdult($0.url) }.prefix(6).map { $0 } : []
-        let closedTabs = closed.tabs.filter { !hideAdult || !AdultSites.isAdult($0.url) }
+        let profile = model.profileID
+        let closedTabs = closed.tabs.filter { $0.profile == profile && (!hideAdult || !AdultSites.isAdult($0.url)) }
         ZStack {
             // In the background, so it can never affect the page's size.
             Color.clear.background { StartBackdrop() }
@@ -285,7 +286,7 @@ private struct RecentlyClosedSection: View {
     var body: some View {
         StartSection(title: "Recently Closed Tabs") {
             Button {
-                RecentlyClosed.shared.clear()
+                RecentlyClosed.shared.clear(profile: model.profileID)
             } label: {
                 Label("Clear All", systemImage: "xmark.circle.fill")
                     .font(.system(size: 12.5, weight: .medium))

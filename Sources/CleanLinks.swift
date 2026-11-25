@@ -70,7 +70,8 @@ enum CleanLinks {
         guard let host = url.host?.lowercased().strippingWWW else { return nil }
         if deAMPEnabled, let real = unAMP(url, host: host) { return real }
         guard debounceEnabled, let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
-        for rule in redirectors where host == rule.host || host.hasSuffix("." + rule.host) {
+        for rule in redirectors where host == rule.host || host.hasSuffix("." + rule.host)
+            || (rule.host == "google.com" && isGoogle(host)) {
             guard url.path.hasPrefix(rule.path) else { continue }
             var target: String?
             if rule.params.isEmpty {
@@ -86,7 +87,7 @@ enum CleanLinks {
     /// Google's AMP copies of articles → the publisher's own page.
     private static func unAMP(_ url: URL, host: String) -> URL? {
         let path = url.path
-        if host == "google.com" || host.hasSuffix(".google.com"), path.hasPrefix("/amp/") {
+        if isGoogle(host), path.hasPrefix("/amp/") {
             var rest = String(path.dropFirst("/amp/".count))
             let secure = rest.hasPrefix("s/")
             if secure { rest = String(rest.dropFirst(2)) }
@@ -100,6 +101,14 @@ enum CleanLinks {
             return validTarget((secure ? "https://" : "http://") + tail.joined(separator: "/"), from: host)
         }
         return nil
+    }
+
+    /// Google in any country: google.com, google.co.uk, google.de, google.com.au… (Only
+    /// google.com was recognised, so UK users' Google redirects and AMP links weren't skipped.)
+    static func isGoogle(_ host: String) -> Bool {
+        let site = Domains.site(host)
+        guard site.hasPrefix("google.") else { return false }
+        return site.dropFirst("google.".count).range(of: #"^[a-z]{2,3}(\.[a-z]{2})?$"#, options: .regularExpression) != nil
     }
 
     private static func validTarget(_ text: String, from host: String) -> URL? {

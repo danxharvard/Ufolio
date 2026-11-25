@@ -148,6 +148,7 @@ final class SpaceStore: ObservableObject {
         // Its own history and bookmarks go with it.
         HistoryStore.forget(profile: id)
         BookmarkStore.forget(profile: id)
+        RecentlyClosed.shared.clear(profile: id)
         try? FileManager.default.removeItem(at: AppPaths.support.appendingPathComponent("Profiles").appendingPathComponent(id.uuidString))
         let store = stores.removeValue(forKey: id) ?? WKWebsiteDataStore(forIdentifier: id)
         // Wipe the data straight away, then remove the store itself once nothing uses it.

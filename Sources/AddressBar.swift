@@ -351,7 +351,7 @@ enum URLResolver {
         if looksLikeAddress(input) {
             // Local servers usually don't do HTTPS.
             let host = input.split(separator: "/").first.map { String($0.split(separator: ":").first ?? "") } ?? ""
-            let local = host == "localhost" || host.hasSuffix(".local") || host.split(separator: ".").allSatisfy { Int($0) != nil }
+            let local = host.lowercased() == "localhost" || host.lowercased().hasSuffix(".local") || isIPv4(host)
             let url = URL(string: (local ? "http://" : "https://") + input)
             if let url { lastGuess = (url, input) }
             return url
@@ -369,11 +369,22 @@ enum URLResolver {
 
     static func looksLikeAddress(_ s: String) -> Bool {
         if s.contains(" ") { return false }
-        if s.hasPrefix("localhost") { return true }
         let host = s.split(separator: "/", maxSplits: 1).first.map(String.init) ?? s
         let hostOnly = host.split(separator: ":").first.map(String.init) ?? host
+        if hostOnly.lowercased() == "localhost" { return true }
+        // Numbers only count as an address when they're a whole IP address: "3.14" or "10.50"
+        // used to open http://3.14 (an IP address) instead of searching.
+        if isIPv4(hostOnly) { return true }
         let parts = hostOnly.split(separator: ".")
         guard parts.count >= 2, let tld = parts.last, tld.count >= 2 else { return false }
-        return tld.allSatisfy { $0.isLetter } || parts.allSatisfy { Int($0) != nil }
+        return tld.allSatisfy { $0.isLetter }
+    }
+
+    /// Four numbers from 0 to 255, like 192.168.1.1.
+    static func isIPv4(_ host: String) -> Bool {
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        return parts.count == 4 && parts.allSatisfy { part in
+            !part.isEmpty && part.count <= 3 && part.allSatisfy(\.isASCII) && (Int(part).map { (0...255).contains($0) } ?? false)
+        }
     }
 }

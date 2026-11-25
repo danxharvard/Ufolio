@@ -7,6 +7,9 @@ struct ClosedTab: Codable, Identifiable, Equatable {
     var title: String
     var url: URL
     var closed: Date
+    /// The profile it was open in (nil: the default profile). Each profile sees and reopens only
+    /// its own closed tabs.
+    var profile: UUID? = nil
 }
 
 /// The last tabs you closed, for the start page and History › Reopen Closed Tab.
@@ -24,18 +27,19 @@ final class RecentlyClosed: ObservableObject {
         }
     }
 
-    func add(title: String, url: URL) {
+    func add(title: String, url: URL, profile: UUID?) {
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return }
-        tabs.removeAll { $0.url == url }
-        tabs.insert(ClosedTab(title: title.isEmpty ? (url.host ?? url.absoluteString) : title, url: url, closed: Date()), at: 0)
+        tabs.removeAll { $0.url == url && $0.profile == profile }
+        tabs.insert(ClosedTab(title: title.isEmpty ? (url.host ?? url.absoluteString) : title, url: url, closed: Date(),
+                              profile: profile), at: 0)
         if tabs.count > Self.limit { tabs.removeLast(tabs.count - Self.limit) }
         save()
     }
 
     /// Takes a tab off the list (when it's reopened).
     @discardableResult
-    func take(_ tab: ClosedTab? = nil) -> ClosedTab? {
-        guard let target = tab ?? tabs.first, let i = tabs.firstIndex(of: target) else { return nil }
+    func take(_ tab: ClosedTab? = nil, profile: UUID? = nil) -> ClosedTab? {
+        guard let target = tab ?? tabs.first(where: { $0.profile == profile }), let i = tabs.firstIndex(of: target) else { return nil }
         let taken = tabs.remove(at: i)
         save()
         return taken
@@ -43,6 +47,12 @@ final class RecentlyClosed: ObservableObject {
 
     func clear() {
         tabs = []
+        save()
+    }
+
+    /// Clears one profile's closed tabs (the start page's Clear, and deleting a profile).
+    func clear(profile: UUID?) {
+        tabs.removeAll { $0.profile == profile }
         save()
     }
 

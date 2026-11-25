@@ -82,7 +82,14 @@ enum PasswordImporter {
     }
 
     static func importCSV(_ url: URL) throws -> Result {
-        var text = try String(contentsOf: url, encoding: .utf8)
+        // Most exports are UTF-8, but a file saved from Excel can be UTF-16 or Windows text: those
+        // used to fail with a confusing "text encoding" error.
+        let data = try Data(contentsOf: url)
+        guard var text = String(data: data, encoding: .utf8)
+                ?? ((data.starts(with: [0xFF, 0xFE]) || data.starts(with: [0xFE, 0xFF])) ? String(data: data, encoding: .utf16) : nil)
+                ?? String(data: data, encoding: .windowsCP1252) else {
+            throw NSError(domain: "Ufolio", code: 2, userInfo: [NSLocalizedDescriptionKey: "That file couldn’t be read as text."])
+        }
         // Some password managers (and anything saved from Excel) start the file with an invisible
         // byte-order mark, which hid the first column's name ("url") so the file was rejected.
         if text.hasPrefix("\u{FEFF}") { text.removeFirst() }

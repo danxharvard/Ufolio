@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.47.1: ten fixes
+
+**Profiles**
+- Fixed: recently closed tabs were shared by every profile. A tab closed in your work profile
+  showed on your personal start page, and Reopen Closed Tab brought it back there without
+  that profile's sign-ins. Each profile now sees and reopens only its own closed tabs, and
+  deleting a profile clears them.
+
+**Restoring tabs**
+- Fixed: with two or more windows open, Restore last session brought back only the window
+  that changed last. Every open window's tabs now come back.
+
+**Address bar**
+- Typing a number like 3.14 or 10.50 now searches for it. It used to open it as an IP address.
+- "Localhost:3000" and other capitalised local addresses now open over plain http like
+  "localhost" does.
+
+**Clean Links**
+- Google redirect links and AMP pages are now skipped on Google's regional sites too
+  (google.co.uk, google.de, google.com.au and so on), not only google.com.
+
+**Downloads**
+- Two files with the same name downloaded at the same moment no longer get the same name
+  (one overwrote or failed the other).
+- Very long file names in Japanese, Chinese or with emoji are now shortened to fit macOS's
+  limit. Those downloads used to fail.
+
+**Bookmarks, news and imports**
+- Imported bookmark titles now show apostrophes, quotes and dashes properly, not codes like
+  "&#8217;". Text like "&amp;lt;" is no longer sometimes decoded twice.
+- The same fix for News headlines.
+- Importing passwords from a CSV saved by Excel (UTF-16 or Windows text) now works instead
+  of failing with a text encoding error.
+
+**Galaxy rank**
+- Days now count when you open a window, not only when the start page shows, so people
+  whose new tabs open a website rank up too.
+
 ## 0.47.0: a saucer pet, warp speed, galaxy ranks and a planet of the week
 
 **Saucer pet**

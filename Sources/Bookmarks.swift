@@ -191,7 +191,7 @@ final class BookmarkStore: ObservableObject {
         }
         var html = """
         <!DOCTYPE NETSCAPE-Bookmark-file-1>
-        <!-- Exported from Hush Browser -->
+        <!-- Exported from Ufolio Browser -->
         <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
         <TITLE>Bookmarks</TITLE>
         <H1>Bookmarks</H1>
@@ -208,11 +208,43 @@ final class BookmarkStore: ObservableObject {
     }
 
     private static func plain(_ s: String) -> String {
-        var t = s.replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
-        for (k, v) in ["&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", "&#39;": "'", "&#x27;": "'", "&nbsp;": " "] {
-            t = t.replacingOccurrences(of: k, with: v)
+        let t = s.replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
+        return decodeEntities(t).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Turns &amp;, &#8217; and the like back into characters, in one pass. (It used to know only
+    /// a few names, so titles showed "&#8217;", and replaced them in a random order, so "&amp;lt;"
+    /// could come out as "<".)
+    nonisolated static func decodeEntities(_ text: String) -> String {
+        guard text.contains("&") else { return text }
+        let named: [String: String] = ["amp": "&", "lt": "<", "gt": ">", "quot": "\"", "apos": "'", "nbsp": " ",
+                                       "ndash": "–", "mdash": "—", "hellip": "…", "lsquo": "‘", "rsquo": "’",
+                                       "ldquo": "“", "rdquo": "”", "copy": "©", "reg": "®", "trade": "™"]
+        var result = ""
+        var rest = Substring(text)
+        while let amp = rest.firstIndex(of: "&") {
+            result += rest[..<amp]
+            let after = rest[rest.index(after: amp)...]
+            if let semi = after.prefix(12).firstIndex(of: ";") {
+                let name = String(after[..<semi])
+                var decoded: String?
+                if name.hasPrefix("#x") || name.hasPrefix("#X") {
+                    decoded = UInt32(name.dropFirst(2), radix: 16).flatMap(Unicode.Scalar.init).map { String(Character($0)) }
+                } else if name.hasPrefix("#") {
+                    decoded = UInt32(name.dropFirst()).flatMap(Unicode.Scalar.init).map { String(Character($0)) }
+                } else {
+                    decoded = named[name.lowercased()]
+                }
+                if let decoded {
+                    result += decoded
+                    rest = after[after.index(after: semi)...]
+                    continue
+                }
+            }
+            result += "&"
+            rest = after
         }
-        return t.trimmingCharacters(in: .whitespacesAndNewlines)
+        return result + rest
     }
 
     /// Asks where to save, and writes the bookmarks file.

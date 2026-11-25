@@ -189,7 +189,10 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
         let ext = (name as NSString).pathExtension
         var candidate = folder.appendingPathComponent(name)
         var n = 2
-        while FileManager.default.fileExists(atPath: candidate.path) {
+        // Also skip names taken by downloads still running: two files with the same name started
+        // together were both given the same path, before either existed on disk.
+        let claimed = Set(items.filter { $0.state != .finished }.compactMap { $0.destination?.standardizedFileURL.path })
+        while FileManager.default.fileExists(atPath: candidate.path) || claimed.contains(candidate.standardizedFileURL.path) {
             candidate = folder.appendingPathComponent(ext.isEmpty ? "\(base) \(n)" : "\(base) \(n).\(ext)")
             n += 1
         }
@@ -227,9 +230,23 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
             .trimmingCharacters(in: .whitespaces)
         if name.isEmpty || name.hasPrefix(".") { name = "download" + name }
         let ext = (name as NSString).pathExtension
-        var base = (name as NSString).deletingPathExtension
-        if base.utf8.count > 200 { base = String(base.prefix(120)) }
-        return ext.isEmpty || ext.count > 20 ? String(name.prefix(200)) : base + "." + ext
+        let base = (name as NSString).deletingPathExtension
+        // macOS allows 255 bytes per name, not characters: a long name in Japanese or emoji cut
+        // to 120 or 200 characters could still be too long, and the download then failed.
+        // (Room is left for " 12" when the name is already taken.)
+        if ext.isEmpty || ext.count > 20 { return fitting(name, bytes: 230) }
+        return fitting(base, bytes: 228 - ext.utf8.count) + "." + ext
+    }
+
+    /// The longest start of the text that fits in that many UTF-8 bytes, cut between characters.
+    private static func fitting(_ text: String, bytes: Int) -> String {
+        guard text.utf8.count > bytes else { return text }
+        var result = ""
+        for character in text {
+            if result.utf8.count + character.utf8.count > bytes { break }
+            result.append(character)
+        }
+        return result
     }
 
     func downloadDidFinish(_ download: WKDownload) {

@@ -294,6 +294,9 @@ final class BrowserModel: NSObject, ObservableObject {
         super.init()
         BrowserModel.all.add(self)
         if isPrivate { FeatureUsage.mark(.stealth); StealthDays.recordToday() }
+        // Counted here too, not only on the start page: someone whose new tabs open a website
+        // would otherwise never rank up.
+        else { GalaxyRank.recordToday() }
         // Which tabs are playing sound (for the speaker button on tabs).
         audioTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             self?.tabs.forEach { $0.checkAudio() }
@@ -381,8 +384,11 @@ final class BrowserModel: NSObject, ObservableObject {
         sessionSave?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            let saved = self.tabs.filter { $0.url != nil }
-            let pinned = saved.filter(\.isPinned)
+            let pinned = self.tabs.filter { $0.url != nil && $0.isPinned }
+            // Every open window's tabs, this one's first: each window used to overwrite the
+            // others', so with two windows open only one window's tabs came back next launch.
+            let others = BrowserModel.all.allObjects.filter { $0 !== self && !$0.isPrivate && ($0.window?.isVisible ?? false) }
+            let saved = ([self] + others).flatMap { model in model.tabs.filter { $0.url != nil && !(model !== self && $0.isPinned) } }
             let d = UserDefaults.standard
             d.set(pinned.compactMap { $0.url?.absoluteString }, forKey: "pinnedTabs")
             d.set(pinned.map { $0.spaceID?.uuidString ?? "" }, forKey: "pinnedTabSpaces")
@@ -437,7 +443,7 @@ final class BrowserModel: NSObject, ObservableObject {
             partner = pair.left == tab.id ? pair.right : pair.left
             splitPair = nil
         }
-        if remember, !isPrivate, let url = tab.url { RecentlyClosed.shared.add(title: tab.title, url: url) }
+        if remember, !isPrivate, let url = tab.url { RecentlyClosed.shared.add(title: tab.title, url: url, profile: tab.profileID) }
         if remember, isPrivate, let url = tab.url { privateClosed.append(url); if privateClosed.count > 20 { privateClosed.removeFirst() } }
         ExtensionEvents.closed(tab)
         tab.tearDown()
@@ -471,7 +477,9 @@ final class BrowserModel: NSObject, ObservableObject {
             if let current = selectedTab, current.isBlank { current.load(url) } else { newTab(url: url) }
             return
         }
-        guard let tab = RecentlyClosed.shared.take(closed) else { return }
+        // Only this profile's closed tabs: a tab closed in another profile used to come back here,
+        // without that profile's sign-ins.
+        guard let tab = RecentlyClosed.shared.take(closed, profile: profileID) else { return }
         if let current = selectedTab, current.isBlank {
             current.load(tab.url)
         } else {
