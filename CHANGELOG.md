@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.48.2: Ufolio opens again
+
+- Fixed: Ufolio 0.48.0 and 0.48.1 closed straight away when opened, if you had any bookmarks.
+  Setting up the bookmarks list asked for itself while it was still being created. Sorry!
+
 ## 0.48.1: one family of toolbar icons
 
 **Toolbar**
