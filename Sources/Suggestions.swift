@@ -61,7 +61,11 @@ final class SuggestionsModel: ObservableObject {
         guard !q.isEmpty else { items = []; return }
 
         let local = localItems(for: q)
-        items = local + items.filter { $0.kind == .search && $0.title.lowercased().hasPrefix(q.lowercased()) }
+        let lower = q.lowercased()
+        // History is searched in the background (below); meanwhile earlier matches that still fit stay.
+        let earlierHistory = items.filter { $0.kind == .history && ($0.title.lowercased().contains(lower) || $0.text.lowercased().contains(lower)) }
+        items = local + earlierHistory.prefix(max(0, 5 - local.count))
+            + items.filter { $0.kind == .search && $0.title.lowercased().hasPrefix(lower) }
 
         task = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 90_000_000) // wait for a pause in typing
@@ -72,19 +76,23 @@ final class SuggestionsModel: ObservableObject {
                 Speed.preconnect(url, in: self?.browser?.selectedTab?.webView)
             }
             // Addresses and pasted links (which can carry private tokens) never go to the search engine.
+            let found = await (self?.browser?.history ?? .shared).searchInBackground(q, limit: 8)
+            guard !Task.isCancelled, let me = self, me.query == q, me.active else { return }
+            let historyItems = me.historyItems(found, after: local)
+            me.items = local + historyItems + me.items.filter { $0.kind == .search }
             let isAddress = URLResolver.looksLikeAddress(q) || q.contains("://") || q.lowercased().hasPrefix("file:")
             let remote = Prefs.bool(Prefs.searchSuggestions) && !isAddress ? await Self.fetchSuggestions(q) : []
             guard !Task.isCancelled else { return }
             guard let self, self.query == q, self.active else { return }
-            let localTexts = Set(local.map { $0.text.lowercased() })
+            let localTexts = Set((local + historyItems).map { $0.text.lowercased() })
             let searches = remote
                 .filter { !localTexts.contains($0.lowercased()) }
-                .prefix(max(3, 8 - local.count))
+                .prefix(max(3, 8 - local.count - historyItems.count))
                 .map { Suggestion(kind: .search, title: $0, text: $0) }
             // Keep the highlight on the suggestion you picked (its position may have changed);
             // otherwise Return could open a different one.
             let picked = self.selected?.text
-            self.items = local + searches
+            self.items = local + historyItems + searches
             self.selectedIndex = picked.flatMap { text in self.items.firstIndex { $0.text == text } }
         }
     }
@@ -107,10 +115,19 @@ final class SuggestionsModel: ObservableObject {
             result.append(Suggestion(kind: .bookmark, title: mark.title,
                                      detail: mark.url.host?.strippingWWW, text: mark.url.absoluteString))
         }
-        // Pages you've visited before, best match first.
-        let taken = Set(result.map { $0.text })
-        for entry in (browser?.history ?? .shared).search(q, limit: 8) where !taken.contains(entry.url.absoluteString) && seen.insert(key(entry.url)).inserted {
-            guard result.count < 5 else { break }
+        return result
+    }
+
+    /// Pages you've visited before (best match first), leaving out ones already suggested; up to
+    /// five suggestions from your own pages in all.
+    private func historyItems(_ found: [HistoryEntry], after local: [Suggestion]) -> [Suggestion] {
+        func key(_ url: URL) -> String {
+            (url.host?.lowercased().strippingWWW ?? "") + url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + (url.query ?? "")
+        }
+        var seen = Set(local.compactMap { URL(string: $0.text).map(key) })
+        var result: [Suggestion] = []
+        for entry in found where seen.insert(key(entry.url)).inserted {
+            guard local.count + result.count < 5 else { break }
             result.append(Suggestion(kind: .history, title: entry.title.isEmpty ? (entry.url.host ?? "") : entry.title,
                                      detail: entry.url.host?.strippingWWW, text: entry.url.absoluteString))
         }

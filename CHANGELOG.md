@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.49.1: heavy work moved off the main thread
+
+Ufolio's windows stay responsive while it reads, writes and searches: that work now happens
+in the background, and the main thread only draws and responds to you.
+
+- History is read from disk in the background as Ufolio opens. With thousands of pages it used
+  to hold up the first window. Pages you visit meanwhile are kept, and history is never written
+  over before it has been read.
+- Typing in the address bar searches your history in the background, so a big history can't
+  make typing stutter. Earlier matches stay in the list while the new search runs.
+- Saving a password after you sign in, filling a password, and opening Settings › Passwords
+  now read and write the keychain in the background. Each could freeze the window, especially
+  when macOS asks for permission.
+- If WebKit's compiled copies of Force Field's lists go missing (after a cleaner app, say),
+  their rules are now read in the background before being rebuilt. A big list like Hushlist
+  is tens of megabytes and used to freeze Ufolio as it opened.
+- As Force Field's lists finish loading at launch, they're applied to your tabs once, instead
+  of once per list (about ten times in a row).
+
 ## 0.49.0: much faster browsing
 
 Measured on a test copy of Ufolio, loading eight busy sites three times each, before and after:

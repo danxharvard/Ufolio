@@ -74,11 +74,39 @@ final class HistoryStore: ObservableObject {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         file = folder.appendingPathComponent("history.json")
         hiddenKey = profile.map { "hiddenFrequentHosts." + $0.uuidString } ?? "hiddenFrequentHosts"
-        if let saved = AppPaths.load([HistoryEntry].self, from: file) {
-            entries = Dictionary(saved.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        }
         hiddenHosts = Set(UserDefaults.standard.stringArray(forKey: hiddenKey) ?? [])
-        prune()
+        // Read in the background: with thousands of pages, decoding history on the main thread
+        // held up Ufolio's first window. Pages visited meanwhile are kept (they win over the file).
+        let file = self.file
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let saved = AppPaths.load([HistoryEntry].self, from: file) ?? []
+            let loaded = Dictionary(saved.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if !loaded.isEmpty { self.entries = loaded.merging(self.entries) { _, recent in recent } }
+                self.isLoaded = true
+                self.prune()
+            }
+        }
+    }
+
+    /// Whether history has been read from disk yet (nothing is written over it before then).
+    private(set) var isLoaded = false
+
+    /// Searches a copy of history away from the main thread, so typing in the address bar never
+    /// waits on it.
+    func searchInBackground(_ query: String, limit: Int) async -> [HistoryEntry] {
+        let q = query.lowercased()
+        guard q.count >= 2 else { return [] }
+        let snapshot = entries
+        return await Task.detached(priority: .userInitiated) {
+            snapshot.values
+                .filter { $0.title.lowercased().contains(q) || $0.url.absoluteString.lowercased().contains(q) }
+                .map { (entry: $0, score: $0.score) }
+                .sorted { $0.score > $1.score }
+                .prefix(limit)
+                .map(\.entry)
+        }.value
     }
 
     private static func key(_ url: URL) -> URL? {
@@ -235,6 +263,11 @@ final class HistoryStore: ObservableObject {
     /// Writes history to disk. `waiting` blocks until it's written (used when Hush quits).
     func save(waiting: Bool = false) {
         saveWork?.cancel()
+        // Not read yet: writing now would replace the saved history with only today's pages.
+        guard isLoaded else {
+            if !waiting { scheduleSave() }
+            return
+        }
         var list = Array(entries.values)
         if list.count > Self.maxEntries {
             list = list.map { (entry: $0, score: $0.score) }.sorted { $0.score > $1.score }

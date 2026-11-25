@@ -136,10 +136,16 @@ final class ContentBlocker: ObservableObject {
                 self?.install(list, as: identifier)
                 return
             }
-            guard let json = source() else { return }
-            self?.store.compileContentRuleList(forIdentifier: identifier, encodedContentRuleList: json) { list, error in
-                if let list { self?.install(list, as: identifier) }
-                if let error { NSLog("Ufolio: couldn't compile \(identifier): \(error)") }
+            // The rules are read (or built) in the background: a big list's file is tens of
+            // megabytes, and reading it on the main thread froze Ufolio as it opened.
+            DispatchQueue.global(qos: .utility).async {
+                guard let json = source() else { return }
+                DispatchQueue.main.async {
+                    self?.store.compileContentRuleList(forIdentifier: identifier, encodedContentRuleList: json) { list, error in
+                        if let list { self?.install(list, as: identifier) }
+                        if let error { NSLog("Ufolio: couldn't compile \(identifier): \(error)") }
+                    }
+                }
             }
         }
     }
@@ -147,6 +153,17 @@ final class ContentBlocker: ObservableObject {
     private func install(_ list: WKContentRuleList, as identifier: String) {
         DispatchQueue.main.async {
             self.compiled[identifier] = list
+            self.scheduleRefresh()
+        }
+    }
+
+    /// Several lists finish loading together at launch: apply them to the tabs once, not once each.
+    private var refreshScheduled = false
+    private func scheduleRefresh() {
+        guard !refreshScheduled else { return }
+        refreshScheduled = true
+        DispatchQueue.main.async {
+            self.refreshScheduled = false
             self.refresh()
         }
     }

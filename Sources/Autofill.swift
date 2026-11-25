@@ -431,8 +431,13 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
             send(kind: "newpassword", data: ["password": password], host: host, tab: tab)
         case .login(let login):
             UserAuth.confirm("fill your password for \(host)") { [weak self] ok in
-                guard ok, let password = PasswordVault.password(for: login) else { return }
-                self?.send(kind: "login", data: ["username": login.account, "password": password], host: host, tab: tab)
+                guard ok else { return }
+                DispatchQueue.global(qos: .userInitiated).async {
+                    guard let password = PasswordVault.password(for: login) else { return }
+                    DispatchQueue.main.async {
+                        self?.send(kind: "login", data: ["username": login.account, "password": password], host: host, tab: tab)
+                    }
+                }
             }
         case .card(let summary):
             UserAuth.confirm("fill your card details") { [weak self] ok in
@@ -476,8 +481,19 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
         if let last = lastSaveOffer, last.key == key, Date().timeIntervalSince(last.date) < 60 { return }
         lastSaveOffer = (key, Date())
 
-        let existing = PasswordVault.logins(for: host).first { $0.account == username }
-        if let existing, PasswordVault.password(for: existing) == password { return }
+        // The keychain is read in the background: it can be slow (or ask permission), and
+        // sending a sign-in form used to freeze the window while it did.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self, weak tab] in
+            let existing = PasswordVault.logins(for: host).first { $0.account == username }
+            let unchanged = existing.map { PasswordVault.password(for: $0) == password } ?? false
+            DispatchQueue.main.async {
+                guard let self, let tab, !unchanged else { return }
+                self.showSaveOffer(existing: existing, username: username, password: password, host: host, tab: tab)
+            }
+        }
+    }
+
+    private func showSaveOffer(existing: SavedLogin?, username: String, password: String, host: String, tab: BrowserTab) {
         guard let window = tab.webView.window, !DialogHost.isBusy(window) else { return }
 
         let who = username.isEmpty ? "" : " for “\(username)”"
@@ -494,7 +510,7 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
             choices: choices,
             completion: { choice, _ in
                 switch choice {
-                case 0: PasswordVault.save(host: host, account: username, password: password)
+                case 0: DispatchQueue.global(qos: .userInitiated).async { PasswordVault.save(host: host, account: username, password: password) }
                 case 2: PasswordVault.neverSave = PasswordVault.neverSave + [host]
                 default: break
                 }

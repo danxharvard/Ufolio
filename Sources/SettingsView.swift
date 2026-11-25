@@ -1873,7 +1873,11 @@ private struct PasswordSettings: View {
         }
         .formStyle(SafariFormStyle())
         .onAppear {
-            cardList = CardVault.list()
+            // The keychain is read in the background, so opening this pane never stalls.
+            DispatchQueue.global(qos: .userInitiated).async {
+                let cards = CardVault.list()
+                DispatchQueue.main.async { cardList = cards }
+            }
             if MyCard.status == .authorized {
                 DispatchQueue.global(qos: .userInitiated).async {
                     let name = MyCard.displayName
@@ -1892,8 +1896,10 @@ private struct PasswordSettings: View {
     private func unlock() {
         UserAuth.confirm("show your saved passwords") { ok in
             guard ok else { return }
-            logins = PasswordVault.logins()
-            unlocked = true
+            DispatchQueue.global(qos: .userInitiated).async {
+                let all = PasswordVault.logins()
+                DispatchQueue.main.async { logins = all; unlocked = true }
+            }
         }
     }
 
