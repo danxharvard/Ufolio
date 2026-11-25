@@ -2,9 +2,12 @@ import SwiftUI
 
 /// The private window's colours: a deep night purple, so it's obvious at a glance.
 enum PrivateChrome {
-    static let toolbar = Color(red: 0.17, green: 0.13, blue: 0.30)
-    static let frame = Color(red: 0.11, green: 0.08, blue: 0.21)
-    static var tint: Chrome.Tint { Chrome.Tint(toolbar: toolbar, frame: frame, scheme: .dark) }
+    /// The one purple laid over the dark frosted glass of the whole Stealth window (toolbar, tab
+    /// column, start page alike), instead of separate solid colours that never quite matched.
+    static let glassTint = Color(red: 0.36, green: 0.22, blue: 0.80).opacity(0.28)
+    /// The toolbar and selected tab use the same light veil as a normal window; the frame adds nothing.
+    static var tint: Chrome.Tint { Chrome.Tint(toolbar: Color.white.opacity(0.045), frame: .clear, scheme: .dark) }
+    static let lavender = Color(red: 0.78, green: 0.70, blue: 1.0)
 }
 
 /// The button beside Hush Guard that opens a Private Browsing window.
@@ -15,9 +18,7 @@ struct PrivateWindowButton: View {
 
     var body: some View {
         Button { openWindow(id: "private") } label: {
-            Image(systemName: "eyeglasses")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(isPrivate ? Color(red: 0.78, green: 0.70, blue: 1.0) : Color.primary.opacity(0.75))
+            StealthIcon(color: isPrivate ? PrivateChrome.lavender : Color.primary.opacity(0.75))
                 .frame(width: 28, height: 26)
                 .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(Color.primary.opacity(hovering ? 0.08 : 0)))
@@ -33,17 +34,13 @@ struct PrivateWindowButton: View {
 struct PrivateStartPage: View {
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(red: 0.16, green: 0.11, blue: 0.32), Color(red: 0.06, green: 0.05, blue: 0.13)],
-                           startPoint: .top, endPoint: .bottom)
+            // The same dark frosted purple glass as the rest of the Stealth window.
+            VisualEffect(material: .underWindowBackground, blending: .behindWindow, appearance: NSAppearance(named: .darkAqua))
                 .ignoresSafeArea()
+            PrivateChrome.glassTint.ignoresSafeArea()
             VStack(spacing: 18) {
-                ZStack {
-                    Circle().fill(Color.white.opacity(0.06)).frame(width: 120, height: 120)
-                    Image(systemName: "eyeglasses")
-                        .font(.system(size: 46, weight: .light))
-                        .foregroundStyle(LinearGradient(colors: [Color(red: 0.85, green: 0.78, blue: 1.0), Color(red: 0.58, green: 0.48, blue: 0.98)],
-                                                        startPoint: .top, endPoint: .bottom))
-                }
+                CloakedSaucer()
+                    .frame(width: 150, height: 120)
                 Text("Stealth Mode")
                     .font(.system(size: 34, weight: .thin, design: .rounded))
                     .foregroundStyle(.white)
@@ -78,5 +75,73 @@ private struct PrivateFact: View {
             Text(text).font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.85))
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+}
+
+
+// MARK: - The Stealth saucer
+
+/// A small saucer, half cloaked: the Stealth button's icon.
+struct StealthIcon: View {
+    var color: Color
+
+    var body: some View {
+        ZStack {
+            HushMark(color: color.opacity(0.35), showStars: false)
+            HushMark(color: color, showStars: false)
+                .mask(LinearGradient(colors: [.black, .black, .clear], startPoint: .leading, endPoint: .trailing))
+        }
+        .frame(width: 19, height: 15)
+    }
+}
+
+/// The Stealth start page's emblem: a saucer shimmering in and out of its cloaking field, with
+/// a band of light sweeping across it. Still with Reduce Motion or Effects off.
+struct CloakedSaucer: View {
+    @State private var cloaked = false
+    @State private var sweep = false
+    @Environment(\.controlActiveState) private var activeState
+
+    var body: some View {
+        ZStack {
+            // A soft violet glow behind it.
+            Circle()
+                .fill(RadialGradient(colors: [PrivateChrome.lavender.opacity(0.28), .clear], center: .center, startRadius: 0, endRadius: 70))
+                .frame(width: 140, height: 140)
+            // Faint rings, like a field around it.
+            ForEach(0..<2) { i in
+                Ellipse()
+                    .strokeBorder(PrivateChrome.lavender.opacity(cloaked ? 0.10 : 0.22), style: StrokeStyle(lineWidth: 1, dash: [3, 5]))
+                    .frame(width: 130 + CGFloat(i) * 26, height: 54 + CGFloat(i) * 12)
+                    .offset(y: 14)
+            }
+            SaucerArt(beam: 0)
+                .frame(width: 104, height: 104)
+                .opacity(cloaked ? 0.32 : 0.95)
+                .overlay {
+                    // The shimmer: a bright band passing over the saucer (and only the saucer).
+                    GeometryReader { g in
+                        LinearGradient(colors: [.clear, .white.opacity(0.6), .clear], startPoint: .leading, endPoint: .trailing)
+                            .frame(width: g.size.width * 0.4)
+                            .offset(x: sweep ? g.size.width : -g.size.width * 0.4)
+                    }
+                    .mask(SaucerArt(beam: 0))
+                    .allowsHitTesting(false)
+                }
+        }
+        .onAppear { animate(Effects.on) }
+        .onChange(of: activeState) { _, state in animate(Effects.on && state != .inactive) }
+        .accessibilityHidden(true)
+    }
+
+    private func animate(_ on: Bool) {
+        guard on else {
+            var still = Transaction(animation: nil)
+            still.disablesAnimations = true
+            withTransaction(still) { cloaked = false; sweep = false }
+            return
+        }
+        withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) { cloaked = true }
+        withAnimation(.linear(duration: 2.2).delay(0.4).repeatForever(autoreverses: false)) { sweep = true }
     }
 }

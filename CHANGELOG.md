@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.46.1: a new look for Stealth Mode
+
+**Stealth Mode**
+- The whole Stealth window is now one dark frosted glass with a single purple tint, like a
+  normal Ufolio window: the toolbar, tab column and start page all match, instead of separate
+  solid purples and a grey top row.
+- The glasses are gone: Stealth Mode's emblem is now a saucer shimmering in and out of its
+  cloaking field, and the Stealth button is a little cloaked saucer. (Still with Reduce Motion
+  or Effects off.)
+
 ## 0.46.0: profiles with their own history and bookmarks
 
 **Profiles, fully separate**

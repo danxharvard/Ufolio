@@ -36,8 +36,14 @@ struct BrowserWindow: View {
     /// The window's frosted glass; the Area 51 theme tints it (and so the tab column) green.
     private var windowGlass: some View {
         ZStack {
-            VisualEffect(material: .titlebar, blending: .behindWindow)
-            if AlienTheme.isActive(theme) && !model.isPrivate { AlienTheme.glass }
+            if model.isPrivate {
+                // Stealth: the whole window is one dark frosted glass with a single purple tint.
+                VisualEffect(material: .titlebar, blending: .behindWindow, appearance: NSAppearance(named: .darkAqua))
+                PrivateChrome.glassTint
+            } else {
+                VisualEffect(material: .titlebar, blending: .behindWindow)
+                if AlienTheme.isActive(theme) { AlienTheme.glass }
+            }
         }
         .ignoresSafeArea()
     }
@@ -1292,15 +1298,19 @@ struct ClickBlocker: NSViewRepresentable {
 struct VisualEffect: NSViewRepresentable {
     var material: NSVisualEffectView.Material
     var blending: NSVisualEffectView.BlendingMode = .withinWindow
+    /// Forces light or dark frosting (Stealth windows are always dark); nil follows the system.
+    var appearance: NSAppearance? = nil
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = material
         view.blendingMode = blending
         view.state = .followsWindowActiveState
+        view.appearance = appearance
         return view
     }
     func updateNSView(_ view: NSVisualEffectView, context: Context) {
         view.material = material
+        if view.appearance?.name != appearance?.name { view.appearance = appearance }
     }
 }
 
