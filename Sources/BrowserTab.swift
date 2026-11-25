@@ -145,6 +145,20 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         return config
     }
 
+    /// Re-applies the settings that live in a page's preferences (power mode, pop-ups, fraud
+    /// warnings) to every open tab. They used to apply only to tabs opened after a change, so
+    /// unplugging into Battery Saver, say, didn't reach the pages already open.
+    static func applyLivePreferences() {
+        for model in BrowserModel.all.allObjects {
+            for tab in model.tabs where !tab.isAsleep {
+                let preferences = tab.webView.configuration.preferences
+                preferences.javaScriptCanOpenWindowsAutomatically = !Prefs.bool(Prefs.blockPopups)
+                preferences.isFraudulentWebsiteWarningEnabled = Prefs.bool(Prefs.fraudWarning)
+                PerformanceCenter.shared.configure(preferences)
+            }
+        }
+    }
+
     init(model: BrowserModel, configuration: WKWebViewConfiguration? = nil, store: WKWebsiteDataStore? = nil) {
         self.model = model
         isPrivate = model.isPrivate
@@ -162,6 +176,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         view.uiDelegate = self
         let zoom = Prefs.double(Prefs.defaultZoom)
         view.pageZoom = zoom > 0 ? zoom : 1
+        // A muted tab's new page (after sleeping, say) is muted from the start, not once it has
+        // finished loading (sound could start playing first).
+        if isMuted { WebKitExtras.setMuted(true, view) }
         ContentBlocker.shared.attach(view.configuration.userContentController)
         HushlistLink.shared.register(view.configuration.userContentController)
         AutofillCenter.shared.register(self)
@@ -319,6 +336,11 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         // A fresh page: a crash before it slept no longer applies (the crashed screen used to
         // stay over the woken page).
         if crashed { crashed = false; crashedWhileHidden = false }
+        // Settings may have changed while it slept (power mode, pop-ups…).
+        let preferences = webView.configuration.preferences
+        preferences.javaScriptCanOpenWindowsAutomatically = !Prefs.bool(Prefs.blockPopups)
+        preferences.isFraudulentWebsiteWarningEnabled = Prefs.bool(Prefs.fraudWarning)
+        PerformanceCenter.shared.configure(preferences)
         setUp(webView)
         if let state = sleepState {
             webView.interactionState = state
@@ -372,6 +394,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     func resetZoom() {
         let zoom = Prefs.double(Prefs.defaultZoom)
         webView.pageZoom = zoom > 0 ? zoom : 1
+        // Trackpad pinch-zoom too: Actual Size left a pinched page magnified.
+        if webView.magnification != 1 { webView.setMagnification(1, centeredAt: .zero) }
     }
 
     /// Print (⌘P): the page as you see it, fitted to the paper's width.
@@ -443,7 +467,10 @@ extension BrowserTab: WKNavigationDelegate {
             }
             // Websites may never open files on your Mac (file:// addresses); only you can.
             // (sourceFrame can really be missing for loads you start, despite what Swift says.)
-            if scheme == "file", let source = action.sourceFrame as WKFrameInfo?,
+            // Clicked links and forms only: dropping a file from Finder onto a page also comes "from"
+            // that page, and must still open (WebKit itself refuses file:// loads made by scripts).
+            if scheme == "file", [.linkActivated, .formSubmitted, .formResubmitted].contains(action.navigationType),
+               let source = action.sourceFrame as WKFrameInfo?,
                ["http", "https"].contains(source.securityOrigin.protocol.lowercased()) {
                 decisionHandler(.cancel, preferences)
                 return

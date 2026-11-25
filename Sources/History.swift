@@ -215,6 +215,11 @@ final class HistoryStore: ObservableObject {
         if list.count > Self.maxEntries {
             list = list.map { (entry: $0, score: $0.score) }.sorted { $0.score > $1.score }
                 .prefix(Self.maxEntries).map(\.entry)
+            // Trimmed in memory too, once it's well over (it used to grow for as long as Ufolio
+            // stayed open, and every save sorted all of it).
+            if entries.count > Self.maxEntries + Self.maxEntries / 10 {
+                entries = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            }
         }
         let snapshot = list
         let file = self.file

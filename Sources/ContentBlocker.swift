@@ -62,6 +62,7 @@ final class ContentBlocker: ObservableObject {
                 if signature != self.lastSignature {
                     self.lastSignature = signature
                     self.refresh()
+                    BrowserTab.applyLivePreferences()   // pop-ups, fraud warnings, Memory Saver
                 }
             }
     }
@@ -72,7 +73,8 @@ final class ContentBlocker: ObservableObject {
         [Prefs.adBlockEnabled, Prefs.trackerBlockEnabled, Prefs.hideCookieBanners, Prefs.collapseAdSpace, Prefs.autoRejectCookies,
          Prefs.autofillPasswords, Prefs.autofillCards, Prefs.autofillContact,
          Prefs.blockThirdPartyCookies, Prefs.httpsUpgrade, Prefs.globalPrivacyControl,
-         Prefs.fingerprintProtection, Prefs.deAMP, Prefs.blockAnnoyances, Prefs.blockChatWidgets]
+         Prefs.fingerprintProtection, Prefs.deAMP, Prefs.blockAnnoyances, Prefs.blockChatWidgets,
+         Prefs.blockPopups, Prefs.fraudWarning, Prefs.memorySaver]
             .map { Prefs.bool($0) ? "1" : "0" }.joined() + Prefs.string(Prefs.blockingMode)
             + Prefs.string(Prefs.scriptPolicy) + Prefs.string(Prefs.fingerprintMode) + Prefs.string(Prefs.cookiePolicy)
             + Prefs.string(ShieldSettings.sitesKey)

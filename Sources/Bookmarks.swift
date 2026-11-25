@@ -579,6 +579,17 @@ actor FaviconCache {
     }
 
     /// Forgets saved icons (they show which sites you've visited), e.g. when history is cleared.
+    /// Deletes icons past their two weeks. They were skipped but never removed, so the folder
+    /// grew with every site ever visited, a list that outlived your history settings.
+    nonisolated static func pruneDisk() {
+        let fm = FileManager.default
+        let cutoff = Date().addingTimeInterval(-14 * 86_400)
+        for file in (try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? [] {
+            let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            if modified < cutoff { try? fm.removeItem(at: file) }
+        }
+    }
+
     nonisolated static func clearDisk() {
         let fm = FileManager.default
         for file in (try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? [] {

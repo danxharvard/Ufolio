@@ -769,6 +769,16 @@ private struct AppearanceSettings: View {
                 LabeledContent("Default page zoom") { Picker("", selection: $zoom) {
                     ForEach(zoomLevels, id: \.self) { Text("\(Int(($0 * 100).rounded()))%").tag($0) }
                 }.labelsHidden().fixedSize() }
+                // Open pages still at the old default follow the new one (it used to apply only to
+                // new tabs); pages you've zoomed yourself keep their zoom.
+                .onChange(of: zoom) { old, new in
+                    let previous = old > 0 ? old : 1
+                    for model in BrowserModel.all.allObjects {
+                        for tab in model.tabs where !tab.isAsleep && abs(tab.webView.pageZoom - previous) < 0.001 {
+                            tab.webView.pageZoom = new
+                        }
+                    }
+                }
             } header: { SectionTitle("Motion and zoom") }
         }
         .formStyle(SafariFormStyle())

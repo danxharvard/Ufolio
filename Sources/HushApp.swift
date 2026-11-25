@@ -94,6 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         Lookalike.refreshKnown()   // ready before the first page loads
         AppearanceMode.apply(Prefs.string(Prefs.appearance))   // before any window shows
+        DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + 30) { FaviconCache.pruneDisk() }
         ContentBlocker.shared.prepare()
         ContentBlocker.shared.startListUpdates()
         ExtensionEvents.launch()

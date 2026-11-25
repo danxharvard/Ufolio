@@ -57,7 +57,9 @@ final class PerformanceCenter: ObservableObject {
     static let shared = PerformanceCenter()
 
     /// The mode in effect right now (Automatic resolved to Balanced or Power Saver).
-    @Published private(set) var effectiveMode: PowerMode = .balanced
+    @Published private(set) var effectiveMode: PowerMode = .balanced {
+        didSet { if effectiveMode != oldValue { BrowserTab.applyLivePreferences() } }   // open tabs too
+    }
     @Published private(set) var onBattery = false
     @Published private(set) var lowPowerMode = false
     /// Automatic Power Mode: when a tab genuinely needs more (it's heavy, or playing video or

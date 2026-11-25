@@ -213,6 +213,9 @@ final class ExtensionStore: ObservableObject {
             let record = InstalledExtension(id: id, name: name, version: ext.displayVersion ?? ext.version ?? "",
                                             source: source)
             let destination = directory(for: record)
+            // Updating one that's running: stop the old copy first (it used to keep running from
+            // files that had just been deleted, and broke until Ufolio restarted).
+            ExtensionManager.shared.unload(id)
             try? FileManager.default.removeItem(at: destination)
             try FileManager.default.copyItem(at: staging, to: destination)
             installed.removeAll { $0.id == id }

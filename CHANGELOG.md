@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.43.15: ten more fixes
+
+**Settings reach open tabs**
+- Changing the power mode (or unplugging into Battery Saver), pop-up blocking or fraudulent
+  website warnings now applies to tabs already open, not only new ones. Sleeping tabs pick up
+  the current settings when they wake.
+- Changing the default page zoom updates open pages still at the old default.
+
+**Tabs**
+- Muted tabs stay muted from the start when they wake from sleep.
+- Actual Size (⌘0) also resets trackpad pinch-zoom.
+- In a Stealth window, Reopen Closed Tab brings back that window's own closed tabs (kept in
+  memory only), not one closed in a normal window.
+- Dropping a file from Finder onto a page opens it again.
+
+**Fixes**
+- Updating or reinstalling an extension that's running no longer breaks it until a restart.
+- Plain http websites can always load (Ufolio now has the standard browser exemption from
+  Apple's App Transport Security for web pages).
+- Old site icons are deleted after two weeks, instead of collecting for every site ever visited.
+- History is trimmed in memory as well as on disk, so very long sessions don't keep growing it.
+
 ## 0.43.14: ten more fixes
 
 **Smoother**

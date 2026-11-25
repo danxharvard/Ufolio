@@ -37,6 +37,8 @@ final class BrowserModel: NSObject, ObservableObject {
         }
     }
     private var sleepTimer: Timer?
+    /// A Stealth window's closed tabs, for Reopen Closed Tab: in memory only, gone with the window.
+    private var privateClosed: [URL] = []
     /// The last tab opened in the background, and the tab it was opened from (see newTab).
     private var lastBackgroundTab: (opener: UUID, tab: UUID)?
     /// The Space this window is showing; only its tabs appear in the tab bar.
@@ -423,6 +425,7 @@ final class BrowserModel: NSObject, ObservableObject {
             splitPair = nil
         }
         if remember, !isPrivate, let url = tab.url { RecentlyClosed.shared.add(title: tab.title, url: url) }
+        if remember, isPrivate, let url = tab.url { privateClosed.append(url); if privateClosed.count > 20 { privateClosed.removeFirst() } }
         ExtensionEvents.closed(tab)
         tab.tearDown()
         tabs.remove(at: index)
@@ -448,6 +451,13 @@ final class BrowserModel: NSObject, ObservableObject {
 
     /// Brings back the most recently closed tab (or a chosen one).
     func reopenClosedTab(_ closed: ClosedTab? = nil) {
+        // A Stealth window reopens its own closed tabs (it used to bring back one closed in a
+        // normal window).
+        if isPrivate, closed == nil {
+            guard let url = privateClosed.popLast() else { return }
+            if let current = selectedTab, current.isBlank { current.load(url) } else { newTab(url: url) }
+            return
+        }
         guard let tab = RecentlyClosed.shared.take(closed) else { return }
         if let current = selectedTab, current.isBlank {
             current.load(tab.url)
