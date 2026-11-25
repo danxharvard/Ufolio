@@ -323,8 +323,16 @@ struct TorrentContents {
         var hiddenDirection = TorrentTools.hasHiddenDirection(rawName)
         var files: [File] = []
         var total: Int64 = 0
+        var mediaBytes: Int64 = 0
         var count = 0
         var unsafePath = false
+        // Keep security-analysis metadata for every file, even when the visible list is capped.
+        var hasExecutable = false
+        var executableNames: [String] = []
+        var disguisedFile: String?
+        var hasShortcut = false
+        var hasArchive = false
+        var passwordNote = false
 
         func add(_ parts: [String], _ length: Int64) {
             count += 1
@@ -336,8 +344,35 @@ struct TorrentContents {
             if parts.contains(where: { $0 == ".." || $0 == "." || $0.contains("/") || $0.contains("\\") || $0.contains(":") }) {
                 unsafePath = true
             }
+
+            // Scan every entry, not just the first 20,000 shown in the preview. Otherwise a
+            // malicious torrent could bury an executable or shortcut after the display limit.
+            let rawPath = parts.joined(separator: "/")
+            let fileName = (rawPath as NSString).lastPathComponent.lowercased()
+            let ext = (fileName as NSString).pathExtension.lowercased()
+            let safeLength = max(0, length)
+            if media.contains(ext) {
+                let (sum, overflow) = mediaBytes.addingReportingOverflow(safeLength)
+                mediaBytes = overflow ? Int64.max : sum
+            }
+            if executable.contains(ext) {
+                hasExecutable = true
+                if executableNames.count < 2 { executableNames.append((rawPath as NSString).lastPathComponent) }
+            }
+            if ext == "lnk" { hasShortcut = true }
+            if archives.contains(ext) { hasArchive = true }
+            if fileName.contains("password") { passwordNote = true }
+            let nameParts = fileName.split(separator: ".")
+            if disguisedFile == nil, nameParts.count >= 3,
+               let last = nameParts.last, executable.contains(String(last)) {
+                let before = String(nameParts[nameParts.count - 2])
+                if media.contains(before) || documents.contains(before) || archives.contains(before) {
+                    disguisedFile = rawPath
+                }
+            }
+
             if files.count < maxFilesListed {
-                files.append(File(id: files.count, path: parts.joined(separator: "/"), size: max(0, length)))
+                files.append(File(id: files.count, path: rawPath, size: safeLength))
             }
         }
 
@@ -363,34 +398,32 @@ struct TorrentContents {
         }
         files = files.map { File(id: $0.id, path: TorrentTools.clean($0.path, limit: 400), size: $0.size) }
         var contents = TorrentContents(name: name, files: files, totalSize: total, fileCount: count, warnings: [])
-        contents.warnings = analyse(contents, hiddenDirection: hiddenDirection, unsafePath: unsafePath)
+        contents.warnings = analyse(contents, hiddenDirection: hiddenDirection, unsafePath: unsafePath,
+                                     mediaBytes: mediaBytes, hasExecutable: hasExecutable,
+                                     executableNames: executableNames, disguisedFile: disguisedFile,
+                                     hasShortcut: hasShortcut, hasArchive: hasArchive, passwordNote: passwordNote)
         return contents
     }
 
-    /// Traps worth pointing out before you open a torrent.
-    private static func analyse(_ t: TorrentContents, hiddenDirection: Bool, unsafePath: Bool) -> [String] {
+    /// Traps worth pointing out before you open a torrent. Metadata is collected across every
+    /// entry while parsing; the UI's 20,000-row cap must never become a security-scan cap.
+    private static func analyse(_ t: TorrentContents, hiddenDirection: Bool, unsafePath: Bool,
+                                mediaBytes: Int64, hasExecutable: Bool, executableNames: [String],
+                                disguisedFile: String?, hasShortcut: Bool, hasArchive: Bool,
+                                passwordNote: Bool) -> [String] {
         var warnings: [String] = []
-        let mediaBytes = t.files.filter { media.contains($0.ext) }.reduce(Int64(0)) { $0 + $1.size }
-        let videoName = t.name.range(of: #"(?i)\b(2160p|1080p|720p|480p|x264|x265|hevc|h\.?264|blu-?ray|web-?dl|webrip|hdrip|dvdrip|brrip|hdtv|s\d{2}e\d{2}|movie|film)\b"#,
+        let videoName = t.name.range(of: #"(?i)\\b(2160p|1080p|720p|480p|x264|x265|hevc|h\\.?264|blu-?ray|web-?dl|webrip|hdrip|dvdrip|brrip|hdtv|s\\d{2}e\\d{2}|movie|film)\\b"#,
                                      options: .regularExpression) != nil
-        let looksLikeMedia = videoName || (t.totalSize > 0 && mediaBytes * 2 > t.totalSize)
-        let programs = t.files.filter { executable.contains($0.ext) }
+        let looksLikeMedia = videoName || (t.totalSize > 0 && mediaBytes > t.totalSize / 2)
 
-        let disguised = t.files.filter { file in
-            let name = (file.path as NSString).lastPathComponent.lowercased()
-            let parts = name.split(separator: ".")
-            guard parts.count >= 3, let last = parts.last, executable.contains(String(last)) else { return false }
-            let before = String(parts[parts.count - 2])
-            return media.contains(before) || documents.contains(before) || archives.contains(before)
+        if let first = disguisedFile {
+            warnings.append("“\\((first as NSString).lastPathComponent)” is a program pretending to be a \\(disguisedKind(first)). Don’t open it.")
         }
-        if let first = disguised.first {
-            warnings.append("“\((first.path as NSString).lastPathComponent)” is a program pretending to be a \(disguisedKind(first.path)). Don’t open it.")
+        if looksLikeMedia, hasExecutable, disguisedFile == nil {
+            let names = executableNames.joined(separator: ", ")
+            warnings.append("This looks like a video or music download, but it contains a program (\\(names)). Real films and music never need one.")
         }
-        if looksLikeMedia, !programs.isEmpty, disguised.isEmpty {
-            let names = programs.prefix(2).map { ($0.path as NSString).lastPathComponent }.joined(separator: ", ")
-            warnings.append("This looks like a video or music download, but it contains a program (\(names)). Real films and music never need one.")
-        }
-        if t.files.contains(where: { $0.ext == "lnk" }) {
+        if hasShortcut {
             warnings.append("It contains a Windows shortcut (.lnk), a common way to hide malware.")
         }
         if hiddenDirection {
@@ -399,12 +432,10 @@ struct TorrentContents {
         if unsafePath {
             warnings.append("Some file paths try to escape their folder. A good torrent app refuses these, but be careful.")
         }
-        let hasArchive = t.files.contains { archives.contains($0.ext) }
-        let passwordNote = t.files.contains { ($0.path as NSString).lastPathComponent.lowercased().contains("password") }
         if looksLikeMedia, hasArchive, passwordNote {
             warnings.append("A video packed in an archive with a “password” file is a common scam: the password usually means visiting a site or running a program.")
         }
-        if videoName, mediaBytes == 0, !t.files.isEmpty {
+        if videoName, mediaBytes == 0, t.fileCount > 0 {
             warnings.append("It’s named like a video, but there’s no video file inside.")
         }
         return warnings
