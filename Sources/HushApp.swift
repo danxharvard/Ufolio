@@ -290,9 +290,9 @@ struct HushCommands: Commands {
             Button("Reopen Closed Tab") { browser?.reopenClosedTab() }
                 .keyboardShortcut(Shortcuts.get(.reopenTab))
             Divider()
-            Button("Back") { browser?.selectedTab?.webView.goBack() }
+            Button("Back") { browser?.selectedTab?.goBack() }
                 .keyboardShortcut(Shortcuts.get(.back))
-            Button("Forward") { browser?.selectedTab?.webView.goForward() }
+            Button("Forward") { browser?.selectedTab?.goForward() }
                 .keyboardShortcut(Shortcuts.get(.forward))
             Divider()
             Button("Show Next Tab") { browser?.selectAdjacentTab(1) }

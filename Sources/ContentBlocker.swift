@@ -228,9 +228,17 @@ final class ContentBlocker: ObservableObject {
         }
     }
 
+    /// For measuring only: leave out the rule lists or page scripts (UFOLIO_NO_RULES, UFOLIO_NO_SCRIPTS).
+    private static let measureNoRules = ProcessInfo.processInfo.environment["UFOLIO_NO_RULES"] != nil
+    private static let measureNoScripts = ProcessInfo.processInfo.environment["UFOLIO_NO_SCRIPTS"] != nil
+
     private func configure(_ controller: WKUserContentController) {
         controller.removeAllContentRuleLists()
         controller.removeAllUserScripts()
+        defer {
+            if Self.measureNoRules { controller.removeAllContentRuleLists() }
+            if Self.measureNoScripts { controller.removeAllUserScripts() }
+        }
         let host = hostOf.object(forKey: controller) as String?
         // The site's switch in the Hush Guard panel turns everything off for it; otherwise
         // your defaults apply, with any of the site's own settings on top.

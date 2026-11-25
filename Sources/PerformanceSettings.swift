@@ -10,6 +10,7 @@ struct PerformanceSettings: View {
     @AppStorage(Prefs.memoryLimitGB) private var memoryLimitGB = 0.0
     @AppStorage(Prefs.pauseBackgroundMedia) private var pauseMedia = false
     @AppStorage(Prefs.clearCacheOnQuit) private var clearCacheOnQuit = true
+    @AppStorage(Prefs.preloadPages) private var preloadPages = true
     @ObservedObject private var center = PerformanceCenter.shared
     @State private var usage = PerformanceCenter.Usage()
     private let tick = Timer.publish(every: 5, tolerance: 2, on: .main, in: .default).autoconnect()
@@ -109,6 +110,14 @@ struct PerformanceSettings: View {
             } header: { SectionTitle("Memory") } footer: {
                 Footnote(memoryFootnote)
             }
+
+            Section {
+                SettingsSwitch(title: "Instant pages",
+                               detail: "When you’ve as good as chosen a page (the top suggestion as you type is one you’ve visited, or you rest the pointer on a favourite or bookmark), Ufolio loads it in the background so it opens instantly. The site sees the visit as it loads. Never in Stealth windows or Power Saver.",
+                               symbol: "bolt.fill",
+                               colors: [Color(red: 1.0, green: 0.78, blue: 0.25), Color(red: 0.95, green: 0.52, blue: 0.12)],
+                               isOn: $preloadPages)
+            } header: { SectionTitle("Speed") }
 
             Section {
                 SettingsSwitch(title: "Clear page cache when Ufolio quits",

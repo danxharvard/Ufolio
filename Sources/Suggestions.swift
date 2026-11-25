@@ -20,6 +20,7 @@ final class SuggestionsModel: ObservableObject {
     @Published private(set) var query = ""
     private var active = false
     private var task: Task<Void, Never>?
+    private var preloadTask: Task<Void, Never>?
     /// The window these suggestions belong to: its Orbit's profile decides whose bookmarks and
     /// history are suggested.
     weak var browser: BrowserModel?
@@ -37,6 +38,7 @@ final class SuggestionsModel: ObservableObject {
 
     func dismiss() {
         task?.cancel()
+        preloadTask?.cancel()
         active = false
         items = []
         selectedIndex = nil
@@ -50,6 +52,23 @@ final class SuggestionsModel: ObservableObject {
         if next < -1 { next = items.count - 1 }
         if next >= items.count { next = -1 }
         selectedIndex = next == -1 ? nil : next
+        // Arrowed onto a suggestion: start loading it, so Return opens it instantly.
+        if let chosen = selected, let url = destination(of: chosen.text, kind: chosen.kind) {
+            Preloader.preload(url, for: browser?.selectedTab)
+        }
+    }
+
+    /// Where Return would go for this text, worked out without side effects. Searches only if
+    /// you already let Ufolio send your typing to the search engine (for suggestions).
+    private func destination(of text: String, kind: Suggestion.Kind) -> URL? {
+        if text.contains("://") { return URL(string: text) }
+        if URLResolver.looksLikeAddress(text) {
+            let host = text.split(separator: "/").first.map { String($0.split(separator: ":").first ?? "") } ?? ""
+            let local = host.lowercased() == "localhost" || host.hasSuffix(".local") || URLResolver.isIPv4(host)
+            return URL(string: (local ? "http://" : "https://") + text)
+        }
+        guard kind == .search, Prefs.bool(Prefs.searchSuggestions) else { return nil }
+        return URLResolver.searchURL(for: text)
     }
 
     func update(query raw: String) {
@@ -57,6 +76,7 @@ final class SuggestionsModel: ObservableObject {
         let q = raw.trimmingCharacters(in: .whitespaces)
         query = q
         task?.cancel()
+        preloadTask?.cancel()
         selectedIndex = nil
         guard !q.isEmpty else { items = []; return }
 
@@ -66,6 +86,14 @@ final class SuggestionsModel: ObservableObject {
         let earlierHistory = items.filter { $0.kind == .history && ($0.title.lowercased().contains(lower) || $0.text.lowercased().contains(lower)) }
         items = local + earlierHistory.prefix(max(0, 5 - local.count))
             + items.filter { $0.kind == .search && $0.title.lowercased().hasPrefix(lower) }
+
+        // A pause in typing: load what Return would open (the search, or the address typed).
+        preloadTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled, let self, self.query == q, self.active,
+                  let url = self.destination(of: q, kind: URLResolver.looksLikeAddress(q) ? .website : .search) else { return }
+            Preloader.preload(url, for: self.browser?.selectedTab)
+        }
 
         task = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 90_000_000) // wait for a pause in typing

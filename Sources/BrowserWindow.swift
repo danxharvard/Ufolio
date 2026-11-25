@@ -621,9 +621,9 @@ struct NavButtons: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            ToolbarIconButton(symbol: "chevron.left", help: "Back (⌘[)") { tab.webView.goBack() }
+            ToolbarIconButton(symbol: "chevron.left", help: "Back (⌘[)") { tab.goBack() }
                 .disabled(!tab.canGoBack)
-            ToolbarIconButton(symbol: "chevron.right", help: "Forward (⌘])") { tab.webView.goForward() }
+            ToolbarIconButton(symbol: "chevron.right", help: "Forward (⌘])") { tab.goForward() }
                 .disabled(!tab.canGoForward)
             ToolbarIconButton(symbol: tab.isLoading ? "xmark" : "arrow.clockwise",
                               help: tab.isLoading ? "Stop" : "Reload (⌘R)") { tab.reload() }

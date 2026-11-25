@@ -107,7 +107,18 @@ enum Speed {
       }, { capture: true, passive: true });
       document.addEventListener('mousedown', function (e) {
         if (!e.isTrusted) return;
-        send(e.target && e.target.closest ? e.target.closest('a[href]') : null);
+        var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+        send(a);
+        // Pressing on a plain link in this tab: start loading it now, a moment before the click
+        // lands (only what the click itself would do; never on hover).
+        if (!a || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        if (a.hasAttribute('download') || (a.target && a.target !== '_self')) return;
+        try {
+          var u = new URL(a.href, location.href);
+          if (u.protocol !== 'https:' && u.protocol !== 'http:') return;
+          if (u.origin === location.origin && u.pathname === location.pathname && u.search === location.search) return;
+          window.webkit.messageHandlers.\(handlerName).postMessage({ preload: u.href });
+        } catch (err) {}
       }, { capture: true, passive: true });
     })();
     """, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .defaultClient)
@@ -123,8 +134,14 @@ enum Speed {
         }
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard message.frameInfo.isMainFrame, let text = message.body as? String, text.count < 300,
-                  let url = URL(string: text) else { return }
+            guard message.frameInfo.isMainFrame else { return }
+            if let body = message.body as? [String: Any], let text = body["preload"] as? String, text.count < 2000,
+               let url = URL(string: text), let webView = message.webView {
+                let tab = BrowserModel.all.allObjects.lazy.flatMap(\.tabs).first { $0.webView === webView }
+                Preloader.preload(url, for: tab)
+                return
+            }
+            guard let text = message.body as? String, text.count < 300, let url = URL(string: text) else { return }
             Speed.preconnect(url, in: message.webView)
         }
     }
@@ -144,10 +161,16 @@ enum SpeedBenchmark {
         let urls = text.split(whereSeparator: \.isNewline).compactMap { URL(string: String($0).trimmingCharacters(in: .whitespaces)) }
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 4_000_000_000)   // let launch settle
+            LagMonitor.start()
             var rows: [String] = ["round,url,commit_ms,finish_ms,fcp_ms"]
             for round in ["first", "return"] {
                 for url in urls {
                     guard let tab = model.selectedTab else { break }
+                    // UFOLIO_BENCH_PRELOAD: as if you'd paused on it first (Instant pages).
+                    if ProcessInfo.processInfo.environment["UFOLIO_BENCH_PRELOAD"] != nil {
+                        Preloader.preload(url, for: tab)
+                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    }
                     let (commit, finish, fcp) = await measure(in: tab) { tab.load(url) }
                     rows.append("\(round),\(url.host ?? ""),\(commit),\(finish),\(fcp)")
                     try? rows.joined(separator: "\n").write(toFile: out, atomically: true, encoding: .utf8)
@@ -156,12 +179,13 @@ enum SpeedBenchmark {
             // Back: from the last page to the one before it.
             if urls.count >= 2, let tab = model.selectedTab {
                 for _ in 0..<3 {
-                    let (commit, finish, _) = await measure(in: tab) { tab.webView.goBack() }
+                    let (commit, finish, _) = await measure(in: tab) { tab.goBack() }
                     rows.append("back,\(tab.webView.url?.host ?? ""),\(commit),\(finish),\(gotFinish ? 1 : 0)")
                     try? rows.joined(separator: "\n").write(toFile: out, atomically: true, encoding: .utf8)
-                    _ = await measure(in: tab) { tab.webView.goForward() }
+                    _ = await measure(in: tab) { tab.goForward() }
                 }
             }
+            rows.append(LagMonitor.summary)
             try? rows.joined(separator: "\n").write(toFile: out, atomically: true, encoding: .utf8)
             NSApp.terminate(nil)
         }
@@ -182,7 +206,13 @@ enum SpeedBenchmark {
         let b = NotificationCenter.default.addObserver(forName: finished, object: tab, queue: .main) { _ in if finishAt == nil { finishAt = Date() } }
         defer { NotificationCenter.default.removeObserver(a); NotificationCenter.default.removeObserver(b) }
         let begin = Date()
+        let before = tab.webView
         start()
+        // A page swapped in ready-made (Instant pages, or a kept page on Back) shows at once.
+        if tab.webView !== before, !tab.webView.isLoading {
+            commitAt = Date()
+            finishAt = commitAt
+        }
         // A page restored from the back/forward cache may not report "finished": committed and
         // no longer loading counts as done.
         while finishAt == nil, !(commitAt != nil && !tab.webView.isLoading), Date().timeIntervalSince(begin) < 30 {
@@ -251,6 +281,186 @@ enum LeakTest {
             await stage("a minute later")
             try? "done".write(toFile: dir + "/stage", atomically: true, encoding: .utf8)
             NSApp.terminate(nil)
+        }
+    }
+}
+
+
+/// Measures how often the main thread (which draws the window and answers clicks and typing)
+/// was too busy to respond: a tick every 10 ms that should arrive on time.
+enum LagMonitor {
+    private static var stalls: [Double] = []
+    private static var timer: DispatchSourceTimer?
+
+    static func start() {
+        var expected = DispatchTime.now().uptimeNanoseconds + 10_000_000
+        let t = DispatchSource.makeTimerSource(queue: .main)
+        t.schedule(deadline: .now() + .milliseconds(10), repeating: .milliseconds(10), leeway: .milliseconds(1))
+        t.setEventHandler {
+            let now = DispatchTime.now().uptimeNanoseconds
+            let late = Double(Int64(now) - Int64(expected)) / 1_000_000
+            if late > 50 { stalls.append(late) }
+            expected = now + 10_000_000
+        }
+        t.resume()
+        timer = t
+    }
+
+    static var summary: String {
+        let over100 = stalls.filter { $0 > 100 }.count
+        let worst = Int(stalls.max() ?? 0)
+        let total = Int(stalls.reduce(0, +))
+        return "lag,stalls>50ms=\(stalls.count),stalls>100ms=\(over100),worst_ms=\(worst),total_ms=\(total)"
+    }
+}
+
+// MARK: - Instant pages
+
+/// Loads the page you're most likely about to open in a hidden view, so when you do open it,
+/// it's already there: no wait at all. Chosen only when you've as good as decided (the top
+/// address-bar suggestion is a page from your history or bookmarks, or you rest the pointer on a
+/// favourite, suggestion or bookmark). One page at a time, muted, with Force Field and every
+/// protection on; never in Stealth windows or Power Saver; thrown away after 30 seconds unused.
+enum Preloader {
+    private final class Entry {
+        let url: URL
+        let tabID: UUID
+        let view: WKWebView
+        let started = Date()
+        var failed = false
+        init(url: URL, tabID: UUID, view: WKWebView) { self.url = url; self.tabID = tabID; self.view = view }
+    }
+    private static var current: Entry?
+    private static var pending: DispatchWorkItem?
+    private static let delegate = Delegate()
+
+    static var enabled: Bool {
+        Speed.enabled && Prefs.bool(Prefs.preloadPages) && !PerformanceCenter.shared.isPowerSaving
+    }
+
+    /// The same page, however it was written (trailing slash, #section).
+    static func same(_ a: URL, _ b: URL) -> Bool {
+        func key(_ u: URL) -> String {
+            var c = URLComponents(url: u, resolvingAgainstBaseURL: false)
+            c?.fragment = nil
+            var s = (c?.string ?? u.absoluteString).lowercased()
+            if s.hasSuffix("/") { s.removeLast() }
+            return s.replacingOccurrences(of: "://www.", with: "://")
+        }
+        return key(a) == key(b)
+    }
+
+    /// Starts loading `url` for `tab`, replacing any earlier preload.
+    static func preload(_ url: URL, for tab: BrowserTab?) {
+        guard enabled, let tab, !tab.isPrivate, !tab.isAsleep,
+              let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https", let host = url.host else { return }
+        if let here = tab.url, same(here, url) { return }
+        if let entry = current, entry.tabID == tab.id, same(entry.url, url), !entry.failed { return }
+        // Pages the tab would stop or change first (look-alikes, tracking redirects) aren't preloaded.
+        if Lookalike.check(host: host) != nil || CleanLinks.skipRedirect(url) != nil
+            || (CleanLinks.isEnabled && CleanLinks.cleaned(url) != nil) || TorrentTools.isAdNetwork(host) { return }
+        discard()
+        let config = BrowserTab.makeConfiguration(privately: false, store: tab.webView.configuration.websiteDataStore)
+        let view = HushWebView(frame: NSRect(x: 0, y: 0, width: 1280, height: 800), configuration: config)
+        view.navigationDelegate = delegate
+        view.uiDelegate = delegate
+        ContentBlocker.shared.attach(config.userContentController)
+        ContentBlocker.shared.update(config.userContentController, forHost: host)
+        WebKitExtras.setMuted(true, view)
+        view.pageZoom = tab.webView.pageZoom
+        view.load(URLRequest(url: url))
+        let entry = Entry(url: url, tabID: tab.id, view: view)
+        current = entry
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak entry] in
+            if let entry, current === entry { discard() }
+        }
+    }
+
+    /// Preloads after the pointer has rested for a moment (cancelled if it moves away).
+    static func preloadSoon(_ url: URL, for tab: BrowserTab?) {
+        pending?.cancel()
+        let work = DispatchWorkItem { preload(url, for: tab) }
+        pending = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
+    }
+
+    static func cancelSoon() {
+        pending?.cancel()
+        pending = nil
+    }
+
+    /// The preloaded page for this address and tab, if there is one: it's handed over and no
+    /// longer the preloader's.
+    static func take(_ url: URL, for tab: BrowserTab) -> WKWebView? {
+        guard let entry = current, entry.tabID == tab.id, !entry.failed,
+              Date().timeIntervalSince(entry.started) < 30,
+              same(entry.url, url) || (entry.view.url.map { same($0, url) } ?? false) else { return nil }
+        current = nil
+        entry.view.navigationDelegate = nil
+        entry.view.uiDelegate = nil
+        WebKitExtras.setMuted(false, entry.view)
+        return entry.view
+    }
+
+    static func discard() {
+        guard let entry = current else { return }
+        current = nil
+        entry.view.navigationDelegate = nil
+        entry.view.uiDelegate = nil
+        entry.view.stopLoading()
+        WebKitExtras.close(entry.view)
+    }
+
+    private static func fail(_ view: WKWebView) {
+        if current?.view === view { current?.failed = true; discard() }
+    }
+
+    /// Keeps a preloading page in its place: no pop-ups, downloads, dialogs or other apps.
+    private final class Delegate: NSObject, WKNavigationDelegate, WKUIDelegate {
+        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
+                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            let scheme = action.request.url?.scheme?.lowercased() ?? ""
+            let ok = ["http", "https", "about", "blob", "data"].contains(scheme)
+            if !ok, action.targetFrame?.isMainFrame ?? true { Preloader.fail(webView) }
+            decisionHandler(ok ? .allow : .cancel)
+        }
+        func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse,
+                     decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+            if response.isForMainFrame, !response.canShowMIMEType {
+                Preloader.fail(webView)   // a download: only ever started by you
+                decisionHandler(.cancel)
+                return
+            }
+            decisionHandler(.allow)
+        }
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { Preloader.fail(webView) }
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { Preloader.fail(webView) }
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { Preloader.fail(webView) }
+        func webView(_ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge,
+                     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+            // A page asking for a password needs you there: leave it for the real visit.
+            if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodHTTPBasic
+                || challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodHTTPDigest {
+                Preloader.fail(webView)
+                completionHandler(.cancelAuthenticationChallenge, nil)
+            } else {
+                completionHandler(.performDefaultHandling, nil)
+            }
+        }
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                     for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? { nil }
+        func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+                     initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) { completionHandler() }
+        func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                     initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) { completionHandler(false) }
+        func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?,
+                     initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) { completionHandler(nil) }
+        /// Never the keychain from a preload (it could ask permission while you're typing).
+        @objc(_webCryptoMasterKeyForWebView:)
+        func webCryptoKey(_ webView: WKWebView) -> Data? { WebCryptoKey.key(privately: false) }
+        @objc(_webCryptoMasterKeyForWebView:completionHandler:)
+        func webCryptoKey(_ webView: WKWebView, completionHandler: @escaping (Data?) -> Void) {
+            completionHandler(WebCryptoKey.key(privately: false))
         }
     }
 }

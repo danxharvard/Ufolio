@@ -117,6 +117,8 @@ final class PerformanceCenter: ObservableObject {
             // Pictures kept in memory can always be fetched again, and so can cached page processes.
             Task { await FaviconCache.shared.purgeMemory(); await NewsImages.shared.purgeMemory() }
             Speed.releaseCachedProcesses()
+            Preloader.discard()
+            for model in BrowserModel.all.allObjects { model.tabs.forEach { $0.dropParkedPages() } }
             MainActor.assumeIsolated {
                 SettingsWindow.releaseNow()          // rebuilt next time you open Settings
                 BackgroundStore.shared.purgeIfHidden()   // the start page picture, if no start page shows

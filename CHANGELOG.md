@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.51.0-beta.1: Instant pages (beta)
+
+**Instant pages** (Settings › Performance › Speed, on by default)
+Ufolio now loads the page you're about to open in the background, so when you open it, it's
+already there. Measured on Google, a Google search, Apple, Wikipedia, Amazon, the New York Times
+and Stack Overflow: a preloaded page shows in 1 to 10 milliseconds, instead of 80 to 550.
+- In the address bar, after a short pause in typing, Ufolio loads what Return would open: the
+  search results for what you've typed (only if you already let Ufolio send your typing to
+  your search engine for suggestions), or the address you've typed.
+- Arrow onto a suggestion and it starts loading straight away.
+- Rest the pointer on a favourite, a start-page suggestion or a bookmark, and it starts loading.
+- Press on a link and it starts loading a moment before the click lands.
+- Back from a page opened this way swaps the page you came from straight back in (in about a
+  millisecond, at the same scroll position), and Forward the other way.
+- Safe by design:
+  - one page at a time, muted, with Force Field and every protection on;
+  - no pop-ups, downloads, dialogs or password prompts from a page loading in the background;
+  - never for look-alike sites or tracking redirects;
+  - never in Stealth windows or Power Saver;
+  - unused pages are thrown away after 30 seconds, and kept pages are let go when a tab
+    sleeps or memory runs short.
+
+**How it was found**
+- Timed against a bare copy of WebKit (Safari's engine) on the same sites, Ufolio already
+  paints pages as fast or faster, and its protections cost no time: Force Field makes heavy
+  pages faster, and Ufolio's page scripts make no measurable difference.
+- The rest of the gap to Firefox-based browsers like Zen is the engine itself. Loading the page
+  before you open it is how Ufolio closes it.
+
 ## 0.50.0: safer updates, and an optional beta channel
 
 **Going back if an update won't start**

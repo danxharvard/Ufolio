@@ -25,6 +25,8 @@ enum Prefs {
     /// Torrent tools (off by default) and their options.
     /// Clears the page cache as Ufolio quits, so it takes almost no disk space between sessions.
     static let clearCacheOnQuit = "clearCacheOnQuit"
+    /// Instant pages: load the page you're about to open in the background.
+    static let preloadPages = "preloadPages"
     static let torrentTools = "torrentTools"
     static let torrentApp = "torrentApp"
     static let torrentPreview = "torrentPreview"
@@ -119,6 +121,7 @@ enum Prefs {
         saucerPet: true,
         planetOfWeek: true,
         clearCacheOnQuit: true,
+        preloadPages: true,
         torrentTools: false,
         torrentApp: "",
         torrentPreview: true,

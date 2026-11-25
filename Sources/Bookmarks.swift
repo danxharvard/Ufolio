@@ -432,7 +432,10 @@ private struct BookmarkChip: View {
         .contentShape(Rectangle())
         .onHover { inside in
             hovering = inside
-            if inside { Speed.preconnect(bookmark.url, in: model.selectedTab?.webView) }
+            if inside {
+                Speed.preconnect(bookmark.url, in: model.selectedTab?.webView)
+                Preloader.preloadSoon(bookmark.url, for: model.selectedTab)   // rested on it: load it
+            } else { Preloader.cancelSoon() }
         }
         .animation(.easeOut(duration: 0.1), value: hovering)
         .onTapGesture {

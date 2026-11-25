@@ -364,7 +364,10 @@ private struct FavouriteTile: View {
         .onHover { inside in
             hovering = inside
             // Pointing at a favourite: get its connection ready before the click.
-            if inside { Speed.preconnect(bookmark.url, in: model.selectedTab?.webView) }
+            if inside {
+                Speed.preconnect(bookmark.url, in: model.selectedTab?.webView)
+                Preloader.preloadSoon(bookmark.url, for: model.selectedTab)   // rested on it: load it
+            } else { Preloader.cancelSoon() }
         }
         .animation(.spring(response: 0.25, dampingFraction: 0.75), value: hovering)
         .help(bookmark.url.absoluteString)
@@ -473,7 +476,10 @@ private struct SuggestionCard: View {
         .buttonStyle(.plain)
         .onHover { inside in
             hovering = inside
-            if inside { Speed.preconnect(site.url, in: model.selectedTab?.webView) }
+            if inside {
+                Speed.preconnect(site.url, in: model.selectedTab?.webView)
+                Preloader.preloadSoon(site.url, for: model.selectedTab)
+            } else { Preloader.cancelSoon() }
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.8), value: hovering)
         .animation(.easeOut(duration: 0.3), value: icon?.pixels)

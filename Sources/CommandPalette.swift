@@ -238,8 +238,8 @@ final class PaletteModel: ObservableObject {
                 m.sleepBackgroundTabs(idleFor: 0)
             },
             .init(title: "Reload Page", symbol: "arrow.clockwise", keywords: "refresh", shortcut: .reload) { m, _ in m.selectedTab?.reload() },
-            .init(title: "Back", symbol: "chevron.left", shortcut: .back) { m, _ in m.selectedTab?.webView.goBack() },
-            .init(title: "Forward", symbol: "chevron.right", shortcut: .forward) { m, _ in m.selectedTab?.webView.goForward() },
+            .init(title: "Back", symbol: "chevron.left", shortcut: .back) { m, _ in m.selectedTab?.goBack() },
+            .init(title: "Forward", symbol: "chevron.right", shortcut: .forward) { m, _ in m.selectedTab?.goForward() },
             .init(title: "Find on Page", symbol: "text.magnifyingglass", keywords: "search", shortcut: .find) { m, _ in m.find.show() },
             .init(title: "Copy Link", symbol: "link", keywords: "address url", available: { $0.selectedTab?.url != nil }) { m, _ in
                 guard let url = m.selectedTab?.url else { return }

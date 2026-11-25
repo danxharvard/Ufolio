@@ -253,8 +253,14 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         bind(\.estimatedProgress) { tab, value in
             if value == 0 || value >= 1 || abs(value - tab.progress) >= 0.08 { tab.progress = value }
         }
-        bind(\.canGoBack) { tab, value in if !tab.waking && tab.canGoBack != value { tab.canGoBack = value } }
-        bind(\.canGoForward) { tab, value in if !tab.waking && tab.canGoForward != value { tab.canGoForward = value } }
+        bind(\.canGoBack) { tab, value in
+            let back = value || tab.parkedBack != nil
+            if !tab.waking && tab.canGoBack != back { tab.canGoBack = back }
+        }
+        bind(\.canGoForward) { tab, value in
+            let forward = value || tab.parkedForward != nil
+            if !tab.waking && tab.canGoForward != forward { tab.canGoForward = forward }
+        }
         // A published value announces a change even when set to the same thing, so each one is
         // only set when it really changes; otherwise every observer redraws for nothing.
         bind(\.hasOnlySecureContent) { tab, value in if tab.isSecure != value { tab.isSecure = value } }
@@ -289,6 +295,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         config.snapshotWidth = NSNumber(value: min(Double(webView.bounds.width), 900))
         webView.takeSnapshot(with: config) { [weak self] image, _ in
             guard let self, !self.isAsleep, self.model?.selectedTab !== self else { return }
+            self.dropParkedPages()
             self.snapshotData = image.flatMap(Self.compressed)
             self.sleepState = self.webView.interactionState
             self.zoomBeforeSleep = self.webView.pageZoom   // the woken page gets it back
@@ -395,12 +402,96 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     private var lastCleaned: (url: URL, date: Date)?
 
     func load(_ url: URL) {
+        // Already loaded in the background (Instant pages): swap it in, no wait at all.
+        if !isAsleep, let ready = Preloader.take(url, for: self) {
+            adopt(ready, for: url)
+            return
+        }
         // A sleeping tab's page isn't connected yet (no blocking, no delegates): wake it first,
         // going straight to the new address rather than restoring the old page.
         if isAsleep { sleepState = nil; wakeIfNeeded(loading: false) }
         lookalike = nil
         userLoadedURL = url
+        dropParked(&parkedForward)   // a new page: Forward no longer leads anywhere
+        refreshNavigation()
         webView.load(URLRequest(url: url))
+    }
+
+    // MARK: Instant pages
+
+    /// A preloaded page has its own (empty) history, so the page you came from is kept to one
+    /// side: Back swaps it straight back in, and Forward the other way.
+    private var parkedBack: WKWebView?
+    private var parkedForward: WKWebView?
+
+    private func dropParked(_ slot: inout WKWebView?) {
+        guard let view = slot else { return }
+        slot = nil
+        view.navigationDelegate = nil
+        view.uiDelegate = nil
+        view.stopLoading()
+        WebKitExtras.close(view)
+    }
+
+    /// Lets the kept pages go (when the tab sleeps or closes, or memory runs short).
+    func dropParkedPages() {
+        dropParked(&parkedBack)
+        dropParked(&parkedForward)
+        refreshNavigation()
+    }
+
+    private func refreshNavigation() {
+        let back = webView.canGoBack || parkedBack != nil
+        let forward = webView.canGoForward || parkedForward != nil
+        if canGoBack != back { canGoBack = back }
+        if canGoForward != forward { canGoForward = forward }
+    }
+
+    /// Shows another page view in this tab; returns the one it replaced (now inactive).
+    private func show(_ view: WKWebView) -> WKWebView {
+        let old = webView
+        let zoom = view.pageZoom
+        observers.removeAll()
+        old.navigationDelegate = nil
+        old.uiDelegate = nil
+        objectWillChange.send()
+        webView = view
+        setUp(view)
+        view.pageZoom = zoom
+        if isMuted { WebKitExtras.setMuted(true, view) }
+        return old
+    }
+
+    private func adopt(_ view: WKWebView, for url: URL) {
+        lookalike = nil
+        userLoadedURL = url
+        let previous = show(view)
+        dropParked(&parkedBack)
+        dropParked(&parkedForward)
+        parkedBack = previous
+        refreshNavigation()
+        // It finished loading before it was handed over, so its follow-up (history, Reader) runs now.
+        if !view.isLoading { DispatchQueue.main.async { [weak self] in self?.pageFinished() } }
+    }
+
+    func goBack() {
+        if webView.canGoBack { webView.goBack(); return }
+        guard let previous = parkedBack else { return }
+        parkedBack = nil
+        let current = show(previous)
+        dropParked(&parkedForward)
+        parkedForward = current
+        refreshNavigation()
+    }
+
+    func goForward() {
+        if webView.canGoForward { webView.goForward(); return }
+        guard let next = parkedForward else { return }
+        parkedForward = nil
+        let current = show(next)
+        dropParked(&parkedBack)
+        parkedBack = current
+        refreshNavigation()
     }
 
     func reload() {
@@ -453,6 +544,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     }
 
     func tearDown() {
+        dropParkedPages()
         observers.removeAll()
         webView.stopLoading()
         webView.navigationDelegate = nil
@@ -477,6 +569,15 @@ extension BrowserTab: WKNavigationDelegate {
            let url = action.request.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
             model?.newTab(url: url, select: false)
             decisionHandler(.cancel, preferences)
+            return
+        }
+        // A link you clicked that was already loading in the background (pressed a moment ago):
+        // swap it in instead of starting again.
+        if action.navigationType == .linkActivated, action.targetFrame?.isMainFrame ?? false,
+           (action.request.httpMethod ?? "GET") == "GET", let url = action.request.url,
+           let ready = Preloader.take(url, for: self) {
+            decisionHandler(.cancel, preferences)
+            adopt(ready, for: url)
             return
         }
         if let url = action.request.url, let scheme = url.scheme?.lowercased() {
