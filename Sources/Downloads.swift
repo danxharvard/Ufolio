@@ -184,7 +184,12 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
             return
         }
 
-        let folder = Self.folder
+        // Sort into folders by type (Settings, off by default): Images, Documents, Videos…
+        var folder = Self.folder
+        if Prefs.bool(Prefs.sortDownloads), let kind = Self.kindFolder(for: name) {
+            let sorted = folder.appendingPathComponent(kind, isDirectory: true)
+            if (try? FileManager.default.createDirectory(at: sorted, withIntermediateDirectories: true)) != nil { folder = sorted }
+        }
         let base = (name as NSString).deletingPathExtension
         let ext = (name as NSString).pathExtension
         var candidate = folder.appendingPathComponent(name)
@@ -217,6 +222,21 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
                 self?.askingSites.remove(site)
                 if choice == 1 { self?.burstAllowed.insert(site); self?.recentStarts[site] = nil }
             }), in: window)
+    }
+
+    /// The folder a file is sorted into by its type, or nil to leave it at the top.
+    static func kindFolder(for name: String) -> String? {
+        let ext = (name as NSString).pathExtension.lowercased()
+        let kinds: [(String, Set<String>)] = [
+            ("Images", ["jpg", "jpeg", "png", "gif", "heic", "webp", "tiff", "tif", "bmp", "svg", "avif", "raw"]),
+            ("Documents", ["pdf", "doc", "docx", "txt", "rtf", "pages", "odt", "xls", "xlsx", "csv", "numbers", "ppt", "pptx", "key", "epub", "md"]),
+            ("Videos", ["mp4", "mov", "m4v", "mkv", "avi", "webm", "wmv"]),
+            ("Music", ["mp3", "m4a", "aac", "wav", "flac", "aiff", "ogg", "opus"]),
+            ("Archives", ["zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz"]),
+            ("Installers", ["dmg", "pkg", "app", "mpkg", "iso"]),
+            ("Torrents", ["torrent"]),
+        ]
+        return kinds.first { $0.1.contains(ext) }?.0
     }
 
     /// Never let a site choose a path or disguise a file: keep only the name, drop invisible
@@ -416,6 +436,7 @@ private struct ActiveRing: View {
 
 private struct DownloadsList: View {
     @ObservedObject private var downloads = Downloads.shared
+    @AppStorage(Prefs.sortDownloads) private var sortByType = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -440,6 +461,18 @@ private struct DownloadsList: View {
                 .padding(.bottom, 8)
             }
             .frame(maxHeight: 340)
+            Divider()
+            HStack {
+                Toggle("Sort into folders by type", isOn: $sortByType)
+                    .toggleStyle(.checkbox)
+                    .font(.system(size: 11.5))
+                Spacer()
+                Button("Open Folder") { NSWorkspace.shared.open(Downloads.folder) }
+                    .buttonStyle(.link)
+                    .font(.system(size: 11.5))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
         }
         .frame(width: 340)
     }

@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.51.0-beta.5: six new features (beta)
+
+**Tab previews**
+- Rest the pointer on a tab (along the top or down the side) for a small picture of its page.
+  It's the picture taken when you last left that tab, or the one from when it went to sleep:
+  the page is never woken or kept running for it. Switch off in Settings › Appearance.
+
+**Downloads**
+- New in the downloads panel: sort into folders by type (Images, Documents, Videos, Music,
+  Archives, Installers, Torrents), off by default, and Open Folder. Pause, resume and Show in
+  Finder are there as before.
+
+**Cookie auto-cleaner** (Settings › Privacy & Security, off by default)
+- Deletes the cookies and data of sites you haven't used for 30 days. Never sites open in a
+  tab, sites you have a saved password for (so you stay signed in), or sites you choose to keep.
+- Runs quietly at most once a day, only after a couple of quiet minutes, never while you're
+  browsing. Settings shows what it cleaned, with "Keep in Future" next to each.
+- When you switch it on, every site you already have starts its 30 days from then, so nothing
+  is wiped all at once.
+
+**Heavy page warning**
+- When a page keeps the processor busy for a while (about a minute and a half), a quiet bar
+  says "This page is using a lot of energy", with Pause Page (freezes it completely), Reload
+  and Put to Sleep. Short bursts never set it off, and pages playing sound are left alone.
+
+**Crash and hang log** (kept on your Mac only, never sent anywhere)
+- If Ufolio quits unexpectedly, the next launch says so and offers the details.
+- If Ufolio stops responding for more than two seconds, that's noted too.
+- It costs nothing while Ufolio runs. Measured idle: the same processor time and memory with it
+  on or off. A crash is written using only what was prepared at launch, and the hang check is
+  one cheap ping a second that does nothing unless Ufolio is stuck.
+- Logs: ~/Library/Logs/Ufolio Browser.
+
+**Picture in Picture on tab switch** (Settings › Appearance, on by default)
+- A video playing in the tab you leave pops out into a floating window, and goes back into its
+  tab when you return. Turn it off for any site from the tab's right-click menu.
+
 ## 0.51.0-beta.4: password moving fixed, and more fixes (beta)
 
 **Passwords**

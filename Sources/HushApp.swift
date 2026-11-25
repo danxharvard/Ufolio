@@ -59,6 +59,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 exit(0)
             }
         }
+        // After the one-copy check, so a second copy that only brings this one forward doesn't
+        // touch the crash record.
+        CrashLog.install()
+        CrashLog.offerReportIfNeeded()
         // Hush has its own tabs; switch off macOS's window tabbing.
         NSWindow.allowsAutomaticWindowTabbing = false
     }
@@ -82,6 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         Rollback.launchSucceeded()   // quitting normally isn't a failed launch
+        CrashLog.quittingNormally()
         // Write everything out before Hush exits (background saves might not finish otherwise).
         BrowserModel.all.allObjects.forEach { $0.saveSessionNow() }   // the last second of changes too
         BookmarkStore.all.forEach { $0.saveNow(waiting: true) }

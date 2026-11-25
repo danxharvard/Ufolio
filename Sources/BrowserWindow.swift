@@ -223,6 +223,9 @@ struct BrowserWindow: View {
             SelectedTab(model: model) { tab in
                 TorrentGuardBar(tab: tab).background(VisualEffect(material: .titlebar))
             }
+            SelectedTab(model: model) { tab in
+                HeavyPageBar(tab: tab).background(VisualEffect(material: .titlebar))
+            }
             // "You visit this site a lot: add it to your Favourites?" (no space otherwise).
             SelectedTab(model: model) { tab in
                 BookmarkOfferBar(tab: tab).background(VisualEffect(material: .titlebar))
@@ -278,6 +281,7 @@ struct BrowserWindow: View {
                 TranslationHost()
                 SelectedTab(model: model) { tab in WebStoreBar(tab: tab) }
                 SelectedTab(model: model) { tab in TorrentGuardBar(tab: tab) }
+                SelectedTab(model: model) { tab in HeavyPageBar(tab: tab) }
                 SelectedTab(model: model) { tab in BookmarkOfferBar(tab: tab) }
                 HStack(spacing: 0) {
                     ZStack(alignment: .topLeading) {
@@ -559,6 +563,8 @@ private struct TabPage: View {
             } else if tab.isAsleep, let snapshot = tab.snapshot {
                 Image(nsImage: snapshot).resizable().aspectRatio(contentMode: .fill)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).clipShape(PageCorners.shape)
+                    .contentShape(Rectangle())
+                    .onTapGesture { tab.wakeIfNeeded() }   // a page put to sleep while showing
             } else {
                 // A woken tab has a new web view, so key the host on it.
                 WebViewHost(webView: tab.webView).id(ObjectIdentifier(tab.webView))

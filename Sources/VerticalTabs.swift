@@ -251,6 +251,7 @@ private struct SideTabRow: View {
         .onTapGesture { model.selectedID = tab.id }
         .onHover { hovering = $0 }
         .contextMenu { TabMenuItems(model: model, tab: tab, vertical: true) }
+        .tabPreview(tab, selected: selected, edge: .trailing)
         .animation(.easeOut(duration: 0.12), value: hovering)
     }
 

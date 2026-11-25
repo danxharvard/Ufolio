@@ -103,6 +103,8 @@ final class PerformanceCenter: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             self?.refresh()
             self?.keepWithinMemoryLimit()
+            CookieCleaner.runIfDue()
+            self?.checkHeavyPages()
             // The disk is checked every half hour too, not only after launch, so the cache
             // can't grow large during a long session.
             if let self, Date().timeIntervalSince(self.lastDiskTidy) > 1_800 {
@@ -304,6 +306,51 @@ final class PerformanceCenter: ObservableObject {
 
     /// When Hush is over its limit, the tabs you used least recently go to sleep, never the one
     /// you're looking at, either side of Split View, or tabs playing sound or using the camera.
+    // MARK: Heavy page warning
+
+    /// Processor time used by each page process at the last check, and how many checks in a row
+    /// it has been busy. A page is "heavy" after three busy checks (about 90 seconds of over 60%
+    /// of a core), so short bursts (a page loading, a video starting) never set it off.
+    private var cpuSeen: [pid_t: (time: UInt64, at: Date)] = [:]
+    private var busyChecks: [pid_t: Int] = [:]
+    private static let timebase: Double = {
+        var info = mach_timebase_info_data_t()
+        mach_timebase_info(&info)
+        return Double(info.numer) / Double(info.denom)
+    }()
+
+    func checkHeavyPages() {
+        var tabsByProcess: [pid_t: [BrowserTab]] = [:]
+        for model in BrowserModel.all.allObjects {
+            for tab in model.tabs where !tab.isAsleep && !tab.isPagePaused {
+                let pid = Self.processID(of: tab.webView, "_webProcessIdentifier")
+                if pid > 0 { tabsByProcess[pid, default: []].append(tab) }
+            }
+        }
+        let now = Date()
+        var seenNow: [pid_t: (time: UInt64, at: Date)] = [:]
+        for (pid, tabs) in tabsByProcess {
+            var info = rusage_info_v2()
+            let ok = withUnsafeMutablePointer(to: &info) {
+                $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { proc_pid_rusage(pid, RUSAGE_INFO_V2, $0) }
+            } == 0
+            guard ok else { continue }
+            let total = info.ri_user_time + info.ri_system_time
+            seenNow[pid] = (total, now)
+            guard let before = cpuSeen[pid], total >= before.time else { continue }
+            let seconds = now.timeIntervalSince(before.at)
+            let busy = seconds > 5 ? (Double(total - before.time) * Self.timebase / 1e9) / seconds : 0
+            let count = busy > 0.6 ? (busyChecks[pid] ?? 0) + 1 : 0
+            busyChecks[pid] = count
+            for tab in tabs {
+                let heavy = count >= 3 && !tab.heavyDismissed && !tab.isPlayingAudio   // music and calls are expected work
+                if tab.isHeavy != heavy { tab.isHeavy = heavy }
+            }
+        }
+        cpuSeen = seenNow
+        busyChecks = busyChecks.filter { seenNow[$0.key] != nil }
+    }
+
     func keepWithinMemoryLimit() {
         let usage = measure()
         evaluatePowerMode(usage)

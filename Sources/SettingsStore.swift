@@ -27,6 +27,14 @@ enum Prefs {
     static let clearCacheOnQuit = "clearCacheOnQuit"
     /// Instant pages: load the page you're about to open in the background.
     static let preloadPages = "preloadPages"
+    /// A small picture of the page when you hover a tab.
+    static let tabPreviews = "tabPreviews"
+    /// Downloads sorted into Images, Documents, Videos… folders (off by default).
+    static let sortDownloads = "sortDownloads"
+    /// Deletes old sites' cookies and data after 30 days unused (off by default).
+    static let cookieCleaner = "cookieCleaner"
+    /// A playing video pops out into Picture in Picture when you switch tabs (on by default).
+    static let autoPictureInPicture = "autoPictureInPicture"
     /// When filling a saved login or card asks for Touch ID or your Mac password ("never" by default).
     static let passwordFillLock = "passwordFillLock"
     static let torrentTools = "torrentTools"
@@ -124,6 +132,10 @@ enum Prefs {
         planetOfWeek: true,
         clearCacheOnQuit: true,
         preloadPages: true,
+        tabPreviews: true,
+        sortDownloads: false,
+        cookieCleaner: false,
+        autoPictureInPicture: true,
         passwordFillLock: "never",
         torrentTools: false,
         torrentApp: "",

@@ -42,6 +42,22 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     @Published private(set) var blockedSites: [String: Int] = [:]
     /// Set when a page was stopped because it looks like a fake copy of a site you use.
     @Published var lookalike: (match: Lookalike.Match, url: URL)?
+    /// This tab's video was popped out into Picture in Picture when you switched away.
+    var autoPictureInPicture = false
+
+    /// Heavy page warning: this page has used a lot of processor (and so energy) for a while.
+    @Published var isHeavy = false
+    /// Frozen from the warning's "Pause Page" (until Resume, or the next page).
+    @Published private(set) var isPagePaused = false
+    /// Dismissed for this page.
+    var heavyDismissed = false
+
+    func pausePage(_ pause: Bool) {
+        WebKitExtras.setPageSuspended(pause, webView)
+        isPagePaused = pause
+        if pause { isHeavy = false }
+    }
+
     /// A link from the other Split View pane is being dragged over this one.
     @Published private(set) var isDropTarget = false
     /// Torrent site mode, on this page: pop-ups and redirects stopped, and traps marked.
@@ -281,6 +297,27 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     @Published private(set) var isAsleep = false
     /// A small, compressed picture of a sleeping tab (about 150 KB instead of a full-size bitmap).
     @Published private(set) var snapshotData: Data? { didSet { decodedSnapshot = nil } }
+
+    /// A small picture of the page for the preview shown when you hover its tab: taken as you
+    /// switch away from it (one snapshot, nothing kept running), JPEG, about 20 KB.
+    private(set) var previewData: Data?
+    private(set) var previewTaken: Date?
+
+    func capturePreview() {
+        guard !isAsleep, url != nil, webView.window != nil, webView.bounds.width > 50 else { return }
+        let config = WKSnapshotConfiguration()
+        config.snapshotWidth = 340
+        webView.takeSnapshot(with: config) { [weak self] image, _ in
+            guard let self, let image, let data = Self.compressed(image) else { return }
+            self.previewData = data
+            self.previewTaken = Date()
+        }
+    }
+
+    /// The best picture there is for a preview: the latest taken, or the one from when it slept.
+    var previewImage: NSImage? {
+        (previewData ?? snapshotData).flatMap(NSImage.init(data:))
+    }
     /// Decoded once (the page area redraws many times while a tab wakes up).
     private var decodedSnapshot: NSImage?
     var snapshot: NSImage? {
@@ -294,12 +331,16 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     private var zoomBeforeSleep: CGFloat?
     private var waking = false
 
-    func sleep() {
-        guard !isAsleep, url != nil, !isLoading, model?.selectedTab !== self else { return }
+    /// Puts even the tab you're looking at to sleep (from the heavy page warning); clicking its
+    /// picture wakes it.
+    func forceSleep() { sleep(force: true) }
+
+    func sleep(force: Bool = false) {
+        guard !isAsleep, url != nil, force || (!isLoading && model?.selectedTab !== self) else { return }
         let config = WKSnapshotConfiguration()
         config.snapshotWidth = NSNumber(value: min(Double(webView.bounds.width), 900))
         webView.takeSnapshot(with: config) { [weak self] image, _ in
-            guard let self, !self.isAsleep, self.model?.selectedTab !== self else { return }
+            guard let self, !self.isAsleep, force || self.model?.selectedTab !== self else { return }
             self.dropParkedPages()
             self.snapshotData = image.flatMap(Self.compressed)
             self.sleepState = self.webView.interactionState
@@ -838,6 +879,10 @@ extension BrowserTab: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        CookieCleaner.lastActivity = Date()   // browsing: the cleaner waits for a quiet spell
+        if isHeavy { isHeavy = false }
+        heavyDismissed = false
+        if isPagePaused { isPagePaused = false }
         if crashed { crashed = false }
         if loadError != nil { loadError = nil }
         // Going back (or anywhere else) from a look-alike warning takes the warning away too.
@@ -921,6 +966,7 @@ extension BrowserTab: WKNavigationDelegate {
             // Private windows leave no trace: no history, suggestions or report entries.
             guard !isPrivate else { return }
             HistoryStore.store(for: profileID).record(url, title: webView.title ?? "")
+            CookieCleaner.noteVisit(url.host)
             // (Only in the default profile: other profiles keep their browsing fully separate.)
             if profileID == nil { BookmarkOffer.shared.record(url, previousHost: lastFinishedHost) }
             lastFinishedHost = url.host

@@ -288,6 +288,7 @@ private struct ChromeTab: View {
         // No tooltips on tabs or their buttons: macOS's tooltip timer could reach a tab that had
         // just been closed under the pointer and crash Ufolio (a SwiftUI fault).
         .contextMenu { TabMenuItems(model: model, tab: tab) }
+        .tabPreview(tab, selected: isSelected, edge: .bottom)
         .animation(.easeOut(duration: 0.12), value: hovering)
     }
 }
@@ -312,6 +313,12 @@ struct TabMenuItems: View {
             Button { model.openSplit(with: tab) } label: { Label("Open in Split View", systemImage: "rectangle.split.2x1") }
         }
         Button { model.togglePin(tab) } label: { Label(tab.isPinned ? "Unpin Tab" : "Pin Tab", systemImage: tab.isPinned ? "pin.slash" : "pin") }
+        if Prefs.bool(Prefs.autoPictureInPicture), let host = tab.host {
+            let off = AutoPictureInPicture.isOff(for: host)
+            Button { AutoPictureInPicture.setOff(!off, for: host) } label: {
+                Label(off ? "Pop Out Videos on This Site" : "Don’t Pop Out Videos on This Site", systemImage: "pip")
+            }
+        }
         if !model.isPrivate && SpaceStore.shared.spaces.count > 1 {
             Menu {
                 ForEach(SpaceStore.shared.spaces.filter { $0.id != tab.spaceID }) { space in

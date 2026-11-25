@@ -384,7 +384,7 @@ struct SettingsHeader: View {
 }
 
 /// A toggle with a small coloured icon and a grey explanation underneath.
-private struct DescribedToggle: View {
+struct DescribedToggle: View {
     let title: String
     let detail: String
     @Binding var isOn: Bool
@@ -509,6 +509,7 @@ private struct GeneralSettings: View {
     @AppStorage(Prefs.downloadFolder) private var downloadFolder = ""
     @AppStorage(Prefs.downloadRetention) private var downloadRetention = DownloadRetention.oneDay.rawValue
     @AppStorage(Prefs.askWhereToSave) private var askWhereToSave = false
+    @AppStorage(Prefs.sortDownloads) private var sortDownloads = false
     @AppStorage(Prefs.openSafeFiles) private var openSafeFiles = false
     @AppStorage(Prefs.askDefaultBrowser) private var askDefault = true
     @State private var isDefaultBrowser = false   // checked when the pane appears (asking macOS isn't free)
@@ -628,6 +629,7 @@ private struct GeneralSettings: View {
                     ForEach(DownloadRetention.allCases) { Text($0.label).tag($0.rawValue) }
                 }.labelsHidden().fixedSize() }
                 Toggle("Ask where to save each download", isOn: $askWhereToSave)
+                Toggle("Sort downloads into folders by type (Images, Documents, Videos…)", isOn: $sortDownloads)
                 DescribedToggle(title: "Open “safe” files after downloading",
                                 detail: "“Safe” files include movies, pictures, sounds, PDFs, text documents and archives.",
                                 isOn: $openSafeFiles)
@@ -685,6 +687,8 @@ private struct AppearanceSettings: View {
     @AppStorage(Prefs.startShowAdult) private var startAdult = false
     @AppStorage(Prefs.startTranslucent) private var startTranslucent = true
     @AppStorage(Prefs.showBookmarkBar) private var bookmarkBar = true
+    @AppStorage(Prefs.tabPreviews) private var tabPreviews = true
+    @AppStorage(Prefs.autoPictureInPicture) private var autoPiP = true
     @AppStorage(Prefs.showFullAddress) private var fullAddress = false
     @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
     @AppStorage(Prefs.defaultZoom) private var zoom = 1.0
@@ -770,6 +774,8 @@ private struct AppearanceSettings: View {
                                 detail: "The toolbar and tabs take on the colours of the website you’re on.",
                                 isOn: $magicTheme)
                 Toggle("Show bookmarks bar", isOn: $bookmarkBar)
+                Toggle("Show a preview when you hover a tab", isOn: $tabPreviews)
+                Toggle("Pop playing videos out into Picture in Picture when you switch tabs", isOn: $autoPiP)
                 Toggle("Show full website address", isOn: $fullAddress)
             } header: { SectionTitle("Toolbar and tabs") }
 
@@ -1013,6 +1019,8 @@ private struct PrivacySettings: View {
                         .disabled(siteCount == 0)
                 }
             } header: { SectionTitle("Website data") }
+
+            CookieCleanerSection()
 
             TorrentToolsSection()
         }

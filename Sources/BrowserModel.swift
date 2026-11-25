@@ -9,17 +9,30 @@ final class BrowserModel: NSObject, ObservableObject {
             // The tab you leave starts its idle clock; the one you pick wakes if it was asleep.
             let old = tabs.first(where: { $0.id == oldValue })
             old?.lastActive = Date()
+            // Its hover preview, while it's still on screen (one snapshot; nothing kept awake).
+            if let old, old !== selectedTab { old.capturePreview() }
             selectedTab?.wakeIfNeeded()
             // Pause sound and video in the tab you leave (Eco, or Settings › Performance),
             // unless it's still showing on the other side of Split View.
             let stillVisible = old.map { splitPair?.contains($0.id) == true && splitPair?.contains(selectedID) == true } ?? false
             // Silent video and animations in a tab you can't see are always paused (they only cost
             // memory, graphics and battery); sound keeps playing unless you've asked otherwise.
-            if let old, old !== selectedTab, !old.isAsleep, !stillVisible,
+            // A video playing in the tab you leave pops out into Picture in Picture (Settings ›
+            // Appearance, on by default, with sites you've turned it off for left alone).
+            if let old, old !== selectedTab, !old.isAsleep, !stillVisible, AutoPictureInPicture.wanted(for: old) {
+                AutoPictureInPicture.popOut(old) { poppedOut in
+                    if !poppedOut, PerformanceCenter.shared.pausesBackgroundMedia || !old.isPlayingAudio {
+                        old.webView.setAllMediaPlaybackSuspended(true)
+                    }
+                }
+            } else if let old, old !== selectedTab, !old.isAsleep, !stillVisible,
                PerformanceCenter.shared.pausesBackgroundMedia || !old.isPlayingAudio {
                 old.webView.setAllMediaPlaybackSuspended(true)
             }
-            if let tab = selectedTab, !tab.isAsleep { tab.webView.setAllMediaPlaybackSuspended(false) }
+            if let tab = selectedTab, !tab.isAsleep {
+                tab.webView.setAllMediaPlaybackSuspended(false)
+                AutoPictureInPicture.bringBack(tab)   // back to its tab when you return
+            }
             if let tab = selectedTab, tab.crashed, tab.crashedWhileHidden { tab.recoverFromCrash() }
             // Keyboard focus follows to the new tab's page (Space and the arrow keys scrolled the old
             // page, or nothing), unless you're typing somewhere such as the address bar.

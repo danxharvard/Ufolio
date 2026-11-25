@@ -30,9 +30,21 @@ enum WebKitExtras {
 
     static func canPictureInPicture(_ webView: WKWebView) -> Bool { bool(webView, "_canTogglePictureInPicture") }
     static func togglePictureInPicture(_ webView: WKWebView) { call(webView, "_togglePictureInPicture") }
+    static func isPictureInPictureActive(_ webView: WKWebView) -> Bool { bool(webView, "_isPictureInPictureActive") }
     /// Ends the page straight away (what Safari does when a tab closes): its memory and web
     /// process are given back even if something still holds on to the web view.
     static func close(_ webView: WKWebView) { call(webView, "_close") }
+
+    /// Freezes a page completely (its scripts, timers and drawing), or lets it carry on.
+    static func setPageSuspended(_ suspended: Bool, _ webView: WKWebView) {
+        let selector = NSSelectorFromString(suspended ? "_suspendPage:" : "_resumePage:")
+        guard webView.responds(to: selector) else {
+            webView.setAllMediaPlaybackSuspended(suspended)   // at least the sound and video
+            return
+        }
+        typealias Call = @convention(c) (AnyObject, Selector, @escaping @convention(block) (Bool) -> Void) -> Void
+        unsafeBitCast(webView.method(for: selector), to: Call.self)(webView, selector) { _ in }
+    }
 }
 
 /// The key WebKit uses to protect encryption keys that websites store (WebCrypto). Left to
