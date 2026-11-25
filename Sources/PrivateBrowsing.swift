@@ -18,15 +18,15 @@ struct PrivateWindowButton: View {
 
     var body: some View {
         Button { openWindow(id: "private") } label: {
-            StealthIcon(color: isPrivate ? PrivateChrome.lavender : Color.primary.opacity(0.75))
-                .frame(width: 28, height: 26)
+            StealthIcon(color: isPrivate ? PrivateChrome.lavender : ToolbarIcon.color)
+                .frame(width: ToolbarIcon.button.width, height: ToolbarIcon.button.height)
                 .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(Color.primary.opacity(hovering ? 0.08 : 0)))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help("New Stealth Window (⇧⌘N)")
+        .help("New Stealth Window: browse without saving history (⇧⌘N)")
     }
 }
 
@@ -87,18 +87,19 @@ struct StealthIcon: View {
     var color: Color
 
     var body: some View {
+        // Drawn as an outline with the same line weight as the toolbar's other icons, with
+        // solid dark glasses, so it reads at a glance as "incognito".
         ZStack {
-            AlienHead().fill(color)
-            // The shades are cut out of the head, so the icon is one colour like the others.
+            AlienHead().stroke(color, style: StrokeStyle(lineWidth: 1.3, lineJoin: .round))
+                .padding(0.65)
             Group {
-                Capsule().frame(width: 6.2, height: 3.6).rotationEffect(.degrees(18)).offset(x: -3.3, y: -0.6)
-                Capsule().frame(width: 6.2, height: 3.6).rotationEffect(.degrees(-18)).offset(x: 3.3, y: -0.6)
-                Rectangle().frame(width: 2.4, height: 0.9).offset(y: -1.1)
+                Capsule().frame(width: 5.6, height: 3.3).rotationEffect(.degrees(18)).offset(x: -3.0, y: -0.4)
+                Capsule().frame(width: 5.6, height: 3.3).rotationEffect(.degrees(-18)).offset(x: 3.0, y: -0.4)
+                Rectangle().frame(width: 1.8, height: 1.0).offset(y: -0.9)
             }
-            .blendMode(.destinationOut)
+            .foregroundStyle(color)
         }
-        .compositingGroup()
-        .frame(width: 15, height: 17)
+        .frame(width: ToolbarIcon.glyph - 3, height: ToolbarIcon.glyph)
     }
 }
 

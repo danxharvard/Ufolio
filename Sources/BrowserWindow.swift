@@ -259,6 +259,8 @@ struct BrowserWindow: View {
                 HStack(spacing: 0) {
                     if showBookmarkBar { BookmarkBar(model: model) } else { Color.clear.contentShape(Rectangle()).gesture(WindowDragGesture()) }
                     HStack(spacing: 2) {
+                        DownloadsButton()
+                        if !model.isPrivate { ExtensionButtons() }
                         SelectedTab(model: model) { ShieldsButton(tab: $0) }
                         PrivateWindowButton(isPrivate: model.isPrivate)
                         MoreMenuButton(model: model)
@@ -350,16 +352,16 @@ struct MoreMenuButton: View {
 
     var body: some View {
         Button { showing.toggle() } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 28, height: 26)
+            Image(systemName: "ellipsis.circle")
+                .font(ToolbarIcon.font)
+                .foregroundStyle(ToolbarIcon.color)
+                .frame(width: ToolbarIcon.button.width, height: ToolbarIcon.button.height)
                 .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(hovering || showing ? 0.08 : 0)))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help("More")
+        .help("More: zoom, print, history, settings and more")
         .popover(isPresented: $showing, arrowEdge: .bottom) {
             MorePanel(model: model) { showing = false }
         }
@@ -630,6 +632,17 @@ struct NavButtons: View {
     }
 }
 
+/// One look for every icon in the toolbar: the same size, line weight and grey, so no icon
+/// shouts louder than another. Colour only ever means "on" (Force Field, Stealth).
+enum ToolbarIcon {
+    static let font = Font.system(size: 15, weight: .regular)
+    /// The square that drawn icons (not SF Symbols) fill, to match a 15 pt symbol.
+    static let glyph: CGFloat = 16
+    static let color = Color.primary.opacity(0.72)
+    static let disabledColor = Color.primary.opacity(0.25)
+    static let button = CGSize(width: 30, height: 26)
+}
+
 struct ToolbarIconButton: View {
     let symbol: String
     let help: String
@@ -641,9 +654,9 @@ struct ToolbarIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(tint ?? Color.primary.opacity(isEnabled ? 0.75 : 0.25))
-                .frame(width: 28, height: 26)
+                .font(ToolbarIcon.font)
+                .foregroundStyle(tint ?? (isEnabled ? ToolbarIcon.color : ToolbarIcon.disabledColor))
+                .frame(width: ToolbarIcon.button.width, height: ToolbarIcon.button.height)
                 .background(
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
                         .fill(Color.primary.opacity(hovering && isEnabled ? 0.08 : 0))
@@ -680,16 +693,19 @@ struct ShieldsButton: View {
 
     var body: some View {
         Button { showing.toggle() } label: {
-            HushMark(color: shieldsUp ? .accentColor : Color.primary.opacity(0.5), showStars: false, outlined: !shieldsUp)
-                .frame(width: 17, height: 17)
+            // A shield, which everyone reads as "protection": ticked and in colour while Force
+            // Field is on, crossed out and grey when it's off for this site.
+            Image(systemName: shieldsUp ? "checkmark.shield" : "shield.slash")
+                .font(ToolbarIcon.font)
+                .foregroundStyle(shieldsUp ? Color.accentColor : ToolbarIcon.color)
                 .scaleEffect(pulse ? 1.18 : 1)
-                .frame(width: 28, height: 26)
+                .frame(width: ToolbarIcon.button.width, height: ToolbarIcon.button.height)
                 .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(Color.primary.opacity(hovering ? 0.08 : 0)))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(shieldsUp ? "Force Field is on" : "Force Field is off for this site")
+        .help(shieldsUp ? "Force Field: blocking ads and trackers on this site" : "Force Field is off for this site")
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.12), value: hovering)
         // A tiny "hush" pulse when something is blocked (at most once a second).

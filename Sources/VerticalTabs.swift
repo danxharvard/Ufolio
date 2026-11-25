@@ -72,9 +72,8 @@ struct SideTabBar: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 4)
-            DownloadsButton()
-            if !model.isPrivate { ExtensionButtons() }
-            // Force Field and Stealth sit at the top right, beside the ⋯ menu.
+            // Downloads, extensions, Force Field and Stealth all sit together at the top right,
+            // beside the ⋯ menu, as with tabs along the top.
         }
         .padding(.horizontal, 8)
         .padding(.top, 6)

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.48.1: one family of toolbar icons
+
+**Toolbar**
+- Every toolbar icon now has the same size, the same line weight and the same grey, so none
+  stands out more than another. Colour only ever means "on".
+- Force Field is now a shield, which everyone reads as protection: ticked and in colour while
+  it's blocking, crossed out and grey when it's off for the site.
+- The Stealth alien is drawn as an outline to match the other icons. It's lavender inside a
+  Stealth window.
+- The ⋯ menu is now a circled ⋯, the same shape and weight as the Downloads icon.
+- With tabs down the side, Downloads and extension buttons now sit at the top right with the
+  other icons, instead of in the tab column.
+- Clearer tooltips: "Force Field: blocking ads and trackers on this site", "New Stealth
+  Window: browse without saving history".
+
 ## 0.48.0: torrent tools (off unless you switch them on)
 
 **Torrent tools** (Settings › Privacy & Security › Torrent tools)

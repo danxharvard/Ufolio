@@ -699,7 +699,7 @@ private struct MoreExtensionsButton: View {
     var body: some View {
         Button { SettingsOpener.open(tab: .extensions) } label: {
             Image(systemName: "puzzlepiece.extension")
-                .font(.system(size: 13))
+                .font(ToolbarIcon.font)
                 .overlay(alignment: .topTrailing) {
                     Text("+\(count)")
                         .font(.system(size: 7.5, weight: .bold, design: .rounded))
@@ -709,12 +709,12 @@ private struct MoreExtensionsButton: View {
                         .background(Capsule().fill(Color.secondary))
                         .offset(x: 9, y: -5)
                 }
-                .frame(width: 28, height: 26)
+                .frame(width: ToolbarIcon.button.width, height: ToolbarIcon.button.height)
                 .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(hovering ? 0.08 : 0)))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(ToolbarIcon.color)
         .help(count == 1 ? "1 more extension in Settings › Extensions" : "\(count) more extensions in Settings › Extensions")
         .onHover { hovering = $0 }
     }
@@ -738,7 +738,7 @@ private struct ExtensionButton: View {
                     }
                 }
                 .frame(width: 16, height: 16)
-                .frame(width: 28, height: 26)
+                .frame(width: ToolbarIcon.button.width, height: ToolbarIcon.button.height)
                 if !action.badgeText.isEmpty {
                     Text(action.badgeText)
                         .font(.system(size: 8, weight: .bold, design: .rounded))
