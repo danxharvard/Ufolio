@@ -189,6 +189,9 @@ final class ExtensionStore: ObservableObject {
         statusIsError = false
         let staging = FileManager.default.temporaryDirectory.appendingPathComponent("hush-ext-\(UUID().uuidString)")
         do {
+            // Inspect before copying so a huge or unsafe local folder cannot consume disk space
+            // before the post-copy check. The staging copy is checked again before installation.
+            try FolderSafety.check(url)
             try await Task.detached(priority: .userInitiated) {
                 try FileManager.default.copyItem(at: url, to: staging)
             }.value
@@ -221,11 +224,31 @@ final class ExtensionStore: ObservableObject {
             let record = InstalledExtension(id: id, name: name, version: ext.displayVersion ?? ext.version ?? "",
                                             source: source)
             let destination = directory(for: record)
-            // Updating one that's running: stop the old copy first (it used to keep running from
-            // files that had just been deleted, and broke until Ufolio restarted).
+            let replacement = folder.appendingPathComponent(".\(id).new-\(UUID().uuidString)", isDirectory: true)
+            let backup = folder.appendingPathComponent(".\(id).old-\(UUID().uuidString)", isDirectory: true)
+            defer {
+                try? FileManager.default.removeItem(at: replacement)
+                try? FileManager.default.removeItem(at: backup)
+            }
+
+            // Prepare the complete new copy before touching the installed extension. If anything
+            // fails during the swap, restore the old directory and put its extension back online.
+            try FileManager.default.copyItem(at: staging, to: replacement)
+            let previous = installed.first { $0.id == id }
             ExtensionManager.shared.unload(id)
-            try? FileManager.default.removeItem(at: destination)
-            try FileManager.default.copyItem(at: staging, to: destination)
+            do {
+                if FileManager.default.fileExists(atPath: destination.path) {
+                    try FileManager.default.moveItem(at: destination, to: backup)
+                }
+                try FileManager.default.moveItem(at: replacement, to: destination)
+            } catch {
+                if FileManager.default.fileExists(atPath: backup.path),
+                   !FileManager.default.fileExists(atPath: destination.path) {
+                    try? FileManager.default.moveItem(at: backup, to: destination)
+                }
+                if let previous { await ExtensionManager.shared.load(previous) }
+                throw error
+            }
             installed.removeAll { $0.id == id }
             installed.append(record)
             save()
