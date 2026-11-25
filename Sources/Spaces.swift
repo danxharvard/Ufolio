@@ -240,6 +240,8 @@ struct SpaceEditor: View {
     @ObservedObject private var store = SpaceStore.shared
     @State private var newProfileName = ""
     @State private var makingProfile = false
+    /// A profile made in this editor: removed again if you cancel (it used to be left behind).
+    @State private var madeProfile: UUID?
     @FocusState private var nameFocused: Bool
 
     var body: some View {
@@ -294,7 +296,11 @@ struct SpaceEditor: View {
             }
             HStack {
                 Spacer()
-                Button("Cancel") { done(nil) }.keyboardShortcut(.cancelAction)
+                Button("Cancel") {
+                    if let madeProfile { store.removeProfile(madeProfile) }
+                    done(nil)
+                }
+                .keyboardShortcut(.cancelAction)
                 Button(isNew ? "Create Orbit" : "Save") { done(space) }.keyboardShortcut(.defaultAction)
             }
         }
@@ -306,6 +312,7 @@ struct SpaceEditor: View {
     private func addProfile() {
         if let profile = store.addProfile(name: newProfileName, color: (store.profiles.count + 2) % SpacePalette.colors.count) {
             space.profile = profile.id
+            madeProfile = profile.id
         }
         newProfileName = ""
         makingProfile = false
@@ -363,6 +370,9 @@ struct SpacesSettings: View {
                 } label: {
                     Label("Add Orbit", systemImage: "plus.circle.fill").foregroundStyle(Color.accentColor)
                 }
+                // At the limit it used to do nothing at all when clicked.
+                .disabled(store.spaces.count >= SpaceStore.maxSpaces)
+                .help(store.spaces.count >= SpaceStore.maxSpaces ? "You can have up to \(SpaceStore.maxSpaces) Orbits" : "")
                 .buttonStyle(.borderless)
                 .disabled(store.spaces.count >= SpaceStore.maxSpaces)
             } header: { SectionTitle("Orbits") } footer: {

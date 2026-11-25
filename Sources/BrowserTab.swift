@@ -373,6 +373,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     /// The site this tab last finished loading, to tell arriving at a site from moving around in it.
     private var lastFinishedHost: String?
     private var lastAppPrompt = Date.distantPast
+    /// The last address Clean Links reloaded without tracking tags (see decidePolicyFor).
+    private var lastCleaned: (url: URL, date: Date)?
 
     func load(_ url: URL) {
         // A sleeping tab's page isn't connected yet (no blocking, no delegates): wake it first,
@@ -491,7 +493,11 @@ extension BrowserTab: WKNavigationDelegate {
                 return
             }
             // Clean Links: reload the same page without tracking tags.
-            if CleanLinks.isEnabled, action.request.httpMethod ?? "GET" == "GET", let clean = CleanLinks.cleaned(url) {
+            // (Not twice in a row for the same page: a server that redirects straight back to the
+            // tagged address would otherwise loop forever.)
+            if CleanLinks.isEnabled, action.request.httpMethod ?? "GET" == "GET", let clean = CleanLinks.cleaned(url),
+               !(lastCleaned?.url == clean && Date().timeIntervalSince(lastCleaned?.date ?? .distantPast) < 5) {
+                lastCleaned = (clean, Date())
                 decisionHandler(.cancel, preferences)
                 webView.load(URLRequest(url: clean))
                 return

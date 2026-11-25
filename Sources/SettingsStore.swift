@@ -11,6 +11,7 @@ enum Prefs {
     static let showBookmarkBar = "showBookmarkBar"
     static let showFullAddress = "showFullAddress"
     static let reduceMotion = "reduceMotion"
+    static let launchSound = "launchSound"
     static let startBackground = "startBackground"
     static let startGreeting = "startShowGreeting"
     static let startBookmarks = "startShowBookmarks"
@@ -91,6 +92,7 @@ enum Prefs {
         showBookmarkBar: true,
         showFullAddress: false,
         reduceMotion: false,
+        launchSound: true,
         startBackground: StartBackground.frosted.rawValue,
         startGreeting: true,
         startBookmarks: true,

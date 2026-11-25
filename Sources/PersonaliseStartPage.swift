@@ -196,6 +196,8 @@ struct PersonaliseCard: View {
         .onAppear {
             DispatchQueue.main.async { focused = true }
             // ↑ and ↓ move through the suggestions while the field is focused.
+            // Never two at once (a sheet can appear twice; the first monitor used to be left running).
+            if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 let count = search.suggestions.count
                 guard focused, count > 0 else { return event }

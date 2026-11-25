@@ -298,7 +298,8 @@ final class PaletteModel: ObservableObject {
                   available: { !$0.isPrivate && SpaceStore.shared.spaces.count > 1 }) { m, _ in m.switchSpace(by: 1) },
             .init(title: "Previous Orbit", symbol: "arrow.left.circle", shortcut: .previousSpace,
                   available: { !$0.isPrivate && SpaceStore.shared.spaces.count > 1 }) { m, _ in m.switchSpace(by: -1) },
-            .init(title: "New Orbit", symbol: "square.stack.3d.up", keywords: "workspace profile", available: { !$0.isPrivate }) { m, _ in
+            .init(title: "New Orbit", symbol: "square.stack.3d.up", keywords: "workspace profile",
+                  available: { !$0.isPrivate && SpaceStore.shared.spaces.count < SpaceStore.maxSpaces }) { m, _ in
                 let store = SpaceStore.shared
                 if let space = store.addSpace(name: "", symbol: SpacePalette.symbols[store.spaces.count % SpacePalette.symbols.count],
                                               color: store.spaces.count % SpacePalette.colors.count) {

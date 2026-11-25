@@ -687,6 +687,7 @@ private struct AppearanceSettings: View {
     @AppStorage(Prefs.showFullAddress) private var fullAddress = false
     @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
     @AppStorage(Prefs.defaultZoom) private var zoom = 1.0
+    @AppStorage(Prefs.launchSound) private var launchSound = true
 
     private let zoomLevels: [Double] = [0.75, 0.85, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75]
 
@@ -763,6 +764,14 @@ private struct AppearanceSettings: View {
             } header: { SectionTitle("Toolbar and tabs") }
 
             Section {
+                HStack {
+                    DescribedToggle(title: "Play the arrival sound when Ufolio opens",
+                                    detail: "A short, retro sci-fi “ooo-weee-ooo” as the saucer lands.",
+                                    isOn: $launchSound)
+                    Button("Play") { UserDefaults.standard.set(true, forKey: Prefs.launchSound); LaunchSound.playIfWanted() }
+                        .controlSize(.small)
+                        .disabled(!launchSound)
+                }
                 DescribedToggle(title: "Reduce motion",
                                 detail: "Turns off Ufolio’s animations, for an instant, snappier feel.",
                                 isOn: $reduceMotion)

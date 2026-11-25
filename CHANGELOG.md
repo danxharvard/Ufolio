@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.44.0: the arrival sound, and a lighter footprint
+
+**New: the arrival sound 🛸**
+- Ufolio plays a short, retro sci-fi "ooo-weee-ooo" as it opens. Made from scratch in code,
+  so it adds almost nothing to Ufolio's size. Turn it off (or play it again) in
+  Settings › Appearance.
+
+**Much less disk space**
+- Website caches are kept in check, as other browsers do: past 300 MB (or 1 GB of site data)
+  they're cleared at launch. Sign-ins and site settings stay. Before, they could grow to gigabytes.
+- Compiled filter lists, rule files and extension files that no longer belong to anything are
+  removed at launch (Hushlist alone is tens of megabytes, and old copies were never cleaned up).
+- Update downloads that were never installed are cleaned up.
+
+**Fixes**
+- Clean Links can no longer get stuck in a loop on a site that keeps redirecting back to its
+  tracking address.
+- Windows last used on a display that's no longer connected open on screen.
+- Release notes on GitHub (and in the updater) show "What's new" again.
+- Cancelling the Orbit editor removes a profile you made in it.
+- "Add Orbit" is greyed out at the 12-Orbit limit instead of doing nothing.
+- The start page's town search can't end up handling keys twice.
+
 ## 0.43.15: ten more fixes
 
 **Settings reach open tabs**

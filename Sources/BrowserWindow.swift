@@ -48,6 +48,7 @@ struct BrowserWindow: View {
             if let window, model.window !== window, !model.isPrivate {
                 window.setFrameUsingName("HushBrowserWindow")
                 window.setFrameAutosaveName("HushBrowserWindow")
+                WindowPlacement.keepOnScreen(window)
             }
             model.window = window
             if window != nil { ExtensionEvents.windowOpened(model) }

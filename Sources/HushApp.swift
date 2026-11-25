@@ -94,7 +94,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         Lookalike.refreshKnown()   // ready before the first page loads
         AppearanceMode.apply(Prefs.string(Prefs.appearance))   // before any window shows
+        LaunchSound.playIfWanted()   // the short "arrival" sound (Settings › Appearance)
         DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + 30) { FaviconCache.pruneDisk() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 45) { PerformanceCenter.tidyDisk() }
         ContentBlocker.shared.prepare()
         ContentBlocker.shared.startListUpdates()
         ExtensionEvents.launch()
@@ -298,6 +300,22 @@ struct HushCommands: Commands {
     }
 }
 
+/// A window last used on a display that's no longer connected came back off-screen, invisible.
+enum WindowPlacement {
+    static func keepOnScreen(_ window: NSWindow) {
+        let frame = window.frame
+        // Enough of it on some screen to grab: leave it where it is.
+        if NSScreen.screens.contains(where: { $0.visibleFrame.intersection(frame).width > 100 && $0.visibleFrame.intersection(frame).height > 60 }) {
+            return
+        }
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        let area = screen.visibleFrame
+        let size = NSSize(width: min(frame.width, area.width), height: min(frame.height, area.height))
+        window.setFrame(NSRect(x: area.midX - size.width / 2, y: area.midY - size.height / 2,
+                               width: size.width, height: size.height), display: true)
+    }
+}
+
 enum QuitHelper {
     static let closeSheets = Notification.Name("HushCloseSheets")
 
@@ -374,6 +392,7 @@ enum SettingsWindow {
         w.tabbingMode = .disallowed
         if !w.setFrameUsingName("HushSettings") { w.center() }
         w.setFrameAutosaveName("HushSettings")
+        WindowPlacement.keepOnScreen(w)
         closeObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: w, queue: .main) { _ in
             MainActor.assumeIsolated {
                 // Reopening within half a minute is instant; after that the contents are put away.

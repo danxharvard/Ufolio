@@ -86,9 +86,18 @@ final class ContentBlocker: ObservableObject {
         store.removeContentRuleList(forIdentifier: "hush-adblock-v1") { _ in } // from version 0.1.0
         // Compiled copies of older built-in rules (each update's rules have their own name) are
         // removed, so they don't pile up on disk.
-        let current = Set(BuiltInRules.allCases.map(\.identifier))
+        // Filter lists that no longer exist go too: a compiled big list (Hushlist) is tens of
+        // megabytes, and every re-import or removal used to leave its old copy behind for good.
+        let current = Set(BuiltInRules.allCases.map(\.identifier)).union(lists.flatMap(\.identifiers))
+        // The same for the lists' rule files in the Filters folder.
+        let known = Set(lists.map(\.id.uuidString))
+        for file in (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+        where file.pathExtension == "json" && !file.lastPathComponent.hasPrefix("lists.")   // lists.json and its damaged-file copies stay
+            && !known.contains(String(file.deletingPathExtension().lastPathComponent.prefix(36))) {
+            try? FileManager.default.removeItem(at: file)
+        }
         store.getAvailableContentRuleListIdentifiers { [weak self] ids in
-            for id in ids ?? [] where id.hasPrefix("hush-") && !id.hasPrefix("hush-list-")
+            for id in ids ?? [] where id.hasPrefix("hush-")
                 && id != ElementZapper.ruleIdentifier && !current.contains(id) {
                 self?.store.removeContentRuleList(forIdentifier: id) { _ in }
             }

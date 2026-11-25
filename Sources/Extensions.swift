@@ -87,8 +87,16 @@ final class ExtensionStore: ObservableObject {
     private init() {
         folder = AppPaths.support.appendingPathComponent("Extensions", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        if let saved = AppPaths.load([InstalledExtension].self, from: listFile) {
-            installed = saved
+        let saved = AppPaths.load([InstalledExtension].self, from: listFile)
+        if let saved { installed = saved }
+        // Files of extensions that are no longer installed (left behind otherwise). Only when the
+        // list was read properly, so a damaged list can never cost you your extensions.
+        if saved != nil || !FileManager.default.fileExists(atPath: listFile.path) {
+            let ids = Set(installed.map(\.id))
+            for item in (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
+            where (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true && !ids.contains(item.lastPathComponent) {
+                try? FileManager.default.removeItem(at: item)
+            }
         }
     }
 

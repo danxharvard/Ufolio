@@ -164,6 +164,46 @@ final class PerformanceCenter: ObservableObject {
         }
     }
 
+    // MARK: Disk tidying
+
+    /// Keeps what websites cache on disk in check, the way other browsers do. WebKit lets its
+    /// caches grow to several gigabytes on a big disk, and Ufolio never trimmed them, so they
+    /// just kept growing. Checked at launch in the background: past the limits, the caches are
+    /// cleared (sites simply download what they need again). Sign-ins and site settings stay.
+    static func tidyDisk() {
+        DispatchQueue.global(qos: .background).async {
+            let fm = FileManager.default
+            let id = Bundle.main.bundleIdentifier ?? "com.danxharvard.hushbrowser"
+            let library = fm.homeDirectoryForCurrentUser.appendingPathComponent("Library")
+            func size(_ url: URL) -> Int {
+                guard let walker = fm.enumerator(at: url, includingPropertiesForKeys: [.totalFileAllocatedSizeKey]) else { return 0 }
+                var total = 0
+                for case let file as URL in walker {
+                    total += (try? file.resourceValues(forKeys: [.totalFileAllocatedSizeKey]).totalFileAllocatedSize) ?? 0
+                }
+                return total
+            }
+            let caches = size(library.appendingPathComponent("Caches/\(id)"))
+            let siteData = size(library.appendingPathComponent("WebKit/\(id)"))
+            // Update downloads that were never installed (a newer one replaced them).
+            let temp = fm.temporaryDirectory
+            for folder in (try? fm.contentsOfDirectory(at: temp, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+            where folder.lastPathComponent.hasPrefix("hush-update-") || folder.lastPathComponent.hasPrefix("hush-ext-") {
+                let modified = (try? folder.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+                if Date().timeIntervalSince(modified) > 86_400 { try? fm.removeItem(at: folder) }
+            }
+            var types: Set<String> = []
+            if caches > 300_000_000 { types.insert(WKWebsiteDataTypeDiskCache) }
+            if siteData > 1_000_000_000 { types.formUnion([WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeFetchCache]) }
+            guard !types.isEmpty else { return }
+            DispatchQueue.main.async {
+                for store in SpaceStore.shared.allDataStores {
+                    store.removeData(ofTypes: types, modifiedSince: .distantPast) {}
+                }
+            }
+        }
+    }
+
     // MARK: Memory Saver
 
     static var memorySaverOn: Bool { Prefs.bool(Prefs.memorySaver) }
