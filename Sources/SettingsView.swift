@@ -692,6 +692,8 @@ private struct AppearanceSettings: View {
     @AppStorage(Prefs.theme) private var alienTheme = "classic"
     @AppStorage(Prefs.funEffects) private var funEffects = true
     @AppStorage(Prefs.achievements) private var achievements = false
+    @AppStorage(Prefs.saucerPet) private var saucerPet = true
+    @AppStorage(Prefs.planetOfWeek) private var planetOfWeek = true
 
     private let zoomLevels: [Double] = [0.75, 0.85, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75]
 
@@ -781,8 +783,14 @@ private struct AppearanceSettings: View {
                         .disabled(!launchSound)
                 }
                 DescribedToggle(title: "Effects",
-                                detail: "The little touches: the saucer on the start page, shooting stars, the Stealth shimmer and the download beam.",
+                                detail: "The little touches: the saucer on the start page, shooting stars, warp speed between Orbits, the Stealth shimmer and the download beam.",
                                 isOn: $funEffects)
+                DescribedToggle(title: "Saucer pet",
+                                detail: "A little saucer in a corner of the start page that picks up an antenna, a glow and more as you earn achievements and ranks. Click it to make it spin.",
+                                isOn: $saucerPet)
+                DescribedToggle(title: "Planet of the week",
+                                detail: "A slowly turning planet in a corner of the start page, a different one each Monday. Click it for facts.",
+                                isOn: $planetOfWeek)
                 DescribedToggle(title: "Achievements",
                                 detail: "Badges on the weekly report card, such as First Contact at 1,000 ads blocked. Never any pop-ups.",
                                 isOn: $achievements)
@@ -803,6 +811,12 @@ private struct AppearanceSettings: View {
                     }
                 }
             } header: { SectionTitle("Motion and zoom") }
+
+            Section {
+                GalaxyRankLadder()
+            } header: { SectionTitle("Galaxy rank") } footer: {
+                Footnote("Earned slowly, one rank at a time, by the days you fly with Ufolio. Never any pop-ups.")
+            }
         }
         .formStyle(SafariFormStyle())
     }

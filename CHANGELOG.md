@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.47.0: a saucer pet, warp speed, galaxy ranks and a planet of the week
+
+**Saucer pet**
+- A little hand-drawn saucer with big friendly eyes hovers in a corner of the start page. Now
+  and then it bobs, blinks, chases its rim lights round or does a little spin, then rests.
+  Click it to make it spin.
+- It levels up as you go: an antenna for your first achievement, a glow underneath for the
+  second, a tiny moon of its own for the third, and a gold rim when you reach Comet Chaser.
+- It only appears where there's clear space, so it never sits on anything. Right-click it, or
+  use Settings › Appearance, to hide it.
+
+**Warp speed**
+- Switching Orbits gives a quick streak of stars, over in under half a second. It's drawn on
+  top of the window, so it never slows the switch down.
+
+**Galaxy rank**
+- Eight ranks, from Cadet to Galactic Admiral, earned slowly by the days you use Ufolio, each
+  with its own badge. The first time, days already in your history count, so you don't
+  start from scratch.
+- Shown quietly on the weekly report card, with all eight in Settings › Appearance. No pop-ups.
+
+**Planet of the week**
+- A painted planet turns slowly in the corner of the start page, a different one every
+  Monday (all eight planets, and Pluto). Click it for a card of facts from NASA.
+- It turns on macOS's animation engine, not by redrawing the page, and pauses while the window
+  isn't in front. Right-click it, or use Settings › Appearance, to hide it.
+
+All of these stay still with Reduce Motion or Effects off.
+
 ## 0.46.2: Stealth Mode is smooth again, and a new Stealth icon
 
 **Stealth Mode**

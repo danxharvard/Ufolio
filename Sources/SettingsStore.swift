@@ -19,6 +19,9 @@ enum Prefs {
     static let funEffects = "funEffects"
     /// Opt-in badges on the weekly report card.
     static let achievements = "achievements"
+    /// The saucer pet and the planet of the week on the start page.
+    static let saucerPet = "saucerPet"
+    static let planetOfWeek = "planetOfWeek"
     static let startBackground = "startBackground"
     static let startGreeting = "startShowGreeting"
     static let startBookmarks = "startShowBookmarks"
@@ -103,6 +106,8 @@ enum Prefs {
         theme: "classic",
         funEffects: true,
         achievements: false,
+        saucerPet: true,
+        planetOfWeek: true,
         startBackground: StartBackground.frosted.rawValue,
         startGreeting: true,
         startBookmarks: true,

@@ -305,6 +305,7 @@ struct WeeklyReportCard: View {
                     .font(.system(size: 13, weight: .medium))
                     .fixedSize(horizontal: false, vertical: true)
             }
+            GalaxyRankLine()
             if achievementsOn {
                 HStack(spacing: 8) {
                     ForEach(Achievement.all(lifetime: stats.total), id: \.title) { badge in

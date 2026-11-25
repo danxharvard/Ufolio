@@ -51,7 +51,7 @@ struct BrowserWindow: View {
     /// Stealth Mode's cloaking field (a faint shimmer round the window's edge) and the easter egg.
     private var funOverlays: some View {
         ZStack {
-            if model.isPrivate { CloakingField().ignoresSafeArea() }
+            if model.isPrivate { CloakingField().ignoresSafeArea() } else { WarpSpeedOverlay(model: model) }
             if leaderEgg { LeaderEasterEgg { leaderEgg = false } }
         }
         .allowsHitTesting(false)
