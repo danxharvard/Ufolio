@@ -5,7 +5,7 @@
 <h1 align="center">Ufolio 🛸</h1>
 
 <p align="center">
-  <b>Browse from another world.</b><br>
+  <b>Project UFO</b><br>
   A native Mac browser built on WebKit. Featherweight, lightning fast, and cloaked from trackers.
 </p>
 
