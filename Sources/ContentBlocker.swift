@@ -348,6 +348,13 @@ final class ContentBlocker: ObservableObject {
                 var request = URLRequest(url: url)
                 request.timeoutInterval = 60
                 let (data, response) = try await URLSession.shared.data(for: request)
+                // URLSession follows redirects. Refuse an HTTPS list that silently downgrades to
+                // HTTP, or its rules could be replaced in transit after the initial URL check.
+                guard response.url?.scheme?.lowercased() == "https" else {
+                    throw NSError(domain: "Ufolio", code: 495, userInfo: [
+                        NSLocalizedDescriptionKey: "The filter list redirected to an insecure address.",
+                    ])
+                }
                 guard data.count < 60_000_000 else {
                     throw NSError(domain: "Ufolio", code: 413, userInfo: [NSLocalizedDescriptionKey: "That list is too large."])
                 }

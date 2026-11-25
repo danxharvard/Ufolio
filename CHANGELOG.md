@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased: security and robustness fixes
+- Torrent previews scan every file entry for executable disguises, shortcuts and scam indicators, even when the visible list is capped at 20,000 files.
+- Reject malformed bencoded torrent data with trailing bytes and prevent declared file sizes from overflowing preview totals.
+- Correct torrent-site off-site detection for multi-part domains such as `.co.uk`.
+- Refuse browser-extension ZIP archives that declare more than 500 MB of expanded data before extracting them.
+- Reject filter-list downloads that follow an HTTPS URL with a redirect to HTTP.
+- Fail closed if extension folder inspection fails; preflight local folders and atomically replace installed extensions with rollback.
+- Validate Chrome Web Store download redirects and restrict updater redirects to trusted HTTPS hosts, with a 1 GB update download cap.
+- Repair damaged WebCrypto key files atomically and retain secure randomness if the primary system RNG call fails.
+
 ## 0.48.1: one family of toolbar icons
 
 **Toolbar**

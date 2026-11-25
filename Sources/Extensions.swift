@@ -140,6 +140,12 @@ final class ExtensionStore: ObservableObject {
                 .init(name: "x", value: "id=\(id)&uc"),
             ]
             let (data, response) = try await URLSession.shared.data(from: components.url!)
+            let finalURL = response.url
+            let finalHost = finalURL?.host?.lowercased() ?? ""
+            guard finalURL?.scheme?.lowercased() == "https",
+                  finalHost == "clients2.google.com" || finalHost.hasSuffix(".googleusercontent.com") else {
+                throw ExtensionError("The Chrome Web Store redirected the extension download to an untrusted address.")
+            }
             guard (response as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty else {
                 throw ExtensionError("The Chrome Web Store didn’t provide this extension.")
             }
@@ -189,6 +195,9 @@ final class ExtensionStore: ObservableObject {
         statusIsError = false
         let staging = FileManager.default.temporaryDirectory.appendingPathComponent("hush-ext-\(UUID().uuidString)")
         do {
+            // Inspect before copying so a huge or unsafe local folder cannot consume disk space
+            // before the post-copy check. The staging copy is checked again before installation.
+            try FolderSafety.check(url)
             try await Task.detached(priority: .userInitiated) {
                 try FileManager.default.copyItem(at: url, to: staging)
             }.value
@@ -221,11 +230,29 @@ final class ExtensionStore: ObservableObject {
             let record = InstalledExtension(id: id, name: name, version: ext.displayVersion ?? ext.version ?? "",
                                             source: source)
             let destination = directory(for: record)
-            // Updating one that's running: stop the old copy first (it used to keep running from
-            // files that had just been deleted, and broke until Ufolio restarted).
+            let replacement = folder.appendingPathComponent(".\(id).new-\(UUID().uuidString)", isDirectory: true)
+            let backup = folder.appendingPathComponent(".\(id).old-\(UUID().uuidString)", isDirectory: true)
+            defer { try? FileManager.default.removeItem(at: replacement) }
+
+            // Prepare the complete new copy before touching the installed extension. If anything
+            // fails during the swap, restore the old directory and put its extension back online.
+            try FileManager.default.copyItem(at: staging, to: replacement)
+            let previous = installed.first { $0.id == id }
             ExtensionManager.shared.unload(id)
-            try? FileManager.default.removeItem(at: destination)
-            try FileManager.default.copyItem(at: staging, to: destination)
+            do {
+                if FileManager.default.fileExists(atPath: destination.path) {
+                    try FileManager.default.moveItem(at: destination, to: backup)
+                }
+                try FileManager.default.moveItem(at: replacement, to: destination)
+            } catch {
+                if FileManager.default.fileExists(atPath: backup.path),
+                   !FileManager.default.fileExists(atPath: destination.path) {
+                    try? FileManager.default.moveItem(at: backup, to: destination)
+                }
+                if let previous { await ExtensionManager.shared.load(previous) }
+                throw error
+            }
+            try? FileManager.default.removeItem(at: backup)
             installed.removeAll { $0.id == id }
             installed.append(record)
             save()
@@ -268,6 +295,18 @@ final class ExtensionStore: ObservableObject {
         guard names.count < 50_000, !names.contains(where: { name in
             name.hasPrefix("/") || name.hasPrefix("~") || name.split(separator: "/").contains("..") || name.contains("\\")
         }) else { throw ExtensionError("This extension’s files are packed in an unsafe way, so Ufolio didn’t add it.") }
+
+        // Check the archive's declared expanded size before extraction. A tiny zip bomb could
+        // otherwise fill the user's disk before FolderSafety gets a chance to inspect the files.
+        let totals = try await ProcessRunner.run("/usr/bin/zipinfo", ["-t", zipFile.path])
+        let totalTokens = totals.output.split(whereSeparator: \.isWhitespace)
+        guard totals.succeeded,
+              let marker = totalTokens.firstIndex(where: { $0.hasPrefix("uncompressed") }),
+              marker >= 2, let expandedBytes = Int64(totalTokens[marker - 2]),
+              expandedBytes <= 500_000_000 else {
+            throw ExtensionError("This extension expands to an unsafe size, so Ufolio didn’t add it.")
+        }
+
         // Nor links: a link to somewhere else on your Mac, followed by a file "inside" it, would
         // write outside the folder too. Extensions never need them.
         let details = try await ProcessRunner.run("/usr/bin/zipinfo", [zipFile.path])

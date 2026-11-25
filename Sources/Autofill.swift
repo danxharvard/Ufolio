@@ -121,14 +121,9 @@ enum PasswordGenerator {
         return groups.map { String($0) }.joined(separator: "-")
     }
 
-    /// A uniformly random number below `bound` from the system's secure random generator.
+    /// A uniformly random number below `bound` from Swift's system-backed secure generator.
     private static func random(_ bound: Int) -> Int {
-        var value: UInt32 = 0
-        let limit = UInt32.max - UInt32.max % UInt32(bound)
-        repeat {
-            _ = withUnsafeMutableBytes(of: &value) { SecRandomCopyBytes(kSecRandomDefault, 4, $0.baseAddress!) }
-        } while value >= limit
-        return Int(value % UInt32(bound))
+        Int.random(in: 0..<bound)
     }
 }
 
