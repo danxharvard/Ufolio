@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>Project UFO</b><br>
-  A native Mac browser built on WebKit. Featherweight, lightning fast, and cloaked from trackers.
+  A native Mac browser built on WebKit. Small but mighty fast amd powerful. With all the standard features you’d expect plus many more unique to Ufolio. The most powerful ad blocker you’ll find!
 </p>
 
 <p align="center">
