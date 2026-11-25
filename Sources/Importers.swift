@@ -162,7 +162,7 @@ enum PasswordImporter {
         panel.message = "Choose the passwords file you exported from your other browser."
         panel.prompt = "Import"
         guard panel.runModal() == .OK, let file = panel.url else { return }
-        UserAuth.confirm("import passwords into your keychain") { ok in
+        UserAuth.confirm("import passwords into Ufolio") { ok in
             guard ok else { return }
             DispatchQueue.global(qos: .userInitiated).async {
                 let message: String
@@ -177,7 +177,7 @@ enum PasswordImporter {
                     DialogHost.settings.present(HushDialog(
                         art: .symbol("doc.text.fill"), badge: "trash.fill", theme: .caution, motion: .drift,
                         title: "Move the exported file to the Trash?",
-                        message: "“\(file.lastPathComponent)” contains your passwords as plain text. It’s safest not to keep it now they’re in your keychain.",
+                        message: "“\(file.lastPathComponent)” contains your passwords as plain text. It’s safest not to keep it now they’re saved in Ufolio.",
                         choices: [.init(title: "Keep It", role: .cancel), .init(title: "Move to Trash", role: .destructive)],
                         completion: { choice, _ in
                             if choice == 1 { NSWorkspace.shared.recycle([file]) }

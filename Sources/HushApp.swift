@@ -13,6 +13,7 @@ struct HushApp: App {
         Prefs.register()
         // Before any window: if this version has failed to start twice, offer the previous one.
         Rollback.checkAtLaunch()
+        Vault.offerToMoveIfNeeded()   // passwords still in the keychain come across, once
     }
 
     var body: some Scene {

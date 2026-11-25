@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.51.0-beta.3: no more password prompts (beta)
+
+**Passwords and cards, kept by Ufolio itself**
+- Save a password once and it simply fills in from then on: no Mac password, no Touch ID.
+- Saved passwords and cards now live in Ufolio's own vault, encrypted with AES-256, with its key
+  in a file only your Mac account can read (and FileVault protecting both while your Mac is
+  locked or off). macOS no longer asks for your Mac password to let Ufolio into the keychain,
+  which it did again after every update.
+- Passwords already in your keychain: Ufolio offers once to move them in. macOS asks one last
+  time, and the keychain copies are left as they are. You can also do it later from
+  Settings › Passwords.
+- Settings › Passwords › Security: choose whether filling asks first. Never ask (the default),
+  once each time Ufolio opens, after 15 minutes away, or every time. Seeing or copying a
+  password in Settings always asks.
+
+Also includes everything in 0.51.0-beta.1 and beta.2 (Instant pages, Split View link dragging).
+
 ## 0.51.0-beta.2: drag links between Split View panes (beta)
 
 **Split View**

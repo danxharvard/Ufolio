@@ -31,7 +31,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .adBlocker: return "blocking mode strict standard off ads ad blocker trackers block filter list easylist cookie banners collapse zapper hidden elements counter statistics"
         case .extensions: return "chrome extension extensions web store add-on plugin dark reader"
         case .privacy: return "torrent torrents magnet bittorrent transmission qbittorrent fingerprinting farbling redirects debounce amp cookies https tracking gpc fraud phishing look-alike clean links camera microphone pop-ups autoplay javascript website data clear"
-        case .passwords: return "autofill passwords credit cards contact card keychain touch id"
+        case .passwords: return "autofill passwords credit cards contact card keychain vault touch id lock ask"
         case .location: return "location weather town postcode personalise start page permission maps"
         case .keyboard: return "keyboard shortcuts keys hotkeys customise command"
         case .updates: return "update updates version changelog what's new release notes"
@@ -1706,6 +1706,8 @@ private struct PasswordSettings: View {
     @AppStorage(Prefs.autofillContact) private var contact = true
     @AppStorage(Prefs.autofillPasswords) private var passwords = true
     @AppStorage(Prefs.autofillCards) private var cards = true
+    @AppStorage(Prefs.passwordFillLock) private var fillLock = UserAuth.FillLock.never.rawValue
+    @State private var moveMessage: String?
     @State private var unlocked = false
     @State private var logins: [SavedLogin] = []
     @State private var cardList: [CardVault.Summary] = []
@@ -1729,7 +1731,7 @@ private struct PasswordSettings: View {
         Form {
             Section {
                 SettingsHeader(tab: .passwords,
-                               subtitle: "Kept in your Mac’s keychain and filled in only after Touch ID or your Mac’s password.")
+                               subtitle: "Kept encrypted in Ufolio’s own vault. Save a password once and it fills in from then on.")
             }
 
             Section {
@@ -1750,6 +1752,33 @@ private struct PasswordSettings: View {
                                   isOn: $cards, button: "Add Card…") { showAddCard = true }
             } header: { SectionTitle("AutoFill web forms") } footer: {
                 Footnote("AutoFill only works on secure (https) pages, and only fills a password on the exact site it was saved for.")
+            }
+
+            Section {
+                Picker("Ask for Touch ID or your Mac password before filling", selection: $fillLock) {
+                    ForEach(UserAuth.FillLock.allCases) { Text($0.label).tag($0.rawValue) }
+                }
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Passwords saved in your keychain")
+                        Text(moveMessage ?? "From older versions of Ufolio. macOS asks once to let Ufolio copy them.")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Move into Ufolio") {
+                        moveMessage = "Moving…"
+                        DispatchQueue.global(qos: .userInitiated).async {
+                            let moved = Vault.moveFromKeychain()
+                            DispatchQueue.main.async {
+                                moveMessage = moved > 0 ? "Moved \(moved) item\(moved == 1 ? "" : "s")." : "Nothing to move."
+                                cardList = CardVault.list()
+                                if unlocked { logins = PasswordVault.logins() }
+                            }
+                        }
+                    }
+                }
+            } header: { SectionTitle("Security") } footer: {
+                Footnote("Seeing or copying a password here always asks. Your vault is encrypted on your Mac, and FileVault protects it while your Mac is locked or off.")
             }
 
             Section {
@@ -1795,7 +1824,7 @@ private struct PasswordSettings: View {
                                 DialogHost.settings.present(HushDialog(
                                     art: .symbol("key.fill"), theme: .danger, motion: .drift,
                                     title: "Delete the password for \(login.host)?",
-                                    message: "\(login.account.isEmpty ? "This password" : "The password for \(login.account)") will be removed from your keychain. This can’t be undone.",
+                                    message: "\(login.account.isEmpty ? "This password" : "The password for \(login.account)") will be deleted from Ufolio. This can’t be undone.",
                                     choices: [.init(title: "Cancel", role: .cancel), .init(title: "Delete", role: .destructive)],
                                     completion: { choice, _ in
                                         guard choice == 1 else { return }
@@ -1845,7 +1874,7 @@ private struct PasswordSettings: View {
                             DialogHost.settings.present(HushDialog(
                                 art: .symbol("creditcard.fill"), theme: .danger, motion: .drift,
                                 title: "Delete “\(card.label)”?",
-                                message: "This card will be removed from your keychain. This can’t be undone.",
+                                message: "This card will be deleted from Ufolio. This can’t be undone.",
                                 choices: [.init(title: "Cancel", role: .cancel), .init(title: "Delete", role: .destructive)],
                                 completion: { choice, _ in
                                     guard choice == 1 else { return }
@@ -1877,7 +1906,7 @@ private struct PasswordSettings: View {
         }
         .formStyle(SafariFormStyle())
         .onAppear {
-            // The keychain is read in the background, so opening this pane never stalls.
+            // Read in the background, so opening this pane never stalls.
             DispatchQueue.global(qos: .userInitiated).async {
                 let cards = CardVault.list()
                 DispatchQueue.main.async { cardList = cards }
@@ -1970,7 +1999,7 @@ private struct AddCardSheet: View {
                 IconTile(symbol: "creditcard.fill", colors: SettingsTab.passwords.colors, size: 40)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Add a Card").font(.system(size: 15, weight: .semibold))
-                    Text("Saved in your Mac’s keychain. Ufolio never stores the security code.")
+                    Text("Saved encrypted in Ufolio’s own vault. Ufolio never stores the security code.")
                         .font(.system(size: 11.5)).foregroundStyle(.secondary)
                 }
             }
@@ -2016,7 +2045,7 @@ private struct AddCardSheet: View {
         }
         let card = SavedCard(name: name.trimmingCharacters(in: .whitespaces), number: digits, expMonth: month, expYear: year)
         guard CardVault.save(card) else {
-            error = "The card couldn’t be saved to your keychain."
+            error = "The card couldn’t be saved."
             return
         }
         onSave()

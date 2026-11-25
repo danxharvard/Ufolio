@@ -27,6 +27,8 @@ enum Prefs {
     static let clearCacheOnQuit = "clearCacheOnQuit"
     /// Instant pages: load the page you're about to open in the background.
     static let preloadPages = "preloadPages"
+    /// When filling a saved login or card asks for Touch ID or your Mac password ("never" by default).
+    static let passwordFillLock = "passwordFillLock"
     static let torrentTools = "torrentTools"
     static let torrentApp = "torrentApp"
     static let torrentPreview = "torrentPreview"
@@ -122,6 +124,7 @@ enum Prefs {
         planetOfWeek: true,
         clearCacheOnQuit: true,
         preloadPages: true,
+        passwordFillLock: "never",
         torrentTools: false,
         torrentApp: "",
         torrentPreview: true,

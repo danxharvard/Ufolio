@@ -7,13 +7,42 @@ import Contacts
 
 // MARK: - Unlocking
 
-/// Touch ID or the Mac's password before anything secret is shown or filled.
-/// One unlock covers a minute, like Safari.
+/// Touch ID or the Mac's password. Filling a saved login or card follows Settings › Passwords
+/// (by default it never asks: save a password once and it simply fills). Seeing or copying your
+/// passwords in Settings always asks.
 enum UserAuth {
-    private static var lastSuccess: Date?
+    enum Purpose { case fill, reveal }
+    enum FillLock: String, CaseIterable, Identifiable {
+        case never, session, quarterHour, always
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .never: return "Never ask"
+            case .session: return "Once each time Ufolio opens"
+            case .quarterHour: return "After 15 minutes away"
+            case .always: return "Every time"
+            }
+        }
+        static var current: FillLock { FillLock(rawValue: Prefs.string(Prefs.passwordFillLock)) ?? .never }
+    }
 
-    static func confirm(_ reason: String, completion: @escaping (Bool) -> Void) {
-        if let last = lastSuccess, Date().timeIntervalSince(last) < 60 { completion(true); return }
+    private static var lastSuccess: Date?
+    private static var unlockedThisSession = false
+    private static var observing = false
+
+    static func confirm(_ reason: String, for purpose: Purpose = .reveal, completion: @escaping (Bool) -> Void) {
+        startObserving()
+        if purpose == .fill {
+            switch FillLock.current {
+            case .never: completion(true); return
+            case .session: if unlockedThisSession { completion(true); return }
+            case .quarterHour: if let last = lastSuccess, Date().timeIntervalSince(last) < 15 * 60 { completion(true); return }
+            case .always: if let last = lastSuccess, Date().timeIntervalSince(last) < 60 { completion(true); return }
+            }
+        } else if let last = lastSuccess, Date().timeIntervalSince(last) < 60 {
+            completion(true)
+            return
+        }
         let context = LAContext()
         var error: NSError?
         guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
@@ -22,16 +51,28 @@ enum UserAuth {
         }
         context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { ok, _ in
             DispatchQueue.main.async {
-                if ok { lastSuccess = Date() }
+                if ok { lastSuccess = Date(); unlockedThisSession = true }
                 completion(ok)
             }
         }
     }
 
     static func lock() { lastSuccess = nil }
+
+    /// "Once each time Ufolio opens" also locks again when your Mac sleeps or its screen locks.
+    private static func startObserving() {
+        guard !observing else { return }
+        observing = true
+        let reset: (Notification) -> Void = { _ in unlockedThisSession = false; lastSuccess = nil }
+        let ws = NSWorkspace.shared.notificationCenter
+        ws.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main, using: reset)
+        ws.addObserver(forName: NSWorkspace.sessionDidResignActiveNotification, object: nil, queue: .main, using: reset)
+        DistributedNotificationCenter.default().addObserver(forName: NSNotification.Name("com.apple.screenIsLocked"),
+                                                            object: nil, queue: .main, using: reset)
+    }
 }
 
-// MARK: - Passwords (macOS Keychain)
+// MARK: - Passwords (Ufolio's own vault)
 
 struct SavedLogin: Identifiable, Hashable {
     let host: String
@@ -40,60 +81,33 @@ struct SavedLogin: Identifiable, Hashable {
     var id: String { host + "\u{0}" + account }
 }
 
-/// Passwords live in the macOS Keychain, tagged as Hush's own items.
+/// Saved passwords, in Ufolio's own encrypted vault (see Vault).
 enum PasswordVault {
-    private static let creator = NSNumber(value: 0x4855_5348) // 'HUSH'
-
-    private static func query(host: String? = nil, account: String? = nil) -> [String: Any] {
-        var q: [String: Any] = [kSecClass as String: kSecClassInternetPassword,
-                                kSecAttrCreator as String: creator]
-        if let host { q[kSecAttrServer as String] = host }
-        if let account { q[kSecAttrAccount as String] = account }
-        return q
-    }
-
     static func logins(for host: String? = nil) -> [SavedLogin] {
-        var q = query(host: host)
-        q[kSecMatchLimit as String] = kSecMatchLimitAll
-        q[kSecReturnAttributes as String] = true
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &result) == errSecSuccess,
-              let items = result as? [[String: Any]] else { return [] }
-        return items.compactMap { item -> SavedLogin? in
-            guard let server = item[kSecAttrServer as String] as? String,
-                  let account = item[kSecAttrAccount as String] as? String else { return nil }
-            return SavedLogin(host: server, account: account, modified: item[kSecAttrModificationDate as String] as? Date)
-        }
-        .sorted { ($0.host, $0.account) < ($1.host, $1.account) }
+        Vault.read().logins
+            .filter { host == nil || $0.host == host }
+            .map { SavedLogin(host: $0.host, account: $0.account, modified: $0.modified) }
+            .sorted { ($0.host, $0.account) < ($1.host, $1.account) }
     }
 
     static func password(for login: SavedLogin) -> String? {
-        var q = query(host: login.host, account: login.account)
-        q[kSecReturnData as String] = true
-        q[kSecMatchLimit as String] = kSecMatchLimitOne
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+        Vault.read().logins.first { $0.host == login.host && $0.account == login.account }?.password
     }
 
     @discardableResult
     static func save(host: String, account: String, password: String) -> Bool {
-        let data = Data(password.utf8)
-        let q = query(host: host, account: account)
-        let status = SecItemUpdate(q as CFDictionary, [kSecValueData as String: data] as CFDictionary)
-        if status == errSecItemNotFound {
-            var add = q
-            add[kSecValueData as String] = data
-            add[kSecAttrProtocol as String] = kSecAttrProtocolHTTPS
-            add[kSecAttrLabel as String] = "\(host) (Ufolio Browser)"
-            add[kSecAttrDescription as String] = "Ufolio Browser password"
-            return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
+        Vault.update { contents in
+            if let i = contents.logins.firstIndex(where: { $0.host == host && $0.account == account }) {
+                contents.logins[i].password = password
+                contents.logins[i].modified = Date()
+            } else {
+                contents.logins.append(Vault.Login(host: host, account: account, password: password, modified: Date()))
+            }
         }
-        return status == errSecSuccess
     }
 
     static func delete(_ login: SavedLogin) {
-        SecItemDelete(query(host: login.host, account: login.account) as CFDictionary)
+        Vault.update { $0.logins.removeAll { $0.host == login.host && $0.account == login.account } }
     }
 
     // Sites the user said never to save passwords for.
@@ -132,7 +146,7 @@ enum PasswordGenerator {
     }
 }
 
-// MARK: - Credit cards (macOS Keychain)
+// MARK: - Credit cards (Ufolio's own vault)
 
 struct SavedCard: Codable, Identifiable, Hashable {
     var id = UUID()
@@ -159,61 +173,28 @@ struct SavedCard: Codable, Identifiable, Hashable {
 }
 
 enum CardVault {
-    private static let service = "Hush Browser Card"
-
     struct Summary: Identifiable, Hashable {
         let id: UUID
         let label: String
     }
 
     static func list() -> [Summary] {
-        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                kSecAttrService as String: service,
-                                kSecMatchLimit as String: kSecMatchLimitAll,
-                                kSecReturnAttributes as String: true]
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &result) == errSecSuccess,
-              let items = result as? [[String: Any]] else { return [] }
-        return items.compactMap { item -> Summary? in
-            guard let account = item[kSecAttrAccount as String] as? String, let id = UUID(uuidString: account) else { return nil }
-            return Summary(id: id, label: item[kSecAttrLabel as String] as? String ?? "Card")
-        }
-        .sorted { $0.label < $1.label }
+        Vault.read().cards.map { Summary(id: $0.id, label: "\($0.label) · \($0.expiry)") }.sorted { $0.label < $1.label }
     }
 
     static func card(_ id: UUID) -> SavedCard? {
-        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                kSecAttrService as String: service,
-                                kSecAttrAccount as String: id.uuidString,
-                                kSecReturnData as String: true,
-                                kSecMatchLimit as String: kSecMatchLimitOne]
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { return nil }
-        return try? JSONDecoder().decode(SavedCard.self, from: data)
+        Vault.read().cards.first { $0.id == id }
     }
 
     @discardableResult
     static func save(_ card: SavedCard) -> Bool {
-        guard let data = try? JSONEncoder().encode(card) else { return false }
-        // Updated in place (it used to be deleted first, so a failed save lost the card).
-        let match: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                    kSecAttrService as String: service,
-                                    kSecAttrAccount as String: card.id.uuidString]
-        let label = "\(card.label) · \(card.expiry)"
-        let status = SecItemUpdate(match as CFDictionary,
-                                   [kSecValueData as String: data, kSecAttrLabel as String: label] as CFDictionary)
-        guard status == errSecItemNotFound else { return status == errSecSuccess }
-        var add = match
-        add[kSecAttrLabel as String] = label
-        add[kSecValueData as String] = data
-        return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
+        Vault.update { contents in
+            if let i = contents.cards.firstIndex(where: { $0.id == card.id }) { contents.cards[i] = card } else { contents.cards.append(card) }
+        }
     }
 
     static func delete(_ id: UUID) {
-        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                kSecAttrService as String: service,
-                                kSecAttrAccount as String: id.uuidString]
-        SecItemDelete(q as CFDictionary)
+        Vault.update { $0.cards.removeAll { $0.id == id } }
     }
 }
 
@@ -430,7 +411,7 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
             if generatedPasswords.count > 20 { generatedPasswords.removeFirst() }
             send(kind: "newpassword", data: ["password": password], host: host, tab: tab)
         case .login(let login):
-            UserAuth.confirm("fill your password for \(host)") { [weak self] ok in
+            UserAuth.confirm("fill your password for \(host)", for: .fill) { [weak self] ok in
                 guard ok else { return }
                 DispatchQueue.global(qos: .userInitiated).async {
                     guard let password = PasswordVault.password(for: login) else { return }
@@ -440,7 +421,7 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
                 }
             }
         case .card(let summary):
-            UserAuth.confirm("fill your card details") { [weak self] ok in
+            UserAuth.confirm("fill your card details", for: .fill) { [weak self] ok in
                 guard ok, let card = CardVault.card(summary.id) else { return }
                 let month2 = String(format: "%02d", card.expMonth)
                 let monthName = DateFormatter().monthSymbols[max(0, min(11, card.expMonth - 1))]
@@ -504,9 +485,9 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
             art: .site(tab.url), badge: "key.fill", theme: .save, motion: .rise,
             title: existing == nil ? "Save this password?" : "Update your saved password?",
             message: existing == nil
-                ? "Ufolio can keep the password\(who) on \(host) in your Mac’s keychain and fill it in for you next time."
-                : "The password\(who) on \(host) has changed. Update it in your keychain?",
-            note: ("lock.fill", "Locked with your Mac password or Touch ID"),
+                ? "Ufolio can keep the password\(who) on \(host) encrypted in Ufolio and fill it in for you next time."
+                : "The password\(who) on \(host) has changed. Update your saved password?",
+            note: ("lock.fill", "Encrypted on your Mac, filled in only on this site"),
             choices: choices,
             completion: { choice, _ in
                 switch choice {
