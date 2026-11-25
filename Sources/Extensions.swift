@@ -268,6 +268,18 @@ final class ExtensionStore: ObservableObject {
         guard names.count < 50_000, !names.contains(where: { name in
             name.hasPrefix("/") || name.hasPrefix("~") || name.split(separator: "/").contains("..") || name.contains("\\")
         }) else { throw ExtensionError("This extension’s files are packed in an unsafe way, so Ufolio didn’t add it.") }
+
+        // Check the archive's declared expanded size before extraction. A tiny zip bomb could
+        // otherwise fill the user's disk before FolderSafety gets a chance to inspect the files.
+        let totals = try await ProcessRunner.run("/usr/bin/zipinfo", ["-t", zipFile.path])
+        let totalTokens = totals.output.split(whereSeparator: \.isWhitespace)
+        guard totals.succeeded,
+              let marker = totalTokens.firstIndex(where: { $0.hasPrefix("uncompressed") }),
+              marker >= 2, let expandedBytes = Int64(totalTokens[marker - 2]),
+              expandedBytes <= 500_000_000 else {
+            throw ExtensionError("This extension expands to an unsafe size, so Ufolio didn’t add it.")
+        }
+
         // Nor links: a link to somewhere else on your Mac, followed by a file "inside" it, would
         // write outside the folder too. Extensions never need them.
         let details = try await ProcessRunner.run("/usr/bin/zipinfo", [zipFile.path])
