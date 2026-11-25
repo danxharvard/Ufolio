@@ -92,7 +92,14 @@ struct LibrarySidebar: View {
 private struct BookmarksList: View {
     @ObservedObject var model: BrowserModel
     let query: String
-    @ObservedObject private var store = BookmarkStore.shared
+    /// The bookmarks of the current Orbit's profile.
+    @ObservedObject private var store: BookmarkStore
+
+    init(model: BrowserModel, query: String) {
+        _model = ObservedObject(wrappedValue: model)
+        self.query = query
+        _store = ObservedObject(wrappedValue: model.bookmarks)
+    }
     @State private var editing: (id: UUID, field: Field)?
     @State private var draft = ""
     @State private var dragging: UUID?
@@ -178,7 +185,7 @@ private struct BookmarksList: View {
                 dragging = bookmark.id
                 return NSItemProvider(object: bookmark.url.absoluteString as NSString)
             }
-            .onDrop(of: [.text], delegate: BookmarkDrop(target: bookmark, dragging: $dragging, enabled: query.isEmpty))
+            .onDrop(of: [.text], delegate: BookmarkDrop(store: store, target: bookmark, dragging: $dragging, enabled: query.isEmpty))
             .contextMenu {
                 Button { model.open(bookmark.url, inNewTab: true) } label: { Label("Open in New Tab", systemImage: "plus.square.on.square") }
                 Button { copy(bookmark.url) } label: { Label("Copy Address", systemImage: "doc.on.doc") }
@@ -284,8 +291,15 @@ private struct BookmarksList: View {
 private struct HistoryList: View {
     let model: BrowserModel   // only used to open pages; the list doesn't redraw for tab changes
     let query: String
-    @ObservedObject private var history = HistoryStore.shared
+    /// The history of the current Orbit's profile.
+    @ObservedObject private var history: HistoryStore
     @Environment(\.openWindow) private var openWindow
+
+    init(model: BrowserModel, query: String) {
+        self.model = model
+        self.query = query
+        _history = ObservedObject(wrappedValue: model.history)
+    }
 
     private var days: [(day: Date, entries: [HistoryEntry])] {
         let q = query.lowercased()
@@ -353,13 +367,13 @@ private struct HistoryList: View {
 
 /// Dropping one bookmark onto another moves it there.
 private struct BookmarkDrop: DropDelegate {
+    let store: BookmarkStore
     let target: Bookmark
     @Binding var dragging: UUID?
     let enabled: Bool
 
     func dropEntered(info: DropInfo) {
         guard enabled, let moving = dragging, moving != target.id else { return }
-        let store = BookmarkStore.shared
         guard let from = store.items.firstIndex(where: { $0.id == moving }),
               let to = store.items.firstIndex(where: { $0.id == target.id }) else { return }
         withAnimation(.easeOut(duration: 0.15)) {

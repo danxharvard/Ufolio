@@ -385,7 +385,7 @@ enum HushDialogs {
             choices: [.init(title: "Cancel", role: .cancel), .init(title: "Clear History", role: .destructive)],
             completion: { choice, _ in
                 guard choice == 1 else { return }
-                HistoryStore.shared.clear()
+                HistoryStore.everyProfile.forEach { $0.clear() }   // every profile's history
                 RecentlyClosed.shared.clear()
                 PrivacyReport.shared.reset()
             }))

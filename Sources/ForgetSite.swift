@@ -28,7 +28,7 @@ enum SiteForgetter {
             }
         }
         if !model.isPrivate {
-            HistoryStore.shared.remove(site: site)
+            HistoryStore.everyProfile.forEach { $0.remove(site: site) }   // every profile's history
             RecentlyClosed.shared.remove(site: site)
             SitePermissions.shared.forget(site: site)
             BookmarkOffer.shared.forget(site: site)

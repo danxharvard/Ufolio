@@ -4,8 +4,9 @@ import SwiftUI
 /// your favourites, suggestions from your history and a privacy report.
 struct StartPage: View {
     let model: BrowserModel   // only used to open pages; tab changes needn't redraw this
-    @ObservedObject private var bookmarks = BookmarkStore.shared
-    @ObservedObject private var history = HistoryStore.shared
+    /// The current Orbit's profile's bookmarks and history.
+    @ObservedObject private var bookmarks: BookmarkStore
+    @ObservedObject private var history: HistoryStore
     @ObservedObject private var closed = RecentlyClosed.shared
     @ObservedObject private var weather = LocalWeather.shared
     @ObservedObject private var background = BackgroundStore.shared
@@ -23,6 +24,12 @@ struct StartPage: View {
     /// sections fit without building several copies of itself to find out.
     @State private var partHeights: [Part: CGFloat] = [:]
     @State private var headerHeight: CGFloat = 0
+
+    init(model: BrowserModel) {
+        self.model = model
+        _bookmarks = ObservedObject(wrappedValue: model.bookmarks)
+        _history = ObservedObject(wrappedValue: model.history)
+    }
 
     var body: some View {
         // Only the favourites actually shown (all bookmarks made a huge cache key on every redraw).
@@ -329,7 +336,7 @@ private struct FavouriteTile: View {
         .contextMenu {
             Button { model.open(bookmark.url, inNewTab: true) } label: { Label("Open in New Tab", systemImage: "plus.square.on.square") }
             Divider()
-            Button { BookmarkStore.shared.remove(bookmark) } label: { Label("Remove from Favourites", systemImage: "star.slash") }
+            Button { model.bookmarks.remove(bookmark) } label: { Label("Remove from Favourites", systemImage: "star.slash") }
         }
     }
 
@@ -432,9 +439,9 @@ private struct SuggestionCard: View {
         .task(id: site.host) { icon = await FaviconCache.shared.info(for: site.url) }
         .contextMenu {
             Button { model.open(site.url, inNewTab: true) } label: { Label("Open in New Tab", systemImage: "plus.square.on.square") }
-            Button { BookmarkStore.shared.toggle(url: site.url, title: site.title) } label: { Label("Add to Favourites", systemImage: "star") }
+            Button { model.bookmarks.toggle(url: site.url, title: site.title) } label: { Label("Add to Favourites", systemImage: "star") }
             Divider()
-            Button { HistoryStore.shared.hideFromStartPage(site.host) } label: { Label("Remove from Suggestions", systemImage: "eye.slash") }
+            Button { model.history.hideFromStartPage(site.host) } label: { Label("Remove from Suggestions", systemImage: "eye.slash") }
         }
     }
 

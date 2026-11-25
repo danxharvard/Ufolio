@@ -39,6 +39,12 @@ final class BrowserModel: NSObject, ObservableObject {
     private var sleepTimer: Timer?
     /// A Stealth window's closed tabs, for Reopen Closed Tab: in memory only, gone with the window.
     private var privateClosed: [URL] = []
+    /// The profile of the Orbit this window is showing (nil = the default profile). Its history
+    /// and bookmarks are the ones this window shows and adds to.
+    var profileID: UUID? { isPrivate ? nil : SpaceStore.shared.space(spaceID)?.profile }
+    var history: HistoryStore { .store(for: profileID) }
+    var bookmarks: BookmarkStore { .store(for: profileID) }
+
     /// The last tab opened in the background, and the tab it was opened from (see newTab).
     private var lastBackgroundTab: (opener: UUID, tab: UUID)?
     /// The Space this window is showing; only its tabs appear in the tab bar.
@@ -557,6 +563,6 @@ final class BrowserModel: NSObject, ObservableObject {
 
     func toggleBookmarkForSelectedTab() {
         guard let tab = selectedTab, let url = tab.url else { return }
-        BookmarkStore.shared.toggle(url: url, title: tab.displayTitle)
+        BookmarkStore.store(for: tab.profileID).toggle(url: url, title: tab.displayTitle)
     }
 }

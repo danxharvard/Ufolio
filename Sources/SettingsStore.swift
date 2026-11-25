@@ -405,6 +405,15 @@ enum AppPaths {
         return folder
     }()
 
+    /// Where a profile keeps its own history and bookmarks. The default profile (nil) uses the
+    /// main folder exactly as before; others get Profiles/<id>/ inside it.
+    static func folder(forProfile id: UUID?) -> URL {
+        guard let id else { return support }
+        let folder = support.appendingPathComponent("Profiles", isDirectory: true).appendingPathComponent(id.uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
+    }
+
     /// Reads a saved JSON file. If it exists but can't be read, a copy is kept beside it before
     /// anything else is written there, so a damaged file never quietly costs you your data.
     static func load<T: Decodable>(_ type: T.Type, from file: URL) -> T? {

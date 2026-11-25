@@ -175,7 +175,7 @@ final class PaletteModel: ObservableObject {
         if !q.isEmpty && !browser.isPrivate {
             // Bookmarks, then pages from history.
             var seen = Set(scored.compactMap { $0.1.siteURL?.absoluteString })
-            let marks = BookmarkStore.shared.items
+            let marks = browser.bookmarks.items
                 .map { (max(PaletteSearch.score(q, $0.title), PaletteSearch.score(q, $0.url.host ?? "")), $0) }
                 .filter { $0.0 >= 60 }.sorted { $0.0 > $1.0 }.prefix(4)
             for (s, mark) in marks where !seen.contains(mark.url.absoluteString) {
@@ -185,7 +185,7 @@ final class PaletteModel: ObservableObject {
                     browser?.open(mark.url)
                 }))
             }
-            for entry in HistoryStore.shared.search(q, limit: 6) where !seen.contains(entry.url.absoluteString) {
+            for entry in browser.history.search(q, limit: 6) where !seen.contains(entry.url.absoluteString) {
                 seen.insert(entry.url.absoluteString)
                 let title = entry.title.isEmpty ? (entry.url.host ?? entry.url.absoluteString) : entry.title
                 scored.append((40, PaletteItem(id: "h-\(entry.url.absoluteString)", kind: .history, title: title,
@@ -290,10 +290,10 @@ final class PaletteModel: ObservableObject {
                 UserDefaults.standard.set(TabLayout.top.rawValue, forKey: Prefs.tabLayout)
             },
             .init(title: "Show All History", symbol: "clock", shortcut: .history) { _, open in open(id: "history") },
-            .init(title: "Import Bookmarks", symbol: "square.and.arrow.down.on.square", keywords: "html chrome safari firefox") { _, _ in
-                _ = BookmarkStore.shared.importWithPanel()
+            .init(title: "Import Bookmarks", symbol: "square.and.arrow.down.on.square", keywords: "html chrome safari firefox") { m, _ in
+                _ = m.bookmarks.importWithPanel()
             },
-            .init(title: "Export Bookmarks", symbol: "square.and.arrow.up", keywords: "html backup") { _, _ in BookmarkStore.shared.exportWithPanel() },
+            .init(title: "Export Bookmarks", symbol: "square.and.arrow.up", keywords: "html backup") { m, _ in m.bookmarks.exportWithPanel() },
             .init(title: "Next Orbit", symbol: "arrow.right.circle", shortcut: .nextSpace,
                   available: { !$0.isPrivate && SpaceStore.shared.spaces.count > 1 }) { m, _ in m.switchSpace(by: 1) },
             .init(title: "Previous Orbit", symbol: "arrow.left.circle", shortcut: .previousSpace,

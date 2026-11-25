@@ -7,10 +7,19 @@ struct AddressBar: View {
     @ObservedObject var model: BrowserModel
     @ObservedObject var tab: BrowserTab
     @ObservedObject var suggestions: SuggestionsModel
-    @ObservedObject private var bookmarks = BookmarkStore.shared
+    /// This tab's profile's bookmarks (for the star).
+    @ObservedObject private var bookmarks: BookmarkStore
     @AppStorage(Prefs.showFullAddress) private var showFullAddress = false
     @AppStorage(Prefs.searchEngine) private var engine = SearchEngine.google.rawValue
     let onGo: (String) -> Void
+
+    init(model: BrowserModel, tab: BrowserTab, suggestions: SuggestionsModel, onGo: @escaping (String) -> Void) {
+        _model = ObservedObject(wrappedValue: model)
+        _tab = ObservedObject(wrappedValue: tab)
+        _suggestions = ObservedObject(wrappedValue: suggestions)
+        _bookmarks = ObservedObject(wrappedValue: BookmarkStore.store(for: tab.profileID))
+        self.onGo = onGo
+    }
 
     @State private var text = ""
     @State private var isEditing = false

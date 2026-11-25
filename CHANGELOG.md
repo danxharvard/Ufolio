@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.46.0: profiles with their own history and bookmarks
+
+**Profiles, fully separate**
+- Each profile now has its own history and bookmarks, as well as its own cookies and sign-ins.
+  A window shows the history and bookmarks of its current Orbit's profile: the bookmarks bar,
+  start page, sidebar, address bar suggestions, Command Palette and the star all follow it.
+- Everything you had before is the Default profile, exactly where it was.
+- The History window opens on the profile you're using, with a switcher at the top when you
+  have more than one.
+- Clear History and Forget This Site cover every profile. Deleting a profile also deletes its
+  history and bookmarks.
+
 ## 0.45.0: close encounters
 
 **New: Area 51 theme 👽**

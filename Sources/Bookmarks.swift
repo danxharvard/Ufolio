@@ -12,7 +12,24 @@ struct Bookmark: Codable, Identifiable, Equatable {
 
 /// Bookmarks, saved to ~/Library/Application Support/Hush Browser/bookmarks.json.
 final class BookmarkStore: ObservableObject {
-    static let shared = BookmarkStore()
+    /// The default profile's bookmarks (the file they've always been in).
+    static let shared = BookmarkStore(profile: nil)
+
+    /// Each profile's own bookmarks; the default profile's are `shared`.
+    private static var stores: [UUID: BookmarkStore] = [:]
+    static func store(for profile: UUID?) -> BookmarkStore {
+        guard let profile, SpaceStore.shared.profile(profile) != nil else { return shared }
+        if let store = stores[profile] { return store }
+        let store = BookmarkStore(profile: profile)
+        stores[profile] = store
+        return store
+    }
+    static var all: [BookmarkStore] { [shared] + Array(stores.values) }
+    static func forget(profile: UUID) {
+        stores[profile]?.saveWork?.cancel()
+        stores[profile] = nil
+        try? FileManager.default.removeItem(at: AppPaths.folder(forProfile: profile).appendingPathComponent("bookmarks.json"))
+    }
 
     @Published private(set) var items: [Bookmark] = [] {
         didSet {
@@ -28,8 +45,8 @@ final class BookmarkStore: ObservableObject {
     private var keys: Set<String> = []
     private let fileURL: URL
 
-    private init() {
-        let folder = AppPaths.support
+    private init(profile: UUID?) {
+        let folder = AppPaths.folder(forProfile: profile)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         fileURL = folder.appendingPathComponent("bookmarks.json")
         load()
@@ -286,7 +303,13 @@ final class BookmarkStore: ObservableObject {
 /// The row of bookmarks under the toolbar.
 struct BookmarkBar: View {
     let model: BrowserModel   // only opens pages: tab changes don't redraw the bar
-    @ObservedObject private var store = BookmarkStore.shared
+    /// The bookmarks of this window's current Orbit's profile.
+    @ObservedObject private var store: BookmarkStore
+
+    init(model: BrowserModel) {
+        self.model = model
+        _store = ObservedObject(wrappedValue: model.bookmarks)
+    }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -315,7 +338,7 @@ struct BookmarkBar: View {
 private struct FolderChip: View {
     let model: BrowserModel
     let folder: String
-    @ObservedObject private var store = BookmarkStore.shared
+    private var store: BookmarkStore { model.bookmarks }
     @State private var hovering = false
 
     var body: some View {
@@ -384,10 +407,10 @@ private struct BookmarkChip: View {
             }
             Divider()
             Button { newTitle = bookmark.title; renaming = true } label: { Label("Rename…", systemImage: "pencil") }
-            Button { BookmarkStore.shared.move(bookmark, by: -1) } label: { Label("Move Left", systemImage: "arrow.left") }
-            Button { BookmarkStore.shared.move(bookmark, by: 1) } label: { Label("Move Right", systemImage: "arrow.right") }
+            Button { model.bookmarks.move(bookmark, by: -1) } label: { Label("Move Left", systemImage: "arrow.left") }
+            Button { model.bookmarks.move(bookmark, by: 1) } label: { Label("Move Right", systemImage: "arrow.right") }
             Divider()
-            Button { BookmarkStore.shared.remove(bookmark) } label: { Label("Remove", systemImage: "trash") }
+            Button { model.bookmarks.remove(bookmark) } label: { Label("Remove", systemImage: "trash") }
         }
         .popover(isPresented: $renaming, arrowEdge: .bottom) {
             HStack {
@@ -404,7 +427,7 @@ private struct BookmarkChip: View {
     }
 
     private func commitRename() {
-        BookmarkStore.shared.rename(bookmark, to: newTitle)
+        model.bookmarks.rename(bookmark, to: newTitle)
         renaming = false
     }
 }

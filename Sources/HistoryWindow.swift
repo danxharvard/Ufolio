@@ -1,8 +1,38 @@
 import SwiftUI
 
-/// History (⌘Y): everything you've visited, newest first, grouped by day, with search.
+/// History (⌘Y): everything you've visited, newest first, grouped by day, with search. Each
+/// profile has its own history: it opens on the profile of the window you're using, and you can
+/// switch at the top when you have more than one.
 struct HistoryWindowView: View {
-    @ObservedObject private var history = HistoryStore.shared
+    @ObservedObject private var spaces = SpaceStore.shared
+    @State private var profile: UUID? = BrowserModel.frontmostNormal?.profileID
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if !spaces.profiles.isEmpty {
+                Picker("Profile", selection: $profile) {
+                    Text("Default").tag(UUID?.none)
+                    ForEach(spaces.profiles) { Text($0.name).tag(UUID?.some($0.id)) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .padding([.horizontal, .top], 14)
+            }
+            HistoryWindowContent(history: HistoryStore.store(for: profile))
+                .id(profile)
+        }
+    }
+
+    static func dayTitle(_ day: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(day) { return "Today" }
+        if calendar.isDateInYesterday(day) { return "Yesterday" }
+        return day.formatted(.dateTime.weekday(.wide).day().month(.wide).year())
+    }
+}
+
+private struct HistoryWindowContent: View {
+    @ObservedObject var history: HistoryStore
     @State private var query = ""
 
     private var days: [(day: Date, entries: [HistoryEntry])] {
@@ -40,9 +70,9 @@ struct HistoryWindowView: View {
             } else {
                 List {
                     ForEach(groups, id: \.day) { group in
-                        Section(header: Text(Self.dayTitle(group.day)).font(.system(size: 12, weight: .semibold))) {
+                        Section(header: Text(HistoryWindowView.dayTitle(group.day)).font(.system(size: 12, weight: .semibold))) {
                             ForEach(group.entries) { entry in
-                                HistoryRow(entry: entry)
+                                HistoryRow(entry: entry, history: history)
                             }
                         }
                     }
@@ -56,16 +86,11 @@ struct HistoryWindowView: View {
         .hushDialogs(DialogHost.history)
     }
 
-    static func dayTitle(_ day: Date) -> String {
-        let calendar = Calendar.current
-        if calendar.isDateInToday(day) { return "Today" }
-        if calendar.isDateInYesterday(day) { return "Yesterday" }
-        return day.formatted(.dateTime.weekday(.wide).day().month(.wide).year())
-    }
 }
 
 private struct HistoryRow: View {
     let entry: HistoryEntry
+    let history: HistoryStore
     @State private var hovering = false
 
     var body: some View {
@@ -80,7 +105,7 @@ private struct HistoryRow: View {
             Spacer()
             Text(entry.lastVisit.formatted(date: .omitted, time: .shortened))
                 .font(.system(size: 11)).foregroundStyle(.tertiary)
-            Button { HistoryStore.shared.remove(entry) } label: { Image(systemName: "xmark.circle.fill") }
+            Button { history.remove(entry) } label: { Image(systemName: "xmark.circle.fill") }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
                 .opacity(hovering ? 1 : 0)
@@ -97,7 +122,7 @@ private struct HistoryRow: View {
                 NSPasteboard.general.setString(entry.url.absoluteString, forType: .string)
             }
             Divider()
-            Button { HistoryStore.shared.remove(entry) } label: { Label("Remove from History", systemImage: "trash") }
+            Button { history.remove(entry) } label: { Label("Remove from History", systemImage: "trash") }
         }
     }
 

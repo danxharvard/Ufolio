@@ -594,7 +594,7 @@ private struct GeneralSettings: View {
                     ForEach(HistoryRetention.allCases) { Text($0.label).tag($0.rawValue) }
                 }.labelsHidden().fixedSize() }
                 // A shorter time takes effect straight away.
-                .onChange(of: historyRetention) { _, _ in HistoryStore.shared.prune() }
+                .onChange(of: historyRetention) { _, _ in HistoryStore.all.forEach { $0.prune() } }
                 HStack {
                     Menu("Import History and Bookmarks") {
                         ForEach(importSources) { source in

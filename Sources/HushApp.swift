@@ -75,10 +75,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         // Write everything out before Hush exits (background saves might not finish otherwise).
         BrowserModel.all.allObjects.forEach { $0.saveSessionNow() }   // the last second of changes too
-        BookmarkStore.shared.saveNow(waiting: true)
+        BookmarkStore.all.forEach { $0.saveNow(waiting: true) }
         BlockStats.shared.save()
         PrivacyReport.shared.save(waiting: true)
-        HistoryStore.shared.save(waiting: true)
+        HistoryStore.all.forEach { $0.save(waiting: true) }
     }
 
     /// Clicking Hush in the Dock with no window open brings one back.
@@ -293,7 +293,7 @@ struct HushCommands: Commands {
                 Divider()
                 // The first 40 not in a folder: macOS rebuilds the whole menu bar whenever bookmarks
                 // change, and listing thousands made that a noticeable pause.
-                ForEach(bookmarks.items(in: nil).prefix(40)) { bookmark in
+                ForEach((browser?.bookmarks ?? bookmarks).items(in: nil).prefix(40)) { bookmark in
                     Button(bookmark.title) { browser?.open(bookmark.url) }
                 }
             }

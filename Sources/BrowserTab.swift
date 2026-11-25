@@ -53,6 +53,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     /// The Space this tab belongs to (only that Space's tabs show in the tab bar).
     var spaceID: UUID?
 
+    /// The profile of this tab's Orbit (nil = the default profile): where its visits are recorded.
+    var profileID: UUID? { isPrivate ? nil : SpaceStore.shared.space(spaceID)?.profile }
+
     /// Fixed when the tab is made: a Stealth tab stays private even in the moment its window is
     /// going away (it used to count as not private then, and could write to history).
     let isPrivate: Bool
@@ -204,7 +207,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             // A sleeping or lazily restored tab's empty web view has no title yet; keep the saved one.
             if (tab.waking || tab.isAsleep) && (title ?? "").isEmpty { return }
             if tab.title != (title ?? "") { tab.title = title ?? "" }
-            if !tab.isPrivate, let url = tab.url, let title, !title.isEmpty { HistoryStore.shared.updateTitle(url, title: title) }
+            if !tab.isPrivate, let url = tab.url, let title, !title.isEmpty { HistoryStore.store(for: tab.profileID).updateTitle(url, title: title) }
         }
         bind(\.url) { tab, url in
             // While waking from sleep the new web view briefly has no address; keep the old one.
@@ -224,7 +227,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             }
             if !tab.isLoading, !tab.isPrivate, let url, page(url) != page(previous),
                ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
-                HistoryStore.shared.record(url, title: tab.webView.title ?? "")
+                HistoryStore.store(for: tab.profileID).record(url, title: tab.webView.title ?? "")
             }
             tab.updateSiteColor()
             tab.model?.scheduleSessionSave()
@@ -670,8 +673,9 @@ extension BrowserTab: WKNavigationDelegate {
             if isMuted { WebKitExtras.setMuted(true, webView) }
             // Private windows leave no trace: no history, suggestions or report entries.
             guard !isPrivate else { return }
-            HistoryStore.shared.record(url, title: webView.title ?? "")
-            BookmarkOffer.shared.record(url, previousHost: lastFinishedHost)
+            HistoryStore.store(for: profileID).record(url, title: webView.title ?? "")
+            // (Only in the default profile: other profiles keep their browsing fully separate.)
+            if profileID == nil { BookmarkOffer.shared.record(url, previousHost: lastFinishedHost) }
             lastFinishedHost = url.host
             if let host = url.host, url.scheme?.hasPrefix("http") == true { PrivacyReport.shared.recordVisit(site: host) }
         }

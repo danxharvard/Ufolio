@@ -24,8 +24,11 @@ enum Lookalike {
         guard !refreshing else { return }
         refreshing = true
         var sites = Set<String>()
-        for b in BookmarkStore.shared.items { if let h = b.url.host { sites.insert(Domains.site(h)) } }
-        for site in HistoryStore.shared.frequentSites(limit: 60) where site.score >= 3 { sites.insert(Domains.site(site.host)) }
+        // Sites you use in any profile.
+        for store in BookmarkStore.all { for b in store.items { if let h = b.url.host { sites.insert(Domains.site(h)) } } }
+        for store in HistoryStore.all {
+            for site in store.frequentSites(limit: 60) where site.score >= 3 { sites.insert(Domains.site(site.host)) }
+        }
         DispatchQueue.global(qos: .utility).async {
             for login in PasswordVault.logins() { sites.insert(Domains.site(login.host)) }
             sites.remove("")

@@ -20,6 +20,9 @@ final class SuggestionsModel: ObservableObject {
     @Published private(set) var query = ""
     private var active = false
     private var task: Task<Void, Never>?
+    /// The window these suggestions belong to: its Orbit's profile decides whose bookmarks and
+    /// history are suggested.
+    weak var browser: BrowserModel?
 
     var isVisible: Bool { active && !items.isEmpty }
     var selected: Suggestion? { selectedIndex.flatMap { items.indices.contains($0) ? items[$0] : nil } }
@@ -90,7 +93,7 @@ final class SuggestionsModel: ObservableObject {
         func key(_ url: URL) -> String {
             (url.host?.lowercased().strippingWWW ?? "") + url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + (url.query ?? "")
         }
-        let marks = BookmarkStore.shared.items.filter {
+        let marks = (browser?.bookmarks ?? .shared).items.filter {
             $0.title.lowercased().contains(lower) || $0.url.absoluteString.lowercased().contains(lower)
         }
         for mark in marks.prefix(3) where seen.insert(key(mark.url)).inserted {
@@ -99,7 +102,7 @@ final class SuggestionsModel: ObservableObject {
         }
         // Pages you've visited before, best match first.
         let taken = Set(result.map { $0.text })
-        for entry in HistoryStore.shared.search(q, limit: 8) where !taken.contains(entry.url.absoluteString) && seen.insert(key(entry.url)).inserted {
+        for entry in (browser?.history ?? .shared).search(q, limit: 8) where !taken.contains(entry.url.absoluteString) && seen.insert(key(entry.url)).inserted {
             guard result.count < 5 else { break }
             result.append(Suggestion(kind: .history, title: entry.title.isEmpty ? (entry.url.host ?? "") : entry.title,
                                      detail: entry.url.host?.strippingWWW, text: entry.url.absoluteString))

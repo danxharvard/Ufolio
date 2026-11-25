@@ -57,7 +57,8 @@ final class BookmarkOffer: ObservableObject {
         let realHost = tab.url?.host ?? site
         guard let home = URL(string: "\(scheme)://\(realHost)/") else { return }
         let title = HistoryStore.siteName(host: site, title: tab.url?.path == "/" ? tab.title : "")
-        if !BookmarkStore.shared.contains(home) { BookmarkStore.shared.toggle(url: home, title: title) }
+        let store = BookmarkStore.store(for: tab.profileID)
+        if !store.contains(home) { store.toggle(url: home, title: title) }
         finish(site, until: .distantFuture)
     }
 

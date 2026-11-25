@@ -29,8 +29,31 @@ struct FrequentSite: Identifiable {
 /// Browsing history, kept on this Mac only
 /// (~/Library/Application Support/Hush Browser/history.json).
 final class HistoryStore: ObservableObject {
-    static let shared = HistoryStore()
+    /// The default profile's history (the file it has always used).
+    static let shared = HistoryStore(profile: nil)
     private static let maxEntries = 10_000
+
+    /// Each profile's own history; the default profile's is `shared`.
+    private static var stores: [UUID: HistoryStore] = [:]
+    static func store(for profile: UUID?) -> HistoryStore {
+        guard let profile, SpaceStore.shared.profile(profile) != nil else { return shared }
+        if let store = stores[profile] { return store }
+        let store = HistoryStore(profile: profile)
+        stores[profile] = store
+        return store
+    }
+    /// Every profile's history that's been opened (for quitting).
+    static var all: [HistoryStore] { [shared] + Array(stores.values) }
+    /// Every profile's history, opening any not yet loaded (Clear History, Forget This Site).
+    static var everyProfile: [HistoryStore] { [shared] + SpaceStore.shared.profiles.map { store(for: $0.id) } }
+    /// Lets go of a deleted profile's history and removes its file.
+    static func forget(profile: UUID) {
+        stores[profile]?.saveWork?.cancel()
+        stores[profile] = nil
+        try? FileManager.default.removeItem(at: AppPaths.folder(forProfile: profile).appendingPathComponent("history.json"))
+        UserDefaults.standard.removeObject(forKey: "hiddenFrequentHosts." + profile.uuidString)
+    }
+    private let hiddenKey: String
 
     @Published private(set) var entries: [String: HistoryEntry] = [:] {
         didSet { frequentCache = nil; searchIndex = nil }
@@ -46,14 +69,15 @@ final class HistoryStore: ObservableObject {
     private let file: URL
     private var saveWork: DispatchWorkItem?
 
-    private init() {
-        let folder = AppPaths.support
+    private init(profile: UUID?) {
+        let folder = AppPaths.folder(forProfile: profile)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         file = folder.appendingPathComponent("history.json")
+        hiddenKey = profile.map { "hiddenFrequentHosts." + $0.uuidString } ?? "hiddenFrequentHosts"
         if let saved = AppPaths.load([HistoryEntry].self, from: file) {
             entries = Dictionary(saved.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         }
-        hiddenHosts = Set(UserDefaults.standard.stringArray(forKey: "hiddenFrequentHosts") ?? [])
+        hiddenHosts = Set(UserDefaults.standard.stringArray(forKey: hiddenKey) ?? [])
         prune()
     }
 
@@ -158,7 +182,7 @@ final class HistoryStore: ObservableObject {
 
     func hideFromStartPage(_ host: String) {
         hiddenHosts.insert(host)
-        UserDefaults.standard.set(Array(hiddenHosts), forKey: "hiddenFrequentHosts")
+        UserDefaults.standard.set(Array(hiddenHosts), forKey: hiddenKey)
     }
 
     func clear() {
@@ -166,7 +190,7 @@ final class HistoryStore: ObservableObject {
         DispatchQueue.global(qos: .utility).async { FaviconCache.clearDisk() }
         entries = [:]
         hiddenHosts = []
-        UserDefaults.standard.removeObject(forKey: "hiddenFrequentHosts")
+        UserDefaults.standard.removeObject(forKey: hiddenKey)
         save()
     }
 

@@ -145,6 +145,10 @@ final class SpaceStore: ObservableObject {
         for space in affected { BrowserModel.all.allObjects.forEach { $0.spaceChangedProfile(space) } }
         // Opened just to wipe it if it wasn't used since launch (otherwise its cookies and
         // logins stayed on disk for good).
+        // Its own history and bookmarks go with it.
+        HistoryStore.forget(profile: id)
+        BookmarkStore.forget(profile: id)
+        try? FileManager.default.removeItem(at: AppPaths.support.appendingPathComponent("Profiles").appendingPathComponent(id.uuidString))
         let store = stores.removeValue(forKey: id) ?? WKWebsiteDataStore(forIdentifier: id)
         // Wipe the data straight away, then remove the store itself once nothing uses it.
         store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) {
