@@ -220,6 +220,8 @@ struct GalaxyRankLadder: View {
 /// achievements and ranks are earned: an antenna, a glow underneath, a tiny moon, a gold rim.
 struct SaucerPet: View {
     @AppStorage(Prefs.saucerPet) private var shown = true
+    @AppStorage(Prefs.funEffects) private var effects = true
+    @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
     @Environment(\.controlActiveState) private var activeState
     @ObservedObject private var stats = BlockStats.shared
 
@@ -250,7 +252,9 @@ struct SaucerPet: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Saucer pet, level \(level). Right-click to hide.")
-                .task(id: activeState != .inactive) { await idle() }
+                // Restarted when Effects or Reduce Motion change too (turning Effects back on used
+                // to leave the pet still until the window lost and regained focus).
+                .task(id: "\(activeState != .inactive)\(effects)\(reduceMotion)") { await idle() }
         }
     }
 
@@ -605,13 +609,18 @@ enum Planet: Int, CaseIterable {
 /// The planet in the corner of the start page. Click it for its card.
 struct PlanetOfTheWeek: View {
     @AppStorage(Prefs.planetOfWeek) private var shown = true
+    @AppStorage(Prefs.funEffects) private var effects = true
+    @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
     @State private var showingCard = false
     private let planet = Planet.thisWeek
 
     var body: some View {
         if shown {
             Button { showingCard.toggle() } label: {
-                PlanetGlobe(planet: planet, diameter: 44, spinning: Effects.on)
+                // Rebuilt when Effects or Reduce Motion change, so it stops (or starts) turning
+                // straight away rather than at the next new tab.
+                PlanetGlobe(planet: planet, diameter: 44, spinning: effects && !reduceMotion)
+                    .id(effects && !reduceMotion)
                     .frame(width: 70, height: 56)
                     .contentShape(Circle().inset(by: 4))
             }

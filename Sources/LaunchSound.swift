@@ -21,12 +21,15 @@ enum LaunchSound {
         engine.connect(player, to: engine.mainMixerNode, format: buffer.format)
         engine.mainMixerNode.outputVolume = 0.5
         do { try engine.start() } catch { return }
+        self.engine?.stop()   // one sound at a time
         self.engine = engine
         player.scheduleBuffer(buffer) {
             // Let go of the audio engine once it's finished (nothing keeps running).
+            // Only this play's engine: pressing Play again in Settings started a new one, which
+            // the first play's ending then stopped, cutting the second sound short.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                self.engine?.stop()
-                self.engine = nil
+                engine.stop()
+                if self.engine === engine { self.engine = nil }
             }
         }
         player.play()

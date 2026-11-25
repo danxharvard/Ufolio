@@ -453,11 +453,11 @@ private struct MorePanel: View {
                     .frame(width: 48)
             }
             .buttonStyle(.plain)
-            .help("Actual Size")
+            .accessibilityLabel("Actual Size")
             ZoomButton(symbol: "plus") { model.selectedTab?.zoom(by: 0.1); zoomRevision += 1 }
             Rectangle().fill(Color.primary.opacity(0.12)).frame(width: 1, height: 18).padding(.horizontal, 4)
             ZoomButton(symbol: "arrow.up.left.and.arrow.down.right") { close(); model.window?.toggleFullScreen(nil) }
-                .help("Full Screen")
+                .accessibilityLabel("Full Screen")
         }
         .padding(.horizontal, 16)
         .frame(height: 34)
@@ -982,7 +982,7 @@ private struct SiteSettingRow: View {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            .help(chosen == nil ? "Following your default" : "Changed for this site")
+            .accessibilityLabel(chosen == nil ? "Following your default" : "Changed for this site")
         }
         .frame(height: 32)
     }

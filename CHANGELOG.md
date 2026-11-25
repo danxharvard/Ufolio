@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.50.1: eight fixes
+
+- Fixed a crash when the mouse was over the zoom or Full Screen buttons in the ⋯ panel as it
+  closed, over a Force Field panel setting as the panel closed, or over a News headline as the
+  headlines refreshed.
+- Pressing Play on the arrival sound in Settings twice no longer cuts the second sound short.
+- Clear History or Forget This Site used in the first moment after Ufolio opens can no longer
+  have the old history come back once it has finished loading.
+- Switching Effects back on starts the saucer pet's little moves straight away (it used to stay
+  still until the window lost and regained focus).
+- The planet of the week stops turning as soon as you switch on Reduce Motion or switch off
+  Effects, instead of at the next new tab.
+- If an update won't start and Ufolio offers to go back to the previous version, that question
+  now comes to the front instead of possibly hiding behind other apps.
+- The update log no longer grows forever: it keeps its most recent entries.
+- With Torrent tools on, big .torrent files (with tens of thousands of files) are now previewed
+  instead of being turned away as unreadable.
+
 ## 0.50.0: safer updates, and an optional beta channel
 
 **Going back if an update won't start**

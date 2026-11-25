@@ -210,7 +210,8 @@ enum Bencode {
     struct DecodeError: Error {}
 
     static let maxDepth = 48
-    static let maxItems = 400_000
+    /// Enough for a torrent of 100,000+ files (each takes a handful of items), still bounded.
+    static let maxItems = 2_000_000
 
     static func decode(_ data: Data) throws -> Value {
         var reader = Reader(bytes: [UInt8](data))
@@ -300,7 +301,9 @@ struct TorrentContents {
     var fileCount: Int
     var warnings: [String]
 
-    static let maxFileSize = 10_000_000          // real .torrent files are well under this
+    /// Big multi-file torrents can run to tens of megabytes (10 MB used to turn them away as
+    /// unreadable); still bounded, and read away from the main thread.
+    static let maxFileSize = 64_000_000
     static let maxFilesListed = 20_000
 
     static let executable: Set<String> = ["exe", "scr", "bat", "cmd", "com", "pif", "msi", "vbs", "vbe", "js", "jse", "jar",
