@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.50.0: safer updates, and an optional beta channel
+
+**Going back if an update won't start**
+- When Ufolio updates, it now keeps the version it replaced, instead of deleting it.
+- Straight after updating, Ufolio checks the new version really starts. If it closes by itself
+  twice as it opens, you're asked whether to go back to the version that worked.
+- If a version later fails to start twice in a row, Ufolio offers to go back the next time
+  it's opened, before anything else.
+- After going back, that version is skipped until a newer one comes out.
+- Your bookmarks, history, passwords and settings stay where they are either way.
+
+**Beta versions** (Settings › Software Update, off by default)
+- Switch on "Get beta versions" to try new versions early.
+- Betas are checked exactly like regular updates: signed with Ufolio's key, fingerprint
+  checked, and verified as a real copy of Ufolio before anything is installed.
+- Version order now understands betas: 0.51.0-beta.2 comes after 0.50.x and before 0.51.0, so
+  beta testers move on to the finished version when it's out.
+
 ## 0.49.2: memory comes back when you close tabs
 
 Checked with a test that opens 30 tabs of busy sites (BBC, YouTube, Reddit, Amazon and more),

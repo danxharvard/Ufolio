@@ -11,6 +11,8 @@ struct HushApp: App {
 
     init() {
         Prefs.register()
+        // Before any window: if this version has failed to start twice, offer the previous one.
+        Rollback.checkAtLaunch()
     }
 
     var body: some Scene {
@@ -53,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 .filter { $0 != NSRunningApplication.current }
             if let running = others.first {
                 running.activate(options: [.activateAllWindows])
+                Rollback.launchWasDuplicate()
                 exit(0)
             }
         }
@@ -78,6 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        Rollback.launchSucceeded()   // quitting normally isn't a failed launch
         // Write everything out before Hush exits (background saves might not finish otherwise).
         BrowserModel.all.allObjects.forEach { $0.saveSessionNow() }   // the last second of changes too
         BookmarkStore.all.forEach { $0.saveNow(waiting: true) }

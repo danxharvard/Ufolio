@@ -34,7 +34,8 @@ echo "  assembling app bundle"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 mv "$BUILD/Hush" "$APP/Contents/MacOS/Hush"
-sed "s/__VERSION__/$VERSION/g" Resources/Info.plist > "$APP/Contents/Info.plist"
+# A test build ("0.50.0-beta.1") gets a plain number as its build version, as macOS expects.
+sed -e "s/__VERSION__/$VERSION/g" -e "s/__BUILD__/${VERSION%%-*}/g" Resources/Info.plist > "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp CHANGELOG.md "$APP/Contents/Resources/CHANGELOG.md"   # shown in What's New and Software Update
 printf 'APPL????' > "$APP/Contents/PkgInfo"

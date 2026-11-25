@@ -76,7 +76,12 @@ final class Updater: ObservableObject {
         do {
             // HUSH_UPDATE_API lets a test point Hush at a local fake server; normal users never set it.
             let api = Self.apiBase
-            var request = URLRequest(url: URL(string: "\(api)/repos/\(Self.repo)/releases/latest")!)
+            // The beta channel (Settings, off by default) looks at every recent release, early
+            // test builds included; otherwise only the latest finished release. Either way the
+            // download has to pass exactly the same signature and fingerprint checks.
+            let beta = Prefs.bool(Prefs.betaUpdates)
+            var request = URLRequest(url: URL(string: beta ? "\(api)/repos/\(Self.repo)/releases?per_page=15"
+                                                         : "\(api)/repos/\(Self.repo)/releases/latest")!)
             request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
             request.cachePolicy = .reloadIgnoringLocalCacheData
             request.timeoutInterval = 20
@@ -87,13 +92,31 @@ final class Updater: ObservableObject {
             UserDefaults.standard.set(lastChecked, forKey: "updates.lastChecked")
 
             if status == 404 { state = .upToDate; return } // nothing published yet
-            guard status == 200,
-                  let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let tag = json["tag_name"] as? String else {
+            let decoded = status == 200 ? try JSONSerialization.jsonObject(with: data) : nil
+            let candidates: [[String: Any]]
+            if beta {
+                candidates = ((decoded as? [[String: Any]]) ?? []).filter { ($0["draft"] as? Bool) != true }
+            } else {
+                candidates = (decoded as? [String: Any]).map { [$0] } ?? []
+            }
+            func versionOf(_ release: [String: Any]) -> String? {
+                (release["tag_name"] as? String)?.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+            }
+            guard status == 200, !candidates.isEmpty || beta else {
                 throw UpdateError("GitHub didn’t answer properly (error \(status)).")
             }
-            let version = tag.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+            // The newest of them.
+            guard let json = candidates.max(by: { a, b in
+                      guard let va = versionOf(a), let vb = versionOf(b) else { return versionOf(a) == nil }
+                      return Self.isNewer(vb, than: va)
+                  }),
+                  let version = versionOf(json) else { state = .upToDate; return }
             guard Self.isNewer(version, than: currentVersion) else { state = .upToDate; return }
+            // A version that didn't start and was rolled back is skipped until a newer one is out.
+            if UserDefaults.standard.string(forKey: Rollback.skipKey) == version {
+                state = .upToDate
+                return
+            }
 
             let assets = json["assets"] as? [[String: Any]] ?? []
             guard let asset = assets.first(where: { ($0["name"] as? String) == "HushBrowser-\(version).zip" }),
@@ -255,26 +278,54 @@ final class Updater: ObservableObject {
         let source = """
         #!/bin/bash
         PID="$1"; NEW="$2"; TARGET="$3"; BACKUP="$4"; RELAUNCH="$5"; WORK="$6"
+        PREVDIR="$7"; BUNDLEID="$8"; NEWVERSION="$9"; OLDVERSION="${10}"
+        PREV="$PREVDIR/Ufolio Browser.app"
         exec >> "$HOME/Library/Logs/Ufolio Browser Update.log" 2>&1
         echo "$(date): installing $NEW over $TARGET"
         for i in $(seq 1 300); do kill -0 "$PID" 2>/dev/null || break; sleep 0.2; done
         # Never swap the app while it's still running (quitting was cancelled): try another time.
         if kill -0 "$PID" 2>/dev/null; then echo "Ufolio is still open; not installing now"; rm -rf "$WORK"; exit 0; fi
         if mv "$TARGET" "$BACKUP" && mv "$NEW" "$TARGET"; then
-          rm -rf "$BACKUP"
+          # The version it replaces is kept, so you can go back if the new one won't start.
+          mkdir -p "$PREVDIR" && rm -rf "$PREV" && mv "$BACKUP" "$PREV" || rm -rf "$BACKUP"
         else
           [ -d "$BACKUP" ] && [ ! -d "$TARGET" ] && mv "$BACKUP" "$TARGET"
         fi
         xattr -dr com.apple.quarantine "$TARGET" 2>/dev/null
-        [ "$RELAUNCH" = "1" ] && open "$TARGET"
         rm -rf "$WORK"
+        [ "$RELAUNCH" = "1" ] || exit 0
+        # Reopened straight away: watch that the new version actually starts.
+        started() {
+          sleep 3
+          for i in $(seq 1 17); do pgrep -f "$TARGET/Contents/MacOS/" >/dev/null || return 1; sleep 1; done
+          return 0
+        }
+        open "$TARGET"
+        started && exit 0
+        echo "Ufolio $NEWVERSION closed as it opened; trying once more"
+        open "$TARGET"
+        started && exit 0
+        [ -d "$PREV" ] || exit 0
+        echo "Ufolio $NEWVERSION closed again"
+        ANSWER=$(osascript -e 'display dialog "Ufolio '"$NEWVERSION"' closed by itself twice as it opened. Go back to Ufolio '"$OLDVERSION"', which worked? Ufolio will skip '"$NEWVERSION"' until a newer version comes out." with title "Ufolio Browser" buttons {"Try Again", "Go Back"} default button "Go Back" with icon caution' -e 'button returned of result' 2>/dev/null)
+        if [ "$ANSWER" = "Go Back" ]; then
+          BROKEN="$TARGET.broken-$(date +%s)"
+          if mv "$TARGET" "$BROKEN" && mv "$PREV" "$TARGET"; then rm -rf "$BROKEN"; else [ -d "$BROKEN" ] && [ ! -d "$TARGET" ] && mv "$BROKEN" "$TARGET"; fi
+          xattr -dr com.apple.quarantine "$TARGET" 2>/dev/null
+          defaults write "$BUNDLEID" updates.skipVersion "$NEWVERSION"
+          defaults write "$BUNDLEID" launch.failures -int 0
+          echo "went back to $OLDVERSION"
+        fi
+        open "$TARGET"
         """
         do {
             try source.write(to: script, atomically: true, encoding: .utf8)
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/bash")
             process.arguments = [script.path, String(ProcessInfo.processInfo.processIdentifier),
-                                 pending.newApp.path, target, backup, relaunch ? "1" : "0", pending.workDir.path]
+                                 pending.newApp.path, target, backup, relaunch ? "1" : "0", pending.workDir.path,
+                                 Rollback.folder.path, Bundle.main.bundleIdentifier ?? "com.danxharvard.hushbrowser",
+                                 pending.version, currentVersion]
             try process.run()
         } catch {
             NSLog("Ufolio: couldn't start the update: \(error)")
@@ -290,17 +341,35 @@ final class Updater: ObservableObject {
         return key.isValidSignature(signature, for: data)
     }
 
-    /// "0.10.0" > "0.9.2"; pre-release suffixes are ignored.
+    /// "0.10.0" > "0.9.2". A test build ("0.50.0-beta.2") comes after 0.49.x and before
+    /// 0.50.0 itself; between test builds, beta.10 > beta.2.
     static func isNewer(_ a: String, than b: String) -> Bool {
-        func parts(_ v: String) -> [Int] {
-            v.split(separator: "-").first.map { $0.split(separator: ".").map { Int($0) ?? 0 } } ?? []
+        func parts(_ v: String) -> (numbers: [Int], label: [Substring]?) {
+            let halves = v.split(separator: "-", maxSplits: 1)
+            let numbers = (halves.first ?? "").split(separator: ".").map { Int($0) ?? 0 }
+            return (numbers, halves.count > 1 ? halves[1].split(separator: ".") : nil)
         }
         let x = parts(a), y = parts(b)
-        for i in 0..<max(x.count, y.count) {
-            let l = i < x.count ? x[i] : 0, r = i < y.count ? y[i] : 0
+        for i in 0..<max(x.numbers.count, y.numbers.count) {
+            let l = i < x.numbers.count ? x.numbers[i] : 0, r = i < y.numbers.count ? y.numbers[i] : 0
             if l != r { return l > r }
         }
-        return false
+        switch (x.label, y.label) {
+        case (nil, nil): return false
+        case (nil, _): return true      // the finished version beats its test builds
+        case (_, nil): return false
+        case let (l?, r?):
+            for i in 0..<max(l.count, r.count) {
+                guard i < l.count else { return false }
+                guard i < r.count else { return true }
+                if let ln = Int(l[i]), let rn = Int(r[i]) {
+                    if ln != rn { return ln > rn }
+                } else if l[i] != r[i] {
+                    return l[i] > r[i]
+                }
+            }
+            return false
+        }
     }
 
     /// Runs a system tool without blocking the main thread.

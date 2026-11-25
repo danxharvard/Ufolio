@@ -1563,6 +1563,7 @@ private struct UpdateSettings: View {
     }
     @AppStorage(Prefs.autoCheckUpdates) private var autoCheck = true
     @AppStorage(Prefs.autoInstallUpdates) private var autoInstall = true
+    @AppStorage(Prefs.betaUpdates) private var betaUpdates = false
 
     var body: some View {
         Form {
@@ -1617,6 +1618,9 @@ private struct UpdateSettings: View {
                                 detail: "New versions download in the background and install the next time you quit Ufolio.",
                                 isOn: $autoInstall)
                     .disabled(!autoCheck)
+                DescribedToggle(title: "Get beta versions",
+                                detail: "Try new versions early, before everyone else. They may have rough edges. They’re checked exactly like regular updates, and if one won’t start, Ufolio offers to go back.",
+                                isOn: $betaUpdates)
             } header: { SectionTitle("Automatic updates") } footer: {
                 Text("Updates come from github.com/\(Updater.repo). Each download is checked against GitHub’s fingerprint before it’s installed.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)

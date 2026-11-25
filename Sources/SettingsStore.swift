@@ -73,6 +73,8 @@ enum Prefs {
     // Updates
     static let autoCheckUpdates = "autoCheckUpdates"
     static let autoInstallUpdates = "autoInstallUpdates"
+    /// Early test builds (off by default). They pass exactly the same signature checks.
+    static let betaUpdates = "betaUpdates"
     // Privacy
     static let blockThirdPartyCookies = "blockThirdPartyCookies"
     static let httpsUpgrade = "httpsUpgrade"
@@ -156,6 +158,7 @@ enum Prefs {
         tabSleepMinutes: 15,
         autoCheckUpdates: true,
         autoInstallUpdates: true,
+        betaUpdates: false,
         blockThirdPartyCookies: true,
         httpsUpgrade: true,
         globalPrivacyControl: true,

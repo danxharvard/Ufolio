@@ -79,7 +79,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           V="$(cat VERSION)"
-          gh release create "v$V" --target "$GITHUB_SHA" \
+          # A test build ("0.50.0-beta.1") is published as a pre-release: only copies with
+          # Settings › Software Update › Get beta versions switched on install it.
+          PRE=""; case "$V" in *-*) PRE="--prerelease" ;; esac
+          gh release create "v$V" $PRE --target "$GITHUB_SHA" \
             "build/UfolioBrowser-$V.dmg" \
             "build/HushBrowser-$V.zip" \
             "build/HushBrowser-$V.zip.sig" \
