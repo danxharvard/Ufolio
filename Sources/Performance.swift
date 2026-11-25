@@ -308,6 +308,8 @@ final class PerformanceCenter: ObservableObject {
         guard Self.memorySaverOn else { return }
         var over = Int64(usage.total) - Int64(Self.memoryLimit)
         guard over > 0 else { return }
+        // Over the limit: first let go of closed pages' cached processes, then sleep tabs.
+        Speed.releaseCachedProcesses()
         var candidates: [(tab: BrowserTab, bytes: UInt64)] = []
         for model in BrowserModel.all.allObjects {
             let visibleSplit = model.splitPair.flatMap { $0.contains(model.selectedID) ? $0 : nil }

@@ -173,7 +173,10 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         }
     }
 
+    deinit { LiveCount.change(\.tabs, by: -1) }
+
     init(model: BrowserModel, configuration: WKWebViewConfiguration? = nil, store: WKWebsiteDataStore? = nil) {
+        LiveCount.change(\.tabs, by: 1)
         self.model = model
         isPrivate = model.isPrivate
         webView = HushWebView(frame: .zero, configuration: configuration
@@ -921,6 +924,13 @@ extension BrowserTab: WKUIDelegate {
 
 /// Hush's web view: adds "Hide Elements on This Page…" to the page's right-click menu.
 final class HushWebView: WKWebView {
+    override init(frame: CGRect, configuration: WKWebViewConfiguration) {
+        super.init(frame: frame, configuration: configuration)
+        LiveCount.change(\.webViews, by: 1)
+    }
+    required init?(coder: NSCoder) { super.init(coder: coder) }
+    deinit { LiveCount.change(\.webViews, by: -1) }
+
     var onHideElements: (() -> Void)?
     var onFocus: (() -> Void)?
 

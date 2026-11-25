@@ -289,6 +289,7 @@ final class BrowserModel: NSObject, ObservableObject {
     private var audioTimer: Timer?
 
     init(isPrivate: Bool = false) {
+        LiveCount.change(\.windows, by: 1)
         self.isPrivate = isPrivate
         dataStore = isPrivate ? .nonPersistent() : .default()
         super.init()
@@ -347,7 +348,7 @@ final class BrowserModel: NSObject, ObservableObject {
             }
             if !placed.isEmpty { tabs = placed + tabs.filter { !$0.isPinned } }
         }
-        if !isPrivate, !Self.didRestoreSession { SpeedBenchmark.startIfAsked(in: self) }
+        if !isPrivate, !Self.didRestoreSession { SpeedBenchmark.startIfAsked(in: self); LeakTest.startIfAsked(in: self) }
         if !isPrivate { Self.didRestoreSession = true }
         if visibleTabs.allSatisfy(\.isPinned) {
             // A new window opens the homepage if Settings › General says so.
@@ -366,6 +367,7 @@ final class BrowserModel: NSObject, ObservableObject {
     }
 
     deinit {
+        LiveCount.change(\.windows, by: -1)
         // A closed window's timers stop with it.
         sleepTimer?.invalidate()
         audioTimer?.invalidate()
@@ -448,6 +450,7 @@ final class BrowserModel: NSObject, ObservableObject {
         if remember, isPrivate, let url = tab.url { privateClosed.append(url); if privateClosed.count > 20 { privateClosed.removeFirst() } }
         ExtensionEvents.closed(tab)
         tab.tearDown()
+        Speed.trimSoon()
         tabs.remove(at: index)
         scheduleSessionSave()
         if tabs.isEmpty {

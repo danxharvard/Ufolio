@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.49.2: memory comes back when you close tabs
+
+Checked with a test that opens 30 tabs of busy sites (BBC, YouTube, Reddit, Amazon and more),
+then closes them:
+- every closed tab and its web page is freed: nothing is kept alive by mistake;
+- memory falls from about 5.4 GB with 30 tabs open to about 330 MB once they're closed,
+  close to where Ufolio started.
+
+**Fixed**
+- 0.49.0's speed-up keeps recently used page processes ready for reuse, and after closing tabs
+  it held on to up to ten of them, about 2 GB. They're now let go 30 seconds after you close
+  tabs (so Reopen Closed Tab is still instant just after), and straight away whenever Ufolio
+  goes over its memory limit or your Mac runs short of memory.
+
 ## 0.49.1: heavy work moved off the main thread
 
 Ufolio's windows stay responsive while it reads, writes and searches: that work now happens

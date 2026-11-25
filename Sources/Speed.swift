@@ -40,8 +40,21 @@ enum Speed {
 
     /// Gives back the memory of cached page processes (when macOS is short of memory).
     static func releaseCachedProcesses() {
+        trimWork?.cancel()
+        trimWork = nil
         let selector = NSSelectorFromString("_clearWebProcessCache")
         if pool.responds(to: selector) { pool.perform(selector) }
+    }
+
+    private static var trimWork: DispatchWorkItem?
+
+    /// After tabs close, their page processes are kept a little while (Reopen Closed Tab is then
+    /// instant), then let go: measured with 30 tabs, the cache otherwise held on to about 2 GB.
+    static func trimSoon() {
+        trimWork?.cancel()
+        let work = DispatchWorkItem { releaseCachedProcesses() }
+        trimWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30, execute: work)
     }
 
     // MARK: Preconnecting
@@ -182,5 +195,62 @@ enum SpeedBenchmark {
         let fcp = ((try? await tab.webView.callAsyncJavaScript(script, contentWorld: .defaultClient)) as? NSNumber)?.intValue ?? -1
         try? await Task.sleep(nanoseconds: 500_000_000)
         return (commit, finish, fcp)
+    }
+}
+
+
+// MARK: - Leak checking
+
+/// How many tabs, web views and windows are alive (for the leak test; costs nothing otherwise).
+struct LiveCount {
+    var tabs = 0
+    var webViews = 0
+    var windows = 0
+    private static var counts = LiveCount()
+    private static let lock = NSLock()
+    static func change(_ field: WritableKeyPath<LiveCount, Int>, by delta: Int) {
+        lock.lock(); counts[keyPath: field] += delta; lock.unlock()
+    }
+    static var now: LiveCount { lock.lock(); defer { lock.unlock() }; return counts }
+}
+
+/// Run only when Ufolio is started with UFOLIO_LEAKTEST set to a file of addresses and
+/// UFOLIO_LEAKTEST_DIR to a folder: opens 30 tabs, then closes them, noting what's still alive
+/// at each stage (and writing a marker so a script can measure memory from outside).
+enum LeakTest {
+    static func startIfAsked(in model: BrowserModel) {
+        let env = ProcessInfo.processInfo.environment
+        guard let list = env["UFOLIO_LEAKTEST"], let dir = env["UFOLIO_LEAKTEST_DIR"],
+              let text = try? String(contentsOfFile: list, encoding: .utf8) else { return }
+        let urls = text.split(whereSeparator: \.isNewline).compactMap { URL(string: String($0).trimmingCharacters(in: .whitespaces)) }
+        Task { @MainActor in
+            var report: [String] = []
+            func stage(_ name: String) async {
+                let c = LiveCount.now
+                report.append("\(name): tabs \(c.tabs), webViews \(c.webViews), windows \(c.windows)")
+                try? report.joined(separator: "\n").write(toFile: dir + "/report.txt", atomically: true, encoding: .utf8)
+                try? name.write(toFile: dir + "/stage", atomically: true, encoding: .utf8)
+                try? await Task.sleep(nanoseconds: 12_000_000_000)   // the script measures memory now
+            }
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            await stage("start")
+            for round in 0..<3 {
+                for url in urls {
+                    model.newTab(url: url, select: true)
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                }
+                _ = round
+            }
+            try? await Task.sleep(nanoseconds: 20_000_000_000)
+            await stage("open")
+            let keep = model.tabs.first
+            for tab in model.tabs where tab !== keep { model.close(tab, remember: true) }
+            try? await Task.sleep(nanoseconds: 15_000_000_000)
+            await stage("closed")
+            try? await Task.sleep(nanoseconds: 25_000_000_000)   // the cache trims itself 30 s after closing
+            await stage("a minute later")
+            try? "done".write(toFile: dir + "/stage", atomically: true, encoding: .utf8)
+            NSApp.terminate(nil)
+        }
     }
 }
