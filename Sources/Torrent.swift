@@ -417,11 +417,11 @@ struct TorrentContents {
         let looksLikeMedia = videoName || (t.totalSize > 0 && mediaBytes > t.totalSize / 2)
 
         if let first = disguisedFile {
-            warnings.append("“\\((first as NSString).lastPathComponent)” is a program pretending to be a \\(disguisedKind(first)). Don’t open it.")
+            warnings.append("“\((first as NSString).lastPathComponent)” is a program pretending to be a \(disguisedKind(first)). Don’t open it.")
         }
         if looksLikeMedia, hasExecutable, disguisedFile == nil {
             let names = executableNames.joined(separator: ", ")
-            warnings.append("This looks like a video or music download, but it contains a program (\\(names)). Real films and music never need one.")
+            warnings.append("This looks like a video or music download, but it contains a program (\(names)). Real films and music never need one.")
         }
         if hasShortcut {
             warnings.append("It contains a Windows shortcut (.lnk), a common way to hide malware.")
