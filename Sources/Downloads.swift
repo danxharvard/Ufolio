@@ -257,6 +257,10 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
         finishedCount += 1
         if let url = item.destination {
             DistributedNotificationCenter.default().post(name: .init("com.apple.DownloadFileFinished"), object: url.path)
+            // Torrent tools: show what a .torrent holds before anything opens it.
+            if TorrentTools.previewOn, url.pathExtension.lowercased() == "torrent" {
+                TorrentPreview.show(for: url, in: download.webView?.window)
+            }
             if Prefs.bool(Prefs.openSafeFiles), Self.safeExtensions.contains(url.pathExtension.lowercased()) {
                 NSWorkspace.shared.open(url)
             }

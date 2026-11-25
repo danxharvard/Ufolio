@@ -27,6 +27,11 @@ final class SitePermissions: ObservableObject {
     @Published private(set) var decisions: [String: [String: Bool]]
     /// "Allow Once" answers, kept until Hush quits.
     private var sessionAllowed: Set<String> = []
+    /// Stealth windows and normal windows keep separate "until Ufolio quits" answers: an Allow
+    /// given in Stealth used to apply silently in normal windows too, and the other way round.
+    private func sessionKey(_ site: String, _ kind: PermissionKind, privately: Bool) -> String {
+        (privately ? "stealth|" : "") + site + "|" + kind.rawValue
+    }
 
     private init() {
         decisions = UserDefaults.standard.dictionary(forKey: "sitePermissions") as? [String: [String: Bool]] ?? [:]
@@ -53,7 +58,10 @@ final class SitePermissions: ObservableObject {
     /// Forgets every answer for a site and its subdomains (Forget This Site).
     func forget(site: String) {
         decisions = decisions.filter { Domains.site($0.key) != site }
-        sessionAllowed = sessionAllowed.filter { Domains.site(String($0.split(separator: "|").first ?? "")) != site }
+        sessionAllowed = sessionAllowed.filter { key in
+            let host = key.split(separator: "|").map(String.init).first { $0 != "stealth" } ?? ""
+            return Domains.site(host) != site
+        }
         save()
     }
 
@@ -74,7 +82,7 @@ final class SitePermissions: ObservableObject {
         guard let host, !host.isEmpty else { completion(false); return }
         if kinds.contains(where: { policy(for: $0) == .never }) { completion(false); return }
         let siteKey = ContentBlocker.normalize(host)
-        if kinds.allSatisfy({ sessionAllowed.contains(siteKey + "|" + $0.rawValue) }) { completion(true); return }
+        if kinds.allSatisfy({ sessionAllowed.contains(sessionKey(siteKey, $0, privately: privately)) }) { completion(true); return }
         let remembered = kinds.map { decision(for: host, $0) }
         if remembered.allSatisfy({ $0 == true }) { completion(true); return }
         if remembered.contains(where: { $0 == false }) { completion(false); return }
@@ -102,10 +110,10 @@ final class SitePermissions: ObservableObject {
             completion: { [weak self] choice, _ in
                 switch choice {
                 case 0:                                  // Allow Once: until Hush quits
-                    for kind in kinds { self?.sessionAllowed.insert(site + "|" + kind.rawValue) }
+                    for kind in kinds { self?.sessionAllowed.insert(self?.sessionKey(site, kind, privately: privately) ?? "") }
                     completion(true)
                 case 1:                                  // Always Allow: remembered for this site
-                    if privately { for kind in kinds { self?.sessionAllowed.insert(site + "|" + kind.rawValue) } }
+                    if privately { for kind in kinds { self?.sessionAllowed.insert(self?.sessionKey(site, kind, privately: true) ?? "") } }
                     else { self?.set(true, for: site, kinds) }
                     completion(true)
                 default:                                 // Don't Allow: remembered, so the site stops asking

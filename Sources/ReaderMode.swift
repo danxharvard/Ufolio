@@ -187,11 +187,11 @@ struct ReaderView: View {
 
     private var controls: some View {
         HStack(spacing: 4) {
-            Button { size = max(14, size - 1) } label: { Image(systemName: "textformat.size.smaller") }.help("Smaller text")
-            Button { size = min(30, size + 1) } label: { Image(systemName: "textformat.size.larger") }.help("Larger text")
+            Button { size = max(14, size - 1) } label: { Image(systemName: "textformat.size.smaller") }.accessibilityLabel("Smaller text")
+            Button { size = min(30, size + 1) } label: { Image(systemName: "textformat.size.larger") }.accessibilityLabel("Larger text")
             Divider().frame(height: 16)
             Button { serif.toggle() } label: { Text(serif ? "Aa" : "Aa").font(.system(size: 13, design: serif ? .serif : .default)) }
-                .help(serif ? "Use a sans-serif font" : "Use a serif font")
+                .accessibilityLabel(serif ? "Use a sans-serif font" : "Use a serif font")
             Divider().frame(height: 16)
             ForEach(ReaderTheme.allCases) { option in
                 Button { themeName = option.rawValue } label: {
@@ -200,10 +200,10 @@ struct ReaderView: View {
                                                        lineWidth: themeName == option.rawValue ? 2 : 1))
                         .frame(width: 16, height: 16)
                 }
-                .help(option.rawValue.capitalized)
+                .accessibilityLabel(option.rawValue.capitalized)
             }
             Divider().frame(height: 16)
-            Button(action: onClose) { Image(systemName: "xmark") }.help("Leave Reader (Esc)")
+            Button(action: onClose) { Image(systemName: "xmark") }.accessibilityLabel("Leave Reader (Esc)")
         }
         .buttonStyle(.borderless)
         .font(.system(size: 13, weight: .medium))
@@ -291,7 +291,7 @@ private struct SmallBarButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(help)
+        .accessibilityLabel(help)
     }
 }
 

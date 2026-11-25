@@ -42,6 +42,11 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     @Published private(set) var blockedSites: [String: Int] = [:]
     /// Set when a page was stopped because it looks like a fake copy of a site you use.
     @Published var lookalike: (match: Lookalike.Match, url: URL)?
+    /// Torrent site mode, on this page: pop-ups and redirects stopped, and traps marked.
+    @Published private(set) var torrentPopupsBlocked = 0
+    @Published private(set) var torrentTrapsMarked = 0
+    /// When you last clicked a link to another site on a torrent site (its redirects may follow).
+    private var torrentOutboundClick = Date.distantPast
     /// Quick translation: the page's language when it isn't yours, and where translation is up to.
     @Published private(set) var translation: TranslationState = .none
     @Published private(set) var pageLanguage: Locale.Language?
@@ -481,6 +486,36 @@ extension BrowserTab: WKNavigationDelegate {
                 decisionHandler(.cancel, preferences)
                 return
             }
+            // Torrent tools: a magnet link shows what it is, then goes to your torrent app.
+            if scheme == "magnet", TorrentTools.on {
+                decisionHandler(.cancel, preferences)
+                if action.targetFrame?.isMainFrame ?? true, Date().timeIntervalSince(lastAppPrompt) > 1 {
+                    lastAppPrompt = Date()
+                    TorrentTools.showMagnetCard(url, from: host, in: webView.window)
+                }
+                return
+            }
+            // Torrent site mode: no redirects to ad networks, and no pages swapped for another
+            // site by a script while you're on a torrent site.
+            if TorrentTools.siteModeOn, action.targetFrame?.isMainFrame ?? true, ["http", "https"].contains(scheme),
+               TorrentTools.isIndexSite(webView.url?.host), url != userLoadedURL {
+                let current = Domains.site(webView.url?.host ?? "")
+                let target = Domains.site(url.host ?? "")
+                if TorrentTools.isAdNetwork(url.host) {
+                    torrentPopupsBlocked += 1
+                    decisionHandler(.cancel, preferences)
+                    return
+                }
+                if target != current, !TorrentTools.isIndexSite(url.host), url.pathExtension.lowercased() != "torrent" {
+                    if action.navigationType == .linkActivated {
+                        torrentOutboundClick = Date()   // a link you chose: its redirects may follow
+                    } else if action.navigationType == .other, Date().timeIntervalSince(torrentOutboundClick) > 4 {
+                        torrentPopupsBlocked += 1
+                        decisionHandler(.cancel, preferences)
+                        return
+                    }
+                }
+            }
             // Links to other apps (mailto:, zoommtg:, facetime:…) open only after you say so.
             if !["http", "https", "about", "blob", "data", "file", "javascript"].contains(scheme) {
                 decisionHandler(.cancel, preferences)
@@ -646,6 +681,8 @@ extension BrowserTab: WKNavigationDelegate {
         if readerAvailable { readerAvailable = false }
         dialogsShown = 0
         dialogsSilenced = false
+        if torrentPopupsBlocked != 0 { torrentPopupsBlocked = 0 }
+        if torrentTrapsMarked != 0 { torrentTrapsMarked = 0 }
     }
 
     /// Asks before a page opens another app, the way Safari does.
@@ -663,7 +700,23 @@ extension BrowserTab: WKNavigationDelegate {
             completion: { choice, _ in if choice == 1 { NSWorkspace.shared.open(url) } }), in: window)
     }
 
+    /// Torrent tools: recognises torrent index sites and marks their traps.
+    private func checkTorrentSite() {
+        guard TorrentTools.on, TorrentTools.siteModeOn || TorrentTools.fakeWarningsOn,
+              let url = webView.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return }
+        let known = TorrentTools.isIndexSite(url.host)
+        let script = TorrentTools.fakeWarningsOn ? TorrentSiteGuard.script
+            : "return { isIndex: document.querySelectorAll('a[href^=\"magnet:\"]').length >= 3, marked: 0 };"
+        webView.callAsyncJavaScript(script, arguments: ["known": known], in: nil, in: .defaultClient) { [weak self] result in
+            guard let self, case .success(let value) = result, let info = value as? [String: Any] else { return }
+            if (info["isIndex"] as? Bool) == true { TorrentTools.recognise(url.host) }
+            let marked = (info["marked"] as? Int) ?? (info["marked"] as? NSNumber)?.intValue ?? 0
+            if marked > 0, self.webView.url == url { self.torrentTrapsMarked = marked }
+        }
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        checkTorrentSite()
         // The guessed address worked: forget the guess (a later hiccup on that site mustn't turn
         // into a search for something typed long ago).
         if let guess = URLResolver.lastGuess, webView.url?.host == guess.url.host { URLResolver.lastGuess = nil }
@@ -743,6 +796,17 @@ extension BrowserTab: WKUIDelegate {
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         guard let model else { return nil }
+        // Torrent site mode: only a real click on a link to the same site may open a new tab.
+        // Scripts opening pop-unders, and links to ad networks, are stopped.
+        if TorrentTools.siteModeOn, TorrentTools.isIndexSite(webView.url?.host) {
+            let target = action.request.url
+            let sameSite = target?.host.map { Domains.site($0) == Domains.site(webView.url?.host ?? "") } ?? false
+            let torrentLink = target?.scheme?.lowercased() == "magnet" || target?.pathExtension.lowercased() == "torrent"
+            if TorrentTools.isAdNetwork(target?.host) || !(action.navigationType == .linkActivated && (sameSite || torrentLink)) {
+                torrentPopupsBlocked += 1
+                return nil
+            }
+        }
         // Its own set of blocking rules and scripts: sharing the opener's meant a pop-up on a
         // site with Force Field off switched blocking off for the original page too.
         configuration.userContentController = WKUserContentController()

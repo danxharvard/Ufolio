@@ -103,6 +103,12 @@ final class PerformanceCenter: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             self?.refresh()
             self?.keepWithinMemoryLimit()
+            // The disk is checked every half hour too, not only after launch, so the cache
+            // can't grow large during a long session.
+            if let self, Date().timeIntervalSince(self.lastDiskTidy) > 1_800 {
+                self.lastDiskTidy = Date()
+                Self.tidyDisk()
+            }
         }
         timer?.tolerance = 10
 
@@ -170,6 +176,26 @@ final class PerformanceCenter: ObservableObject {
     /// caches grow to several gigabytes on a big disk, and Ufolio never trimmed them, so they
     /// just kept growing. Checked at launch in the background: past the limits, the caches are
     /// cleared (sites simply download what they need again). Sign-ins and site settings stay.
+    private var lastDiskTidy = Date()
+
+    /// Clears the page cache (as Ufolio quits, when Settings › Performance says so), waiting
+    /// at most two seconds. Sign-ins, cookies and site storage stay.
+    static func clearPageCache(then done: @escaping () -> Void) {
+        URLCache.shared.removeAllCachedResponses()
+        let stores = SpaceStore.shared.allDataStores
+        var remaining = stores.count
+        var finished = false
+        let finish = { if !finished { finished = true; done() } }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: finish)
+        guard remaining > 0 else { finish(); return }
+        for store in stores {
+            store.removeData(ofTypes: [WKWebsiteDataTypeDiskCache], modifiedSince: .distantPast) {
+                remaining -= 1
+                if remaining == 0 { finish() }
+            }
+        }
+    }
+
     static func tidyDisk() {
         DispatchQueue.global(qos: .background).async {
             let fm = FileManager.default
@@ -192,9 +218,11 @@ final class PerformanceCenter: ObservableObject {
                 let modified = (try? folder.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
                 if Date().timeIntervalSince(modified) > 86_400 { try? fm.removeItem(at: folder) }
             }
+            // Kept small, like Safari: the page cache is cleared past 100 MB, and sites' own
+            // offline caches past 400 MB. Sign-ins and cookies are never touched.
             var types: Set<String> = []
-            if caches > 300_000_000 { types.insert(WKWebsiteDataTypeDiskCache) }
-            if siteData > 1_000_000_000 { types.formUnion([WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeFetchCache]) }
+            if caches > 100_000_000 { types.insert(WKWebsiteDataTypeDiskCache) }
+            if siteData > 400_000_000 { types.formUnion([WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeFetchCache]) }
             guard !types.isEmpty else { return }
             DispatchQueue.main.async {
                 for store in SpaceStore.shared.allDataStores {

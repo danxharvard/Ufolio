@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.48.0: torrent tools (off unless you switch them on)
+
+**Torrent tools** (Settings › Privacy & Security › Torrent tools)
+- Off by default. With the switch off, Ufolio behaves exactly as before. Ufolio never downloads
+  or shares torrents itself: it shows you what's there and hands the link to your torrent app.
+- Smart magnet links: clicking a magnet link shows a card with its name, size, file count and
+  trackers when the link includes them, with Open in your torrent app and Copy Link. Choose
+  the app in Settings (Transmission, qBittorrent and so on, or the Mac's default). A broken
+  link says so, and with no torrent app installed you can still copy it.
+- .torrent preview: when a .torrent file finishes downloading, Ufolio reads it on your Mac
+  (no network, strict size and nesting limits, so a booby-trapped file can't harm it) and lists
+  its files and sizes before anything opens it. It warns about:
+  - programs inside a video or music download;
+  - double endings such as movie.mp4.exe;
+  - Windows shortcuts (.lnk);
+  - hidden characters that disguise a file's ending;
+  - paths that try to escape their folder;
+  - the "password in a text file" archive scam;
+  - "videos" with no video inside.
+- Torrent site mode: on torrent sites, scripts can't open pop-ups or pop-unders, links to
+  pop-under ad networks are stopped, and the page can't be swapped for another site behind
+  your back. Links you click still work. A slim bar says what was stopped.
+- Fake download buttons: on torrent sites, the real magnet and .torrent links get a green
+  outline. Fake "Download" and "Play now" ads, and programs disguised as videos, are marked in
+  red. Invisible layers that turn every click into a pop-under lose their grip.
+
+**Smaller on disk**
+- Ufolio now clears its page cache as it quits, so between sessions it takes almost no disk
+  space. Your sign-ins, cookies and site settings are kept. Switch it off in Settings ›
+  Performance › Disk if you'd rather sites load from the cache after a relaunch.
+- While Ufolio is open, the page cache is kept under 100 MB (it was 300 MB), and sites' own
+  offline caches under 400 MB (it was 1 GB). The disk is checked every half hour, not only
+  just after launch.
+
+**Fixes**
+- Fixed a crash when the mouse was over a button as it disappeared: Reader's close and text
+  buttons, Split View's Close This Side, the Find bar after pressing Esc, sidebar bookmarks
+  deleted from their menu, and the Force Field panel's buttons that close it.
+- Camera, microphone and location answers given "until Ufolio quits" in a Stealth window no
+  longer apply in normal windows, and normal windows' answers no longer carry into Stealth.
+- The Bookmarks menu now lists the window's own profile's bookmarks, and updates when you add
+  one there. It used to decide from the default profile's bookmarks whether to show any.
+
 ## 0.47.1: ten fixes
 
 **Profiles**

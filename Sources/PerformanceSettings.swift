@@ -9,6 +9,7 @@ struct PerformanceSettings: View {
     @AppStorage(Prefs.autoPowerMode) private var autoPowerMode = true
     @AppStorage(Prefs.memoryLimitGB) private var memoryLimitGB = 0.0
     @AppStorage(Prefs.pauseBackgroundMedia) private var pauseMedia = false
+    @AppStorage(Prefs.clearCacheOnQuit) private var clearCacheOnQuit = true
     @ObservedObject private var center = PerformanceCenter.shared
     @State private var usage = PerformanceCenter.Usage()
     private let tick = Timer.publish(every: 5, tolerance: 2, on: .main, in: .default).autoconnect()
@@ -107,6 +108,16 @@ struct PerformanceSettings: View {
                                isOn: $freeMemory)
             } header: { SectionTitle("Memory") } footer: {
                 Footnote(memoryFootnote)
+            }
+
+            Section {
+                SettingsSwitch(title: "Clear page cache when Ufolio quits",
+                               detail: "Ufolio takes almost no disk space between sessions. Sites load a little slower the first time after you open Ufolio. Sign-ins and cookies are kept.",
+                               symbol: "internaldrive.fill",
+                               colors: [Color(red: 0.45, green: 0.65, blue: 1.0), Color(red: 0.25, green: 0.42, blue: 0.90)],
+                               isOn: $clearCacheOnQuit)
+            } header: { SectionTitle("Disk") } footer: {
+                Footnote("While Ufolio is open, its page cache is kept under 100 MB.")
             }
 
             Section {

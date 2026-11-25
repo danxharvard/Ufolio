@@ -417,7 +417,6 @@ private struct LibraryRow: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help(url.absoluteString)
     }
 }
 

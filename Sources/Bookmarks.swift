@@ -35,6 +35,7 @@ final class BookmarkStore: ObservableObject {
         didSet {
             keys = Set(items.map { Self.key($0.url) })
             byFolder = Dictionary(grouping: items, by: \.folder)
+            if self !== Self.shared { BookmarkMenuSignal.shared.changed() }
         }
     }
     /// Bookmarks grouped by folder, worked out once per change: the sidebar, bookmarks bar and
@@ -721,3 +722,12 @@ actor FaviconCache {
 // Pictures are created once and then only read, so they're safe to hand between threads
 // (Hush decodes icons and news pictures off the main thread).
 extension NSImage: @retroactive @unchecked Sendable {}
+
+
+/// Tells the Bookmarks menu that another profile's bookmarks changed (the menu bar can only
+/// watch fixed objects, and it watched the default profile's alone).
+final class BookmarkMenuSignal: ObservableObject {
+    static let shared = BookmarkMenuSignal()
+    @Published private(set) var tick = 0
+    func changed() { DispatchQueue.main.async { self.tick &+= 1 } }
+}

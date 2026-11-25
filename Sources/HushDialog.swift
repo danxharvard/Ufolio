@@ -42,6 +42,9 @@ struct HushDialog: Identifiable {
     var motion: Motion = .orbit
     var title: String
     var message: String = ""
+    /// Extra content under the message (e.g. a torrent's file list).
+    var detail: AnyView? = nil
+    var width: CGFloat = 300
     var note: (symbol: String, text: String)? = nil
     var checkbox: String? = nil
     var choices: [Choice]
@@ -178,6 +181,7 @@ struct HushDialogCard: View {
                     .frame(maxHeight: 150)
                     .fixedSize(horizontal: false, vertical: dialog.message.count < 400)
                 }
+                if let detail = dialog.detail { detail }
                 if let note = dialog.note {
                     Label(note.text, systemImage: note.symbol)
                         .font(.system(size: 11))
@@ -199,7 +203,7 @@ struct HushDialogCard: View {
                 .padding(.top, 16)
                 .padding(.bottom, 18)
         }
-        .frame(width: 300)
+        .frame(width: dialog.width)
     }
 
     @ViewBuilder private var buttons: some View {

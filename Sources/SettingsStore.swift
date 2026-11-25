@@ -22,6 +22,14 @@ enum Prefs {
     /// The saucer pet and the planet of the week on the start page.
     static let saucerPet = "saucerPet"
     static let planetOfWeek = "planetOfWeek"
+    /// Torrent tools (off by default) and their options.
+    /// Clears the page cache as Ufolio quits, so it takes almost no disk space between sessions.
+    static let clearCacheOnQuit = "clearCacheOnQuit"
+    static let torrentTools = "torrentTools"
+    static let torrentApp = "torrentApp"
+    static let torrentPreview = "torrentPreview"
+    static let torrentSiteMode = "torrentSiteMode"
+    static let torrentFakeWarnings = "torrentFakeWarnings"
     static let startBackground = "startBackground"
     static let startGreeting = "startShowGreeting"
     static let startBookmarks = "startShowBookmarks"
@@ -108,6 +116,12 @@ enum Prefs {
         achievements: false,
         saucerPet: true,
         planetOfWeek: true,
+        clearCacheOnQuit: true,
+        torrentTools: false,
+        torrentApp: "",
+        torrentPreview: true,
+        torrentSiteMode: true,
+        torrentFakeWarnings: true,
         startBackground: StartBackground.frosted.rawValue,
         startGreeting: true,
         startBookmarks: true,

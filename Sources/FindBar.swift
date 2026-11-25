@@ -111,9 +111,9 @@ struct FindBar: View {
 
             ControlGroup {
                 Button { find.search(in: webView, backwards: true) } label: { Image(systemName: "chevron.up") }
-                    .help("Previous (⇧⌘G)")
+                    .accessibilityLabel("Previous (⇧⌘G)")
                 Button { find.search(in: webView) } label: { Image(systemName: "chevron.down") }
-                    .help("Next (⌘G)")
+                    .accessibilityLabel("Next (⌘G)")
             }
             .controlSize(.small)
             .fixedSize()

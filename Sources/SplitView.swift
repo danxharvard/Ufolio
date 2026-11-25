@@ -116,6 +116,6 @@ private struct PaneButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help(help)
+        .accessibilityLabel(help)
     }
 }

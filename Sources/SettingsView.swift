@@ -30,7 +30,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .performance: return "performance speed fast power battery saver eco carbon energy green memory ram tab sleep graphics 120hz smooth frame rate video pause"
         case .adBlocker: return "blocking mode strict standard off ads ad blocker trackers block filter list easylist cookie banners collapse zapper hidden elements counter statistics"
         case .extensions: return "chrome extension extensions web store add-on plugin dark reader"
-        case .privacy: return "fingerprinting farbling redirects debounce amp cookies https tracking gpc fraud phishing look-alike clean links camera microphone pop-ups autoplay javascript website data clear"
+        case .privacy: return "torrent torrents magnet bittorrent transmission qbittorrent fingerprinting farbling redirects debounce amp cookies https tracking gpc fraud phishing look-alike clean links camera microphone pop-ups autoplay javascript website data clear"
         case .passwords: return "autofill passwords credit cards contact card keychain touch id"
         case .location: return "location weather town postcode personalise start page permission maps"
         case .keyboard: return "keyboard shortcuts keys hotkeys customise command"
@@ -1013,6 +1013,8 @@ private struct PrivacySettings: View {
                         .disabled(siteCount == 0)
                 }
             } header: { SectionTitle("Website data") }
+
+            TorrentToolsSection()
         }
         .formStyle(SafariFormStyle())
         .onAppear(perform: countSites)
@@ -1041,6 +1043,46 @@ private struct PrivacySettings: View {
                 if remaining == 0 { countSites() }
             }
         }
+    }
+}
+
+/// Settings › Privacy & Security › Torrent tools: one switch, with its options underneath.
+private struct TorrentToolsSection: View {
+    @AppStorage(Prefs.torrentTools) private var on = false
+    @AppStorage(Prefs.torrentApp) private var app = ""
+    @AppStorage(Prefs.torrentPreview) private var preview = true
+    @AppStorage(Prefs.torrentSiteMode) private var siteMode = true
+    @AppStorage(Prefs.torrentFakeWarnings) private var fakeWarnings = true
+    @State private var apps: [URL] = []
+
+    var body: some View {
+        Section {
+            DescribedToggle(title: "Torrent tools",
+                            detail: "See what a magnet link or .torrent file contains before your torrent app opens it, and stay safe on torrent sites. Ufolio never downloads or shares torrents itself.",
+                            isOn: $on)
+            if on {
+                Picker("Torrent app", selection: $app) {
+                    Text("Mac default").tag("")
+                    ForEach(apps, id: \.self) { url in
+                        Text(TorrentTools.appName(url)).tag(Bundle(url: url)?.bundleIdentifier ?? "")
+                    }
+                }
+                DescribedToggle(title: "Preview .torrent files",
+                                detail: "Lists the files and sizes when one finishes downloading, and warns about programs hidden in videos or names like movie.mp4.exe.",
+                                isOn: $preview)
+                DescribedToggle(title: "Torrent site mode",
+                                detail: "On torrent sites, stops pop-ups, pop-unders and redirects to other sites.",
+                                isOn: $siteMode)
+                DescribedToggle(title: "Mark fake download buttons",
+                                detail: "On torrent sites, outlines the real magnet links in green and marks fake “Download” ads and disguised programs in red.",
+                                isOn: $fakeWarnings)
+            }
+        } header: { SectionTitle("Torrent tools") } footer: {
+            if on && apps.isEmpty {
+                Footnote("No torrent app found on this Mac. Magnet links can still be copied.")
+            }
+        }
+        .onAppear { apps = TorrentTools.installedApps() }
     }
 }
 

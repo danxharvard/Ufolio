@@ -63,13 +63,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Quitting cancels downloads that are still running, so ask first (as Safari does).
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         let running = Downloads.shared.activeCount
-        guard running > 0 else { return .terminateNow }
-        let alert = NSAlert()
-        alert.messageText = running == 1 ? "A download is still in progress." : "\(running) downloads are still in progress."
-        alert.informativeText = "If you quit now, \(running == 1 ? "it" : "they") will be cancelled."
-        alert.addButton(withTitle: "Don’t Quit")
-        alert.addButton(withTitle: "Quit")
-        return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
+        if running > 0 {
+            let alert = NSAlert()
+            alert.messageText = running == 1 ? "A download is still in progress." : "\(running) downloads are still in progress."
+            alert.informativeText = "If you quit now, \(running == 1 ? "it" : "they") will be cancelled."
+            alert.addButton(withTitle: "Don’t Quit")
+            alert.addButton(withTitle: "Quit")
+            guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
+        }
+        // Settings › Performance › Clear page cache when Ufolio quits: finish that first.
+        guard Prefs.bool(Prefs.clearCacheOnQuit) else { return .terminateNow }
+        PerformanceCenter.clearPageCache { sender.reply(toApplicationShouldTerminate: true) }
+        return .terminateLater
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -117,11 +122,17 @@ struct HushCommands: Commands {
     @FocusedObject private var focusedBrowser: BrowserModel?
     private var browser: BrowserModel? { focusedBrowser ?? BrowserModel.frontmost }
     @ObservedObject private var bookmarks = BookmarkStore.shared
+    @ObservedObject private var otherProfileBookmarks = BookmarkMenuSignal.shared
     @ObservedObject private var spaces = SpaceStore.shared
     @AppStorage(Prefs.showBookmarkBar) private var showBookmarkBar = true
     @AppStorage(Prefs.tabLayout) private var tabLayout = TabLayout.top.rawValue
     @AppStorage(Prefs.adBlockEnabled) private var adBlockEnabled = true
     @AppStorage(Prefs.appearance) private var appearance = AppearanceMode.system.rawValue
+
+    private var menuBookmarks: [Bookmark] {
+        _ = otherProfileBookmarks.tick
+        return Array((browser?.bookmarks ?? bookmarks).items(in: nil).prefix(40))
+    }
 
     var body: some Commands {
         // SwiftUI refuses to quit while one of its sheets is open, so Quit closes them first.
@@ -289,11 +300,12 @@ struct HushCommands: Commands {
         CommandMenu("Bookmarks") {
             Button("Bookmark This Page") { browser?.toggleBookmarkForSelectedTab() }
                 .keyboardShortcut(Shortcuts.get(.bookmark))
-            if !bookmarks.items.isEmpty {
+            // The window's own profile's bookmarks (it checked the default profile's to decide
+            // whether to show any). The first 40 not in a folder: macOS rebuilds the whole menu bar
+            // whenever bookmarks change, and listing thousands made that a noticeable pause.
+            if !menuBookmarks.isEmpty {
                 Divider()
-                // The first 40 not in a folder: macOS rebuilds the whole menu bar whenever bookmarks
-                // change, and listing thousands made that a noticeable pause.
-                ForEach((browser?.bookmarks ?? bookmarks).items(in: nil).prefix(40)) { bookmark in
+                ForEach(menuBookmarks) { bookmark in
                     Button(bookmark.title) { browser?.open(bookmark.url) }
                 }
             }

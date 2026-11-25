@@ -219,6 +219,10 @@ struct BrowserWindow: View {
             SelectedTab(model: model) { tab in
                 WebStoreBar(tab: tab).background(VisualEffect(material: .titlebar))
             }
+            // What torrent site mode stopped (only with Torrent tools on, on torrent sites).
+            SelectedTab(model: model) { tab in
+                TorrentGuardBar(tab: tab).background(VisualEffect(material: .titlebar))
+            }
             // "You visit this site a lot: add it to your Favourites?" (no space otherwise).
             SelectedTab(model: model) { tab in
                 BookmarkOfferBar(tab: tab).background(VisualEffect(material: .titlebar))
@@ -271,6 +275,7 @@ struct BrowserWindow: View {
                 FindBarHost(model: model)
                 TranslationHost()
                 SelectedTab(model: model) { tab in WebStoreBar(tab: tab) }
+                SelectedTab(model: model) { tab in TorrentGuardBar(tab: tab) }
                 SelectedTab(model: model) { tab in BookmarkOfferBar(tab: tab) }
                 HStack(spacing: 0) {
                     ZStack(alignment: .topLeading) {
@@ -818,7 +823,7 @@ struct ShieldsPanel: View {
                     }))
                 .toggleStyle(.switch)
                 .labelsHidden()
-                .help("Turn Force Field off if this site doesn’t work properly")
+                .accessibilityLabel("Turn Force Field off if this site doesn’t work properly")
             }
         }
         .padding(10)
@@ -916,11 +921,11 @@ struct ShieldsPanel: View {
         HStack(spacing: 6) {
             GuardAction(symbol: tab.javaScriptOff ? "curlybraces.square.fill" : "curlybraces.square",
                         label: tab.javaScriptOff ? "JS Off" : "JavaScript", active: tab.javaScriptOff) { tab.toggleJavaScript() }
-                .help(tab.javaScriptOff ? "Turn JavaScript back on in this tab" : "Turn JavaScript off in this tab")
+                .accessibilityLabel(tab.javaScriptOff ? "Turn JavaScript back on in this tab" : "Turn JavaScript off in this tab")
             GuardAction(symbol: "eye.slash", label: "Hide…", active: false) { ElementZapper.shared.start(in: tab) }
-                .help("Click things on the page to hide them for good")
+                .accessibilityLabel("Click things on the page to hide them for good")
             GuardAction(symbol: "eraser", label: "Forget", active: false) { SiteForgetter.confirmAndForget(tab) }
-                .help("Forget This Site: delete its cookies, data and history")
+                .accessibilityLabel("Forget This Site: delete its cookies, data and history")
         }
     }
 }
