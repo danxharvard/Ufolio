@@ -59,6 +59,7 @@ final class BrowserModel: NSObject, ObservableObject {
     /// Shows another Space: its tabs replace the tab bar, and the tab you last used there is selected.
     func switchSpace(to id: UUID) {
         guard !isPrivate, id != spaceID, SpaceStore.shared.space(id) != nil else { return }
+        FeatureUsage.mark(.orbits)
         if let current = selectedID { lastSelected[spaceID] = current }
         if splitPair != nil { splitPair = nil }
         spaceID = id
@@ -233,7 +234,10 @@ final class BrowserModel: NSObject, ObservableObject {
     /// opening or closing it only redraws the sidebar and its button, not the whole window.
     final class SidebarState: ObservableObject {
         @Published var open = UserDefaults.standard.bool(forKey: "sidebar.open") {
-            didSet { if open != oldValue { UserDefaults.standard.set(open, forKey: "sidebar.open") } }
+            didSet {
+                if open != oldValue { UserDefaults.standard.set(open, forKey: "sidebar.open") }
+                if open { FeatureUsage.mark(.sidebar) }
+            }
         }
     }
     let sidebar = SidebarState()
@@ -250,6 +254,7 @@ final class BrowserModel: NSObject, ObservableObject {
     /// Shows a tab beside the current one. Splitting the current tab itself opens a new tab beside it.
     func openSplit(with tab: BrowserTab? = nil) {
         guard let current = selectedTab else { return }
+        FeatureUsage.mark(.split)
         if let tab, tab !== current {
             splitPair = SplitPair(left: current.id, right: tab.id)
             tab.wakeIfNeeded()
@@ -281,6 +286,7 @@ final class BrowserModel: NSObject, ObservableObject {
         dataStore = isPrivate ? .nonPersistent() : .default()
         super.init()
         BrowserModel.all.add(self)
+        if isPrivate { FeatureUsage.mark(.stealth); StealthDays.recordToday() }
         // Which tabs are playing sound (for the speaker button on tabs).
         audioTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             self?.tabs.forEach { $0.checkAudio() }

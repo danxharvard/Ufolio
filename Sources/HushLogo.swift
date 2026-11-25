@@ -140,13 +140,15 @@ struct Alien: View {
 struct HushLogoTile: View {
     var size: CGFloat
     var eclipse: CGFloat = 1
+    @AppStorage(Prefs.theme) private var theme = "classic"
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: size * 0.225, style: .continuous)
-                .fill(LinearGradient(colors: [Color(red: 0.42, green: 0.25, blue: 0.80),
-                                              Color(red: 0.20, green: 0.12, blue: 0.45),
-                                              Color(red: 0.05, green: 0.06, blue: 0.20)],
+                .fill(LinearGradient(colors: AlienTheme.isActive(theme) ? AlienTheme.tile
+                                        : [Color(red: 0.42, green: 0.25, blue: 0.80),
+                                           Color(red: 0.20, green: 0.12, blue: 0.45),
+                                           Color(red: 0.05, green: 0.06, blue: 0.20)],
                                      startPoint: .topTrailing, endPoint: .bottomLeading))
             if size >= 30 {
                 Circle().fill(.white.opacity(0.9)).frame(width: size * 0.035).offset(x: size * 0.30, y: -size * 0.32)

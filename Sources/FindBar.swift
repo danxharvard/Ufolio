@@ -24,6 +24,7 @@ final class FindModel: ObservableObject {
     }
 
     func show() {
+        FeatureUsage.mark(.find)
         isVisible = true
         focusToken += 1
     }

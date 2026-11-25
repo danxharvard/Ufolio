@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.45.0: close encounters
+
+**New: Area 51 theme 👽**
+- One complete alien look: radioactive-green accents, green-tinted glass on the window, sidebar
+  and tab column, a green aurora on the start page and a green saucer, in light and dark mode.
+  Settings › Appearance › Theme.
+- On 2 July, World UFO Day, Ufolio wears it for the day and says hello.
+
+**New on the start page**
+- Abducted counter: how many ads and trackers the saucer abducted today. Click it for the
+  abduction log of today's trackers and the companies behind them.
+- Weekly report card: "This week the saucer zapped N ads and trackers and saved you X MB."
+- Achievements (opt-in, never any pop-ups): First Contact at 1,000 blocked, Area 51 for
+  Stealth Mode on 30 days, Lightyear at a million. Turn them on in Settings › Appearance.
+- Signal from space: one small tip a day about something you haven't tried yet. Close it for the day.
+- Live Sky background: the start page follows the real time of day, from dawn to a starry
+  night with the odd shooting star.
+- Ufolio's birthday: a little saucer in a party hat on the anniversary of the day you started using it.
+
+**New little touches**
+- Stealth windows have a faint cloaking-field shimmer round their edge.
+- Finished downloads are beamed up into the Downloads button with a soft glow.
+- Try typing "take me to your leader" in the address bar.
+- All of these follow Reduce Motion, and Settings › Appearance › Effects turns them off.
+
+**Fixes**
+- Nothing gets through a dialog, the setup guide, the palette, Reader, the sidebar or the address
+  suggestions to the page underneath: no clicks, scrolling, hover effects or link cursor.
+- Automatic cookie-banner rejection only ever clicks inside real consent pop-ups (it could press
+  "Decline" in other dialogs, such as a meeting invitation).
+- A filter-list update that suddenly shrinks a big list (a hotel wifi login page, say) is
+  ignored, and the current list is kept.
+- A site asking for a username and password several times at once shows one sign-in box.
+- An address guessed from what you typed is forgotten once it has loaded.
+
 ## 0.44.0: the arrival sound, and a lighter footprint
 
 **New: the arrival sound 🛸**

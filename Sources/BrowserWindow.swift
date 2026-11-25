@@ -29,14 +29,34 @@ struct BrowserWindow: View {
 
 
     @AppStorage(Prefs.tabLayout) private var tabLayout = TabLayout.top.rawValue
+    @AppStorage(Prefs.theme) private var theme = "classic"
+    @State private var leaderEgg = false
     private var sideTabs: Bool { tabLayout == TabLayout.side.rawValue }
+
+    /// The window's frosted glass; the Area 51 theme tints it (and so the tab column) green.
+    private var windowGlass: some View {
+        ZStack {
+            VisualEffect(material: .titlebar, blending: .behindWindow)
+            if AlienTheme.isActive(theme) && !model.isPrivate { AlienTheme.glass }
+        }
+        .ignoresSafeArea()
+    }
+
+    /// Stealth Mode's cloaking field (a faint shimmer round the window's edge) and the easter egg.
+    private var funOverlays: some View {
+        ZStack {
+            if model.isPrivate { CloakingField().ignoresSafeArea() }
+            if leaderEgg { LeaderEasterEgg { leaderEgg = false } }
+        }
+        .allowsHitTesting(false)
+    }
 
     var body: some View {
         Group {
             if sideTabs { sideLayout } else { topLayout }
         }
         .ignoresSafeArea(.container, edges: .top)
-        .background(VisualEffect(material: .titlebar, blending: .behindWindow).ignoresSafeArea())
+        .background(windowGlass)
         .coordinateSpace(name: "window")
         // Address suggestions float over everything, lined up under the address bar wherever it is.
         .overlay(alignment: .topLeading) {
@@ -118,6 +138,7 @@ struct BrowserWindow: View {
             NSApp.activate(ignoringOtherApps: true)
         }
         .overlay { CommandPaletteOverlay(model: model) }
+        .overlay(funOverlays)
         .hushDialogs(model.dialogs)
         // Settings › General › Run Setup Guide Again.
         .onReceive(NotificationCenter.default.publisher(for: SetupGuide.showAgain)) { _ in
@@ -294,6 +315,12 @@ struct BrowserWindow: View {
 
     private func go(_ text: String) {
         suggestions.dismiss()
+        // 👽
+        let words = text.lowercased().filter { $0.isLetter || $0 == " " }.split(separator: " ").joined(separator: " ")
+        if words == "take me to your leader" {
+            leaderEgg = true
+            return
+        }
         guard let url = URLResolver.resolve(text) else { return }
         model.selectedTab?.load(url)
         if let tab = model.selectedTab {
@@ -1234,6 +1261,19 @@ struct ClickBlocker: NSViewRepresentable {
 
     final class BlockingView: NSView {
         var onClick: (() -> Void)?
+        /// Every blocker on screen, so web pages can tell when one covers them (see HushWebView).
+        static let all = NSHashTable<BlockingView>.weakObjects()
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window != nil { Self.all.add(self) } else { Self.all.remove(self) }
+        }
+        /// True when a blocker in `window` covers this point (in window coordinates).
+        static func covers(_ point: NSPoint, in window: NSWindow) -> Bool {
+            all.allObjects.contains { blocker in
+                blocker.window === window && !blocker.isHiddenOrHasHiddenAncestor
+                    && blocker.convert(blocker.bounds, to: nil).contains(point)
+            }
+        }
         override func hitTest(_ point: NSPoint) -> NSView? { frame.contains(point) ? self : nil }
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
         override func mouseDown(with event: NSEvent) { onClick?() }
@@ -1284,6 +1324,8 @@ private struct SidebarSlot: View {
                 LibrarySidebar(model: model, active: slotOpen)
                     .frame(width: width - 12)
                     .frame(maxHeight: .infinity)
+                    // While it's out, the page underneath gets no clicks, scrolling or hover through it.
+                    .background { if slotOpen { ClickBlocker() } }
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.1)))
                     .padding(6)

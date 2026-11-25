@@ -405,6 +405,13 @@ final class ContentBlocker: ObservableObject {
                     source != nil ? $0.sourceURL == source : ($0.sourceURL == nil && $0.name == listName)
                 }
             }
+            // An update that suddenly shrinks a big list by more than half is almost certainly a
+            // wrong download (a hotel or café wifi login page, say), not the real list: keep the
+            // current one rather than silently losing most of its blocking.
+            if let existing, existing.ruleCount > 1_000, output.ruleCount < existing.ruleCount / 2 {
+                await report("“\(existing.name)” didn’t update: the download didn’t look right, so the current list was kept.", error: true)
+                return
+            }
             var list = existing ?? FilterList(name: name, ruleCount: 0, skippedCount: 0, format: output.format)
             list.name = output.title ?? existing?.name ?? name
             list.sourceURL = source
@@ -853,8 +860,15 @@ enum UserScripts {
         var boxes = document.querySelectorAll(CONTAINERS);
         for (var b = 0; b < boxes.length; b++) {
           var box = boxes[b];
+          // Only a real consent pop-up: never the whole page (a page's <body> can carry a
+          // "cookie…" class), only a reasonably small box, and one that talks about cookies or
+          // consent, not merely "privacy" or "tracking". Otherwise a "Decline" button in any
+          // dialog (a meeting invitation, say) could have been pressed for you.
+          if (box === document.body || box === document.documentElement) continue;
+          var text = box.textContent || '';
+          if (text.length > 6000) continue;
           // textContent, not innerText: reading innerText makes the page lay itself out again.
-          if (!/cookie|consent|privacy|gdpr|tracking|personal data|partners/i.test((box.textContent || '').slice(0, 4000))) continue;
+          if (!/cookie|consent|gdpr|datenschutz|rgpd|einwilligung|consentement/i.test(text)) continue;
           var buttons = box.querySelectorAll('button, [role="button"], a[href="#"], input[type="button"], input[type="submit"]');
           for (var k = 0; k < buttons.length; k++) {
             var t = (buttons[k].textContent || buttons[k].value || buttons[k].getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim();

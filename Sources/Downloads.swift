@@ -118,6 +118,8 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
     }
 
     var activeCount: Int { items.filter { $0.state == .downloading }.count }
+    /// Goes up each time a download finishes (the tractor beam watches it).
+    @Published private(set) var finishedCount = 0
 
     // MARK: WKDownloadDelegate
 
@@ -235,6 +237,7 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
         item.stopWatching()
         item.progress = 1
         item.state = .finished
+        finishedCount += 1
         if let url = item.destination {
             DistributedNotificationCenter.default().post(name: .init("com.apple.DownloadFileFinished"), object: url.path)
             if Prefs.bool(Prefs.openSafeFiles), Self.safeExtensions.contains(url.pathExtension.lowercased()) {
@@ -366,6 +369,8 @@ struct DownloadsButton: View {
                             .allowsHitTesting(false)
                     }
                 }
+                // A finished download is beamed up into the button with a soft glow.
+                .overlay { TractorBeam(trigger: downloads.finishedCount) }
                 .popover(isPresented: $showing, arrowEdge: .bottom) { DownloadsList() }
                 .onAppear { downloads.prune() }
         }

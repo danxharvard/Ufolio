@@ -7,6 +7,7 @@ struct HushApp: App {
     @AppStorage(Prefs.appearance) private var appearance = AppearanceMode.system.rawValue
     @AppStorage(Prefs.accent) private var accent = AccentChoice.system.rawValue
     @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
+    @AppStorage(Prefs.theme) private var theme = "classic"
 
     init() {
         Prefs.register()
@@ -16,7 +17,7 @@ struct HushApp: App {
         // ONE WINDOW: Hush has a single browser window with unlimited tabs.
         Window("Ufolio Browser", id: "browser") {
             BrowserWindow()
-                .accentColor(AccentChoice(rawValue: accent)?.color)
+                .accentColor(AlienTheme.isActive(theme) ? AlienTheme.accent : AccentChoice(rawValue: accent)?.color)
                 .transaction { if reduceMotion { $0.animation = nil } }
                 .onAppear { AppearanceMode.apply(appearance) }
                 .onChange(of: appearance) { _, mode in AppearanceMode.apply(mode) }

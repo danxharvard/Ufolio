@@ -12,6 +12,13 @@ enum Prefs {
     static let showFullAddress = "showFullAddress"
     static let reduceMotion = "reduceMotion"
     static let launchSound = "launchSound"
+    /// "classic" or "area51" (the alien theme).
+    static let theme = "theme"
+    /// The playful animations: the abducted-counter saucer, shooting stars, the cloaking shimmer,
+    /// the tractor beam and the easter egg.
+    static let funEffects = "funEffects"
+    /// Opt-in badges on the weekly report card.
+    static let achievements = "achievements"
     static let startBackground = "startBackground"
     static let startGreeting = "startShowGreeting"
     static let startBookmarks = "startShowBookmarks"
@@ -93,6 +100,9 @@ enum Prefs {
         showFullAddress: false,
         reduceMotion: false,
         launchSound: true,
+        theme: "classic",
+        funEffects: true,
+        achievements: false,
         startBackground: StartBackground.frosted.rawValue,
         startGreeting: true,
         startBookmarks: true,

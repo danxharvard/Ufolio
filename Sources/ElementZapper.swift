@@ -31,6 +31,7 @@ final class ElementZapper: NSObject, ObservableObject, WKScriptMessageHandler {
 
     /// Starts picking on the tab's page (Esc or Done to finish).
     func start(in tab: BrowserTab) {
+        FeatureUsage.mark(.zapper)
         tab.webView.callAsyncJavaScript(Self.pickerScript, arguments: [:], in: nil, in: .defaultClient) { _ in }
     }
 

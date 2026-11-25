@@ -90,6 +90,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     func setReaderAvailable(_ available: Bool) { if readerAvailable != available { readerAvailable = available } }
     func showReader(_ article: ReaderArticle) { reader = article }
     func toggleReader() {
+        FeatureUsage.mark(.reader)
         if reader != nil { reader = nil } else if url != nil { ReaderMode.open(self) }
     }
 
@@ -583,6 +584,15 @@ extension BrowserTab: WKNavigationDelegate {
             return
         }
         let space = challenge.protectionSpace
+        // One sign-in box per site and realm: a page asking several times at once used to stack
+        // up identical boxes. Later requests wait and get the same answer.
+        let key = "\(space.host):\(space.port)|\(space.realm ?? "")"
+        if Self.waitingSignIns[key] != nil { Self.waitingSignIns[key]?.append(completionHandler); return }
+        Self.waitingSignIns[key] = []
+        let finish: (URLSession.AuthChallengeDisposition, URLCredential?) -> Void = { disposition, credential in
+            completionHandler(disposition, credential)
+            for waiting in Self.waitingSignIns.removeValue(forKey: key) ?? [] { waiting(disposition, credential) }
+        }
         let alert = NSAlert()
         alert.messageText = "Sign in to \(space.host)"
         var info = space.realm.map { "The site says: “\(String($0.prefix(120)))”" } ?? "This site needs a username and password."
@@ -602,10 +612,11 @@ extension BrowserTab: WKNavigationDelegate {
         alert.addButton(withTitle: "Cancel")
         alert.window.initialFirstResponder = user.stringValue.isEmpty ? user : password
         alert.beginSheetModal(for: window) { response in
-            guard response == .alertFirstButtonReturn else { completionHandler(.cancelAuthenticationChallenge, nil); return }
-            completionHandler(.useCredential, URLCredential(user: user.stringValue, password: password.stringValue, persistence: .forSession))
+            guard response == .alertFirstButtonReturn else { finish(.cancelAuthenticationChallenge, nil); return }
+            finish(.useCredential, URLCredential(user: user.stringValue, password: password.stringValue, persistence: .forSession))
         }
     }
+    private static var waitingSignIns: [String: [(URLSession.AuthChallengeDisposition, URLCredential?) -> Void]] = [:]
 
     /// The page's web process crashed or was stopped by macOS.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
@@ -650,6 +661,9 @@ extension BrowserTab: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        // The guessed address worked: forget the guess (a later hiccup on that site mustn't turn
+        // into a search for something typed long ago).
+        if let guess = URLResolver.lastGuess, webView.url?.host == guess.url.host { URLResolver.lastGuess = nil }
         if let url = webView.url {
             PageTranslator.shared.detect(in: self)
             ReaderMode.detect(in: self)
@@ -812,6 +826,37 @@ extension BrowserTab: WKUIDelegate {
 final class HushWebView: WKWebView {
     var onHideElements: (() -> Void)?
     var onFocus: (() -> Void)?
+
+    // MARK: Nothing gets through a dialog, guide or other card on top of the page
+    //
+    // A click, scroll, hover or cursor change under one of Ufolio's cards (dialogs, the setup
+    // guide, the palette, Reader, warnings) used to be able to reach the page underneath: macOS
+    // sends pointer movement straight to the page, whatever's drawn over it. The page now
+    // checks for a card over the pointer and ignores the event.
+
+    private func covered(_ point: NSPoint) -> Bool {
+        guard let window else { return false }
+        return ClickBlocker.BlockingView.covers(point, in: window)
+    }
+    private func covered(_ event: NSEvent) -> Bool { event.window === window && covered(event.locationInWindow) }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        if let superview, covered(superview.convert(point, to: nil)) { return nil }
+        return super.hitTest(point)
+    }
+    override func mouseDown(with event: NSEvent) { if !covered(event) { super.mouseDown(with: event) } }
+    override func mouseUp(with event: NSEvent) { if !covered(event) { super.mouseUp(with: event) } }
+    override func mouseDragged(with event: NSEvent) { if !covered(event) { super.mouseDragged(with: event) } }
+    override func rightMouseDown(with event: NSEvent) { if !covered(event) { super.rightMouseDown(with: event) } }
+    override func rightMouseUp(with event: NSEvent) { if !covered(event) { super.rightMouseUp(with: event) } }
+    override func otherMouseDown(with event: NSEvent) { if !covered(event) { super.otherMouseDown(with: event) } }
+    override func otherMouseUp(with event: NSEvent) { if !covered(event) { super.otherMouseUp(with: event) } }
+    override func scrollWheel(with event: NSEvent) { if !covered(event) { super.scrollWheel(with: event) } }
+    override func mouseMoved(with event: NSEvent) { if !covered(event) { super.mouseMoved(with: event) } }
+    override func mouseEntered(with event: NSEvent) { if !covered(event) { super.mouseEntered(with: event) } }
+    override func cursorUpdate(with event: NSEvent) {
+        if covered(event) { NSCursor.arrow.set() } else { super.cursorUpdate(with: event) }
+    }
 
     override func becomeFirstResponder() -> Bool {
         let accepted = super.becomeFirstResponder()

@@ -12,6 +12,7 @@ struct LibrarySidebar: View {
     @ObservedObject var model: BrowserModel
     var active = true
     @AppStorage("sidebar.section") private var sectionName = Section.bookmarks.rawValue
+    @AppStorage(Prefs.theme) private var theme = "classic"
     @State private var query = ""
 
     private var section: Section { Section(rawValue: sectionName) ?? .bookmarks }
@@ -31,7 +32,12 @@ struct LibrarySidebar: View {
             }
         }
         .frame(width: 275)
-        .background { if active { VisualEffect(material: .sidebar) } }
+        .background {
+            if active {
+                VisualEffect(material: .sidebar)
+                if AlienTheme.isActive(theme) { AlienTheme.glass }   // the Area 51 theme's green glass
+            }
+        }
     }
 
     @Namespace private var sectionSlide

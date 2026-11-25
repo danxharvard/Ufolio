@@ -86,6 +86,7 @@ enum SettingsOpener {
 struct SettingsView: View {
     @AppStorage("settingsTab") private var selection = SettingsTab.general.rawValue
     @AppStorage(Prefs.accent) private var accent = AccentChoice.system.rawValue
+    @AppStorage(Prefs.theme) private var theme = "classic"
     @State private var query = ""
 
     private var current: Binding<SettingsTab?> {
@@ -158,7 +159,7 @@ struct SettingsView: View {
             window?.titleVisibility = .hidden   // the centred title above replaces the left-hand one
         })
         .frame(width: 900, height: 680)
-        .accentColor(AccentChoice(rawValue: accent)?.color)
+        .accentColor(AlienTheme.isActive(theme) ? AlienTheme.accent : AccentChoice(rawValue: accent)?.color)
         .onChange(of: query) { _, q in
             // Searching jumps straight to the first matching section.
             if !q.isEmpty, let first = visibleTabs.first { selection = first.rawValue }
@@ -688,6 +689,9 @@ private struct AppearanceSettings: View {
     @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
     @AppStorage(Prefs.defaultZoom) private var zoom = 1.0
     @AppStorage(Prefs.launchSound) private var launchSound = true
+    @AppStorage(Prefs.theme) private var alienTheme = "classic"
+    @AppStorage(Prefs.funEffects) private var funEffects = true
+    @AppStorage(Prefs.achievements) private var achievements = false
 
     private let zoomLevels: [Double] = [0.75, 0.85, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75]
 
@@ -711,6 +715,10 @@ private struct AppearanceSettings: View {
                         }
                     }
                 }
+                .disabled(alienTheme == "area51")
+                DescribedToggle(title: "Area 51 alien theme",
+                                detail: "Radioactive-green accents, green-tinted glass, a green aurora on the start page and a green saucer, in light and dark mode.",
+                                isOn: Binding(get: { alienTheme == "area51" }, set: { alienTheme = $0 ? "area51" : "classic" }))
             } header: { SectionTitle("Theme") }
 
             Section {
@@ -772,6 +780,12 @@ private struct AppearanceSettings: View {
                         .controlSize(.small)
                         .disabled(!launchSound)
                 }
+                DescribedToggle(title: "Effects",
+                                detail: "The little touches: the saucer on the start page, shooting stars, the Stealth shimmer and the download beam.",
+                                isOn: $funEffects)
+                DescribedToggle(title: "Achievements",
+                                detail: "Badges on the weekly report card, such as First Contact at 1,000 ads blocked. Never any pop-ups.",
+                                isOn: $achievements)
                 DescribedToggle(title: "Reduce motion",
                                 detail: "Turns off Ufolio’s animations, for an instant, snappier feel.",
                                 isOn: $reduceMotion)

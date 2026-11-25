@@ -146,6 +146,8 @@ struct SuggestionList: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(.regularMaterial)
         )
+        // The page underneath mustn't get clicks, scrolling or hover through the list.
+        .background(ClickBlocker())
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.1))

@@ -83,6 +83,11 @@ final class PrivacyReport: ObservableObject {
         var sitesWithTrackers: Int
         /// Trackers, most widespread first: (tracker, number of sites)
         var trackers: [(tracker: String, sites: Int)]
+        /// Blocked today and over the last seven days (the abducted counter and weekly card).
+        var today = 0
+        var week = 0
+        /// Today's trackers, most widespread first: (tracker, number of sites).
+        var todayTrackers: [(tracker: String, sites: Int)] = []
 
         var percentWithTrackers: Int {
             sitesVisited == 0 ? 0 : Int((Double(sitesWithTrackers) / Double(sitesVisited) * 100).rounded())
@@ -190,8 +195,15 @@ final class PrivacyReport: ObservableObject {
         }
         let ranked = trackerSites.map { (tracker: $0.key, sites: $0.value.count) }
             .sorted { $0.sites != $1.sites ? $0.sites > $1.sites : $0.tracker < $1.tracker }
-        summary = Summary(blocked: blocked, sitesVisited: visited.count,
-                          sitesWithTrackers: withTrackers.count, trackers: ranked)
+        var result = Summary(blocked: blocked, sitesVisited: visited.count,
+                             sitesWithTrackers: withTrackers.count, trackers: ranked)
+        let todayKey = today
+        let weekStart = Self.dayFormat.string(from: Date().addingTimeInterval(-6 * 86_400))
+        result.today = days[todayKey]?.blocked ?? 0
+        result.week = days.filter { $0.key >= weekStart }.reduce(0) { $0 + $1.value.blocked }
+        result.todayTrackers = (days[todayKey]?.trackers ?? [:]).map { (tracker: $0.key, sites: max(1, $0.value.count)) }
+            .sorted { $0.sites != $1.sites ? $0.sites > $1.sites : $0.tracker < $1.tracker }
+        summary = result
     }
 
     func save(waiting: Bool = false) {

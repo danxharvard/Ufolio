@@ -3,7 +3,7 @@ import ImageIO
 
 /// What sits behind the start page.
 enum StartBackground: String, CaseIterable, Identifiable {
-    case frosted, desktop, daily, wallpaper, photo
+    case frosted, desktop, daily, wallpaper, photo, sky
     var id: String { rawValue }
 
     var label: String {
@@ -13,6 +13,7 @@ enum StartBackground: String, CaseIterable, Identifiable {
         case .daily: return "Photo of the Day"
         case .wallpaper: return "macOS Wallpaper"
         case .photo: return "Your Photo"
+        case .sky: return "Live Sky"
         }
     }
 
@@ -59,7 +60,7 @@ final class BackgroundStore: ObservableObject {
         let choice = StartBackground.current
         let key: String
         switch choice {
-        case .frosted: image = nil; credit = nil; loadedKey = nil; return
+        case .frosted, .sky: image = nil; credit = nil; loadedKey = nil; return   // the sky is drawn, not loaded
         case .desktop: key = "desktop:" + (NSScreen.main.flatMap { NSWorkspace.shared.desktopImageURL(for: $0)?.path } ?? "")
         case .wallpaper: key = "wallpaper:" + Prefs.string(Prefs.startWallpaper)
         case .photo: key = "photo:" + Prefs.string(Prefs.startPhoto)
@@ -77,7 +78,7 @@ final class BackgroundStore: ObservableObject {
             case .wallpaper: url = Prefs.string(Prefs.startWallpaper).isEmpty ? Self.systemWallpapers.first : URL(fileURLWithPath: Prefs.string(Prefs.startWallpaper))
             case .photo: url = Prefs.string(Prefs.startPhoto).isEmpty ? nil : URL(fileURLWithPath: Prefs.string(Prefs.startPhoto))
             case .daily: (url, credit) = await DailyPhoto.today()
-            case .frosted: break
+            case .frosted, .sky: break
             }
             let decoded = await Task.detached(priority: .utility) { url.flatMap { Self.downsampled($0, maxPixels: maxPixels) } }.value
             guard !Task.isCancelled else { return }
@@ -195,10 +196,19 @@ struct StartBackdrop: View {
     @AppStorage(Prefs.startTranslucent) private var translucent = true
     @Environment(\.colorScheme) private var scheme
 
+    @AppStorage(Prefs.theme) private var theme = "classic"
+
     var body: some View {
         ZStack {
+            if choice == StartBackground.sky.rawValue {
+                LiveSky()
+            } else {
             if translucent || store.image == nil {
                 VisualEffect(material: .underWindowBackground, blending: .behindWindow)
+            }
+            // The Area 51 theme: a faint green aurora over the frosted glass.
+            if store.image == nil, AlienTheme.isActive(theme) {
+                AlienTheme.aurora
             }
             if !translucent && store.image == nil {
                 Color(nsColor: .windowBackgroundColor)
@@ -217,6 +227,7 @@ struct StartBackdrop: View {
                     .transition(.opacity)
                 // A soft shade, deeper at the bottom where the cards are.
                 LinearGradient(colors: [.black.opacity(0.18), .black.opacity(0.42)], startPoint: .top, endPoint: .bottom)
+            }
             }
         }
         .clipped()
@@ -241,6 +252,7 @@ struct BackgroundPicker: View {
                 kindTile(.frosted, symbol: "square.on.square.dashed", colors: [Color(white: 0.75), Color(white: 0.55)])
                 kindTile(.desktop, symbol: "menubar.dock.rectangle", colors: [Color(red: 0.3, green: 0.6, blue: 1), Color(red: 0.2, green: 0.4, blue: 0.9)])
                 kindTile(.daily, symbol: "sun.horizon.fill", colors: [Color(red: 1, green: 0.62, blue: 0.3), Color(red: 0.95, green: 0.38, blue: 0.3)])
+                kindTile(.sky, symbol: "moon.stars.fill", colors: [Color(red: 0.25, green: 0.3, blue: 0.75), Color(red: 0.08, green: 0.1, blue: 0.3)])
                 Button(action: choosePhoto) {
                     tileLabel(title: StartBackground.photo.label, symbol: "photo.on.rectangle.angled",
                               colors: [Color(red: 0.6, green: 0.45, blue: 1), Color(red: 0.42, green: 0.3, blue: 0.9)],
@@ -250,6 +262,9 @@ struct BackgroundPicker: View {
             }
             if choice == StartBackground.daily.rawValue {
                 Footnote("A new photo every day from Bing’s public photo of the day, fetched without cookies.")
+            }
+            if choice == StartBackground.sky.rawValue {
+                Footnote("The sky outside, more or less: dawn, day, sunset and a starry night, following your Mac’s clock. Watch for the odd shooting star.")
             }
             if let message {
                 Label(message, systemImage: "exclamationmark.circle").font(.system(size: 11.5)).foregroundStyle(.orange)

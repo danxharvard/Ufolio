@@ -16,6 +16,7 @@ struct StartPage: View {
     @AppStorage(Prefs.startFrequent) private var showSuggestions = true
     @AppStorage(Prefs.startPrivacyReport) private var showPrivacy = true
     @AppStorage(Prefs.startShowAdult) private var showAdult = false
+    @AppStorage(Prefs.startBackground) private var backgroundChoice = StartBackground.frosted.rawValue
     @State private var personalising = false
     @State private var customisingNews = false
     /// The measured height of each section (and the header), so the page can tell which
@@ -48,7 +49,7 @@ struct StartPage: View {
             }
             .clipped()
             // Over a picture, light text reads best.
-            .environment(\.colorScheme, background.image != nil ? .dark : scheme)
+            .environment(\.colorScheme, background.image != nil || backgroundChoice == StartBackground.sky.rawValue ? .dark : scheme)
         }
         .overlay(alignment: .bottomLeading) {
             if let credit = background.credit, background.image != nil {
@@ -145,6 +146,17 @@ struct StartPage: View {
             AnimatedHushLogo(size: 54)
                 .padding(.bottom, 4)
             AlienTitle(size: 50)
+            if UFODay.isToday {
+                Label("Happy World UFO Day! Keep watching the skies.", systemImage: "sparkles")
+                    .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color.accentColor)
+            } else if let years = UfolioBirthday.yearsToday {
+                HStack(spacing: 8) {
+                    MiniSaucer(size: 24, partyHat: true)
+                    Text("Happy birthday, Ufolio! \(years) year\(years == 1 ? "" : "s") of flying with you.")
+                        .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                }
+            }
             if showGreeting || weather.temperature != nil {
                 HStack(spacing: 8) {
                     if showGreeting { Text(greeting) }
@@ -158,6 +170,8 @@ struct StartPage: View {
                 .font(.system(size: 14, design: .rounded))
                 .foregroundStyle(.secondary)
             }
+            AbductionCounter().padding(.top, 4)
+            SignalFromSpace()
         }
         .frame(maxWidth: .infinity)
     }
@@ -442,6 +456,7 @@ private struct PrivacyReportSection: View {
     var body: some View {
         let s = report.summary
         StartSection(title: "Privacy Report") {
+            VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top, spacing: 24) {
                 VStack(alignment: .leading, spacing: 18) {
                     HushLogoTile(size: 52)
@@ -472,6 +487,9 @@ private struct PrivacyReportSection: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
+            }
+            Divider().opacity(0.6)
+            WeeklyReportCard(summary: s)
             }
             .padding(24)
             .background(

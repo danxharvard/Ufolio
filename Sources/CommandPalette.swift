@@ -401,6 +401,7 @@ private struct CommandPalette: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.primary.opacity(0.1)))
         .shadow(color: .black.opacity(0.25), radius: 30, y: 12)
         .onAppear {
+            FeatureUsage.mark(.palette)
             palette.attach(model, openWindow: openWindow)
             focused = true
         }
