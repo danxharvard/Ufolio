@@ -412,7 +412,7 @@ struct TorrentContents {
                                 disguisedFile: String?, hasShortcut: Bool, hasArchive: Bool,
                                 passwordNote: Bool) -> [String] {
         var warnings: [String] = []
-        let videoName = t.name.range(of: #"(?i)\\b(2160p|1080p|720p|480p|x264|x265|hevc|h\\.?264|blu-?ray|web-?dl|webrip|hdrip|dvdrip|brrip|hdtv|s\\d{2}e\\d{2}|movie|film)\\b"#,
+        let videoName = t.name.range(of: #"(?i)\b(2160p|1080p|720p|480p|x264|x265|hevc|h\.?264|blu-?ray|web-?dl|webrip|hdrip|dvdrip|brrip|hdtv|s\d{2}e\d{2}|movie|film)\b"#,
                                      options: .regularExpression) != nil
         let looksLikeMedia = videoName || (t.totalSize > 0 && mediaBytes > t.totalSize / 2)
 
