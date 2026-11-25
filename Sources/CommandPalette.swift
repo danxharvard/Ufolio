@@ -111,9 +111,14 @@ final class PaletteModel: ObservableObject {
         var scored: [(Int, PaletteItem)] = []
 
         // A typed address goes straight there.
-        if !q.isEmpty, URLResolver.looksLikeAddress(q), let url = URLResolver.resolve(q) {
+        // (Worked out without remembering it as a guess: typing here used to leave a stale guess
+        // that could later turn a failed page on that site into a search.)
+        if !q.isEmpty, URLResolver.looksLikeAddress(q), let url = URLResolver.addressURL(q) {
             scored.append((1000, PaletteItem(id: "go", kind: .website, title: q, subtitle: "Go to website",
-                                             symbol: "globe", siteURL: url) { [weak browser] in browser?.open(url) }))
+                                             symbol: "globe", siteURL: url) { [weak browser] in
+                URLResolver.lastGuess = (url, q)   // only once you've chosen it
+                browser?.open(url)
+            }))
         }
 
         // Open tabs, in every Space.
@@ -196,7 +201,7 @@ final class PaletteModel: ObservableObject {
             }
         }
 
-        if !q.isEmpty, let url = URLResolver.resolve(q), !URLResolver.looksLikeAddress(q) {
+        if !q.isEmpty, !URLResolver.looksLikeAddress(q), let url = URLResolver.searchURL(for: q) {
             scored.append((-1, PaletteItem(id: "search", kind: .search, title: q, subtitle: "Search with \(SearchEngine.current.name)",
                                            symbol: "magnifyingglass") { [weak browser] in browser?.open(url) }))
         }

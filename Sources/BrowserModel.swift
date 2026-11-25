@@ -20,7 +20,9 @@ final class BrowserModel: NSObject, ObservableObject {
             // A video playing in the tab you leave pops out into Picture in Picture (Settings ›
             // Appearance, on by default, with sites you've turned it off for left alone).
             if let old, old !== selectedTab, !old.isAsleep, !stillVisible, AutoPictureInPicture.wanted(for: old) {
-                AutoPictureInPicture.popOut(old) { poppedOut in
+                AutoPictureInPicture.popOut(old) { [weak self, weak old] poppedOut in
+                    // Back on that tab already: leave it playing.
+                    guard let self, let old, self.selectedTab !== old else { return }
                     if !poppedOut, PerformanceCenter.shared.pausesBackgroundMedia || !old.isPlayingAudio {
                         old.webView.setAllMediaPlaybackSuspended(true)
                     }
@@ -393,6 +395,13 @@ final class BrowserModel: NSObject, ObservableObject {
 
     deinit {
         LiveCount.change(\.windows, by: -1)
+        // The last Stealth window gone: its downloads leave the list too (the files stay in your
+        // Downloads folder, as the Stealth page says; they used to stay listed until Ufolio quit).
+        if isPrivate {
+            DispatchQueue.main.async {
+                if !BrowserModel.all.allObjects.contains(where: { $0.isPrivate }) { Downloads.shared.forgetPrivateItems() }
+            }
+        }
         // A closed window's timers stop with it.
         sleepTimer?.invalidate()
         audioTimer?.invalidate()

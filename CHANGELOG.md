@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.51.0-beta.7: twenty fixes (beta)
+
+Everything in 0.50.3 (seventeen fixes to downloads, bookmarks, Reader, translation, Find, the
+Command Palette, Orbits, Settings, the torrent app list, galaxy rank and offline back-off), plus:
+- Send to iPhone: a very long address (too long for a QR code) now says so, instead of spinning.
+- Picture in Picture on tab switch: switching straight back no longer pauses the tab you've
+  returned to.
+- Forget This Site also removes the cookie auto-cleaner's note of when you last used the site.
+
 ## 0.51.0-beta.6: Send to iPhone, steadier, smoother (beta)
 
 **Send to iPhone** (⋯ menu, or File › Send to iPhone…)

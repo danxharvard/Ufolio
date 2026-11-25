@@ -28,7 +28,9 @@ final class BookmarkStore: ObservableObject {
     static func forget(profile: UUID) {
         stores[profile]?.saveWork?.cancel()
         stores[profile] = nil
-        try? FileManager.default.removeItem(at: AppPaths.folder(forProfile: profile).appendingPathComponent("bookmarks.json"))
+        let file = AppPaths.folder(forProfile: profile).appendingPathComponent("bookmarks.json")
+        try? FileManager.default.removeItem(at: file)
+        UserDefaults.standard.removeObject(forKey: "bookmarkEmptyFolders|" + file.path)
     }
 
     @Published private(set) var items: [Bookmark] = [] {
@@ -56,6 +58,7 @@ final class BookmarkStore: ObservableObject {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         fileURL = folder.appendingPathComponent("bookmarks.json")
         load()
+        emptyFolders = UserDefaults.standard.stringArray(forKey: "bookmarkEmptyFolders|" + fileURL.path) ?? []
     }
 
     func contains(_ url: URL) -> Bool { keys.contains(Self.key(url)) }
@@ -104,8 +107,12 @@ final class BookmarkStore: ObservableObject {
         for f in items.compactMap(\.folder) where seen.insert(f).inserted { result.append(f) }
         return result + emptyFolders.filter { !seen.contains($0) }
     }
-    /// Folders made in the sidebar that don't have a bookmark yet.
-    @Published private(set) var emptyFolders: [String] = []
+    /// Folders made in the sidebar that don't have a bookmark yet. Kept between launches (a new
+    /// folder used to vanish when Ufolio quit, until something was put in it).
+    @Published private(set) var emptyFolders: [String] = [] {
+        didSet { UserDefaults.standard.set(emptyFolders, forKey: emptyFoldersKey) }
+    }
+    private var emptyFoldersKey: String { "bookmarkEmptyFolders|" + fileURL.path }
 
     func items(in folder: String?) -> [Bookmark] { byFolder[folder] ?? [] }
 
@@ -135,7 +142,9 @@ final class BookmarkStore: ObservableObject {
         let clean = String(new.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60))
         guard !clean.isEmpty, clean != old else { return }
         for i in items.indices where items[i].folder == old { items[i].folder = clean }
-        emptyFolders = emptyFolders.map { $0 == old ? clean : $0 }
+        // Renamed onto an existing folder's name: the two merge (the name used to be listed twice).
+        var seen = Set(items.compactMap(\.folder))
+        emptyFolders = emptyFolders.map { $0 == old ? clean : $0 }.filter { seen.insert($0).inserted }
         save()
     }
 
@@ -279,18 +288,25 @@ final class BookmarkStore: ObservableObject {
         save()
     }
 
+    /// Moves a bookmark up or down among the others in its own folder. (It used to swap with its
+    /// neighbour in the whole list, often a bookmark in another folder, so nothing seemed to move.)
     func move(_ bookmark: Bookmark, by offset: Int) {
         guard let i = items.firstIndex(where: { $0.id == bookmark.id }) else { return }
-        let j = i + offset
-        guard items.indices.contains(j) else { return }
-        items.swapAt(i, j)
+        let sameFolder = items.indices.filter { items[$0].folder == bookmark.folder }
+        guard let position = sameFolder.firstIndex(of: i), sameFolder.indices.contains(position + offset) else { return }
+        items.swapAt(i, sameFolder[position + offset])
         save()
     }
 
+    /// The same page, however it was written. Only the scheme and host ignore case: /wiki/Apple
+    /// and /wiki/APPLE are different pages (they used to count as one, so only one could be saved).
     private static func key(_ u: URL) -> String {
-        var s = u.absoluteString.lowercased()
+        guard var c = URLComponents(url: u, resolvingAgainstBaseURL: false) else { return u.absoluteString }
+        c.scheme = c.scheme?.lowercased()
+        c.host = c.host?.lowercased().strippingWWW
+        var s = c.string ?? u.absoluteString
         if s.hasSuffix("/") { s.removeLast() }
-        return s.replacingOccurrences(of: "://www.", with: "://")
+        return s
     }
 
     private static func same(_ a: URL, _ b: URL) -> Bool { key(a) == key(b) }

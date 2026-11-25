@@ -88,13 +88,17 @@ enum ReaderMode {
     """
 
     static func detect(in tab: BrowserTab) {
+        let page = tab.url
         tab.webView.callAsyncJavaScript(detectScript, arguments: [:], in: nil, in: .defaultClient) { result in
-            if case .success(let value) = result { tab.setReaderAvailable((value as? Bool) ?? false) }
+            if case .success(let value) = result, tab.url == page { tab.setReaderAvailable((value as? Bool) ?? false) }
         }
     }
 
     static func open(_ tab: BrowserTab) {
+        let page = tab.url
         tab.webView.callAsyncJavaScript(extractScript, arguments: [:], in: nil, in: .defaultClient) { result in
+            // Moved to another page meanwhile: don't show the old page's article over the new one.
+            guard tab.url == page else { return }
             guard case .success(let value) = result, let dict = value as? [String: Any],
                   let raw = dict["blocks"] as? [[String: Any]], !raw.isEmpty else { NSSound.beep(); return }
             var title = (dict["title"] as? String) ?? tab.displayTitle

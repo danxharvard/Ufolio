@@ -33,6 +33,7 @@ enum Beam {
 private struct BeamCard: View {
     let url: URL
     @State private var qr: NSImage?
+    @State private var tooLong = false
 
     var body: some View {
         VStack(spacing: 12) {
@@ -40,6 +41,10 @@ private struct BeamCard: View {
                 RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white)
                 if let qr {
                     Image(nsImage: qr).interpolation(.none).resizable().frame(width: 168, height: 168)
+                } else if tooLong {
+                    // A very long address doesn't fit in a QR code (it used to spin for ever).
+                    Text("This address is too long for a QR code. Use AirDrop or Share instead.")
+                        .font(.system(size: 12)).foregroundStyle(.black.opacity(0.6)).multilineTextAlignment(.center).padding()
                 } else {
                     ProgressView().controlSize(.small)
                 }
@@ -58,7 +63,10 @@ private struct BeamCard: View {
             .controlSize(.large)
         }
         .padding(.top, 8)
-        .task { qr = Beam.qrCode(for: url, size: 168) }
+        .task {
+            qr = Beam.qrCode(for: url, size: 168)
+            tooLong = qr == nil
+        }
     }
 }
 

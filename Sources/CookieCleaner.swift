@@ -54,6 +54,13 @@ enum CookieCleaner {
         UserDefaults.standard.set(Date(), forKey: runKey)   // the first clean is a day away
     }
 
+    /// Forget This Site: its "last used" date goes too (that's a record of your visit).
+    static func forget(site: String) {
+        let site = Domains.site(site)
+        var all = seen
+        if all.removeValue(forKey: site) != nil { seen = all }
+    }
+
     static func switchedOff() {
         UserDefaults.standard.removeObject(forKey: seenKey)   // nothing kept about your browsing
     }

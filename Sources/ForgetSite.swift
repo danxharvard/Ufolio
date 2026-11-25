@@ -33,6 +33,7 @@ enum SiteForgetter {
             SitePermissions.shared.forget(site: site)
             BookmarkOffer.shared.forget(site: site)
             PrivacyReport.shared.forget(site: site)   // it lists the sites you visited too
+            CookieCleaner.forget(site: site)          // and the cleaner's note of when you last used it
             Task { await FaviconCache.shared.forget(site: site) }
         }
         // Close the site's tabs (a new tab replaces them if nothing else is left).

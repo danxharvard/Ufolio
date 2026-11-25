@@ -49,6 +49,7 @@ final class PageTranslator: ObservableObject {
     /// Works out the page's language after it loads, and offers translation if it isn't yours.
     func detect(in tab: BrowserTab) {
         guard tab.translation == .none || tab.translation == .available else { return }
+        let page = tab.url
         Task { @MainActor in
             let target = Self.target.languageCode?.identifier ?? "en"
             guard let result = try? await tab.webView.callAsyncJavaScript(Self.sampleScript, arguments: ["target": target],
@@ -65,9 +66,12 @@ final class PageTranslator: ObservableObject {
                 }
             }
             if language == nil, !declared.isEmpty { language = Locale.Language(identifier: declared) }
+            guard tab.url == page else { return }
             guard let language, let code = language.languageCode,
                   code != Self.target.languageCode else { tab.setTranslation(.none, language: nil); return }
             let status = await LanguageAvailability().status(from: language, to: Self.target)
+            // A different page by now: its own check decides (this answer was for the old one).
+            guard tab.url == page else { return }
             guard status != .unsupported else { tab.setTranslation(.none, language: nil); return }
             tab.setTranslation(.available, language: language)
         }

@@ -355,6 +355,13 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
 
     // MARK: List
 
+    /// Stealth windows' finished downloads, out of the list (not off the disk).
+    func forgetPrivateItems() {
+        let before = items.count
+        items.removeAll { $0.isPrivate && $0.state != .downloading && $0.state != .paused }
+        if items.count != before { save() }
+    }
+
     func cancel(_ item: DownloadItem) {
         item.download?.cancel { _ in }
     }
@@ -374,8 +381,10 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
         save()
     }
 
+    /// Clears finished, failed and stopped downloads; ones still going or paused stay (Clear used
+    /// to throw away a paused download, and with it any way to resume it).
     func clearFinished() {
-        items.removeAll { $0.state != .downloading }
+        items.removeAll { $0.state != .downloading && $0.state != .paused }
         save()
     }
 
@@ -383,7 +392,10 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
     func prune() {
         guard DownloadRetention.current == .oneDay else { return }
         let cutoff = Date().addingTimeInterval(-86_400)
-        items.removeAll { $0.state != .downloading && $0.started < cutoff }
+        let before = items.count
+        // Paused downloads stay: removing them threw away what's needed to resume them.
+        items.removeAll { $0.state != .downloading && $0.state != .paused && $0.started < cutoff }
+        if items.count != before { save() }
     }
 
     private func save() {
@@ -446,7 +458,7 @@ private struct DownloadsList: View {
                 Button("Clear") { downloads.clearFinished() }
                     .buttonStyle(.link)
                     .font(.system(size: 12))
-                    .disabled(downloads.items.allSatisfy { $0.state == .downloading })
+                    .disabled(downloads.items.allSatisfy { $0.state == .downloading || $0.state == .paused })
             }
             .padding(.horizontal, 14)
             .padding(.top, 12)

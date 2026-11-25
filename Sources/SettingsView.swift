@@ -1063,6 +1063,14 @@ private struct TorrentToolsSection: View {
     @AppStorage(Prefs.torrentFakeWarnings) private var fakeWarnings = true
     @State private var apps: [URL] = []
 
+    private var uniqueApps: [URL] {
+        var seen = Set<String>()
+        return apps.filter { url in
+            guard let id = Bundle(url: url)?.bundleIdentifier, !id.isEmpty else { return false }
+            return seen.insert(id).inserted
+        }
+    }
+
     var body: some View {
         Section {
             DescribedToggle(title: "Torrent tools",
@@ -1071,7 +1079,9 @@ private struct TorrentToolsSection: View {
             if on {
                 Picker("Torrent app", selection: $app) {
                     Text("Mac default").tag("")
-                    ForEach(apps, id: \.self) { url in
+                    // Apps without an ID (they'd share the "Mac default" choice) are left out, and each
+                    // app is listed once even if macOS knows several copies of it.
+                    ForEach(uniqueApps, id: \.self) { url in
                         Text(TorrentTools.appName(url)).tag(Bundle(url: url)?.bundleIdentifier ?? "")
                     }
                 }

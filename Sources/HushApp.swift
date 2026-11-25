@@ -402,10 +402,13 @@ enum SettingsWindow {
     private static func centre(_ w: NSWindow) {
         w.layoutIfNeeded()
         let size = w.frame.size
-        let anchor = (BrowserModel.frontmostNormal?.window ?? NSApp.mainWindow)?.frame
+        // The window you were using (a Stealth one too), so it opens where you are.
+        let front = NSApp.keyWindow.flatMap { key in BrowserModel.all.allObjects.first { $0.window === key }?.window }
+            ?? BrowserModel.frontmostNormal?.window ?? NSApp.mainWindow
+        let anchor = front?.frame
             ?? (NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900))
         var origin = NSPoint(x: anchor.midX - size.width / 2, y: anchor.midY - size.height / 2)
-        if let screen = (BrowserModel.frontmostNormal?.window?.screen ?? NSScreen.main)?.visibleFrame {
+        if let screen = (front?.screen ?? NSScreen.main)?.visibleFrame {
             origin.x = min(max(origin.x, screen.minX), screen.maxX - size.width)
             origin.y = min(max(origin.y, screen.minY), screen.maxY - size.height)
         }
