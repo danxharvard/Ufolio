@@ -568,7 +568,8 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
         var users = Array.prototype.filter.call(form.querySelectorAll('input'), function (i) {
           return i !== pw && isTextInput(i) && i.value && (i.compareDocumentPosition(pw) & Node.DOCUMENT_POSITION_FOLLOWING);
         });
-        var user = users.length ? users[users.length - 1].value : '';
+        var hinted = form.querySelector('input[autocomplete~="username"], input[name="identifier"], input[name="username"], input[type="email"]');
+        var user = users.length ? users[users.length - 1].value : (hinted && hinted !== pw ? hinted.value || '' : '');
         var key = user + '\u0000' + pw.value;
         if (key === lastSent) return;
         lastSent = key;
@@ -582,6 +583,43 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
       document.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && e.target && e.target.type === 'password') capture(e.target.form || document);
       }, true);
+
+      // Sign-ins that never send a form (web apps that check the password in the background,
+      // and the password step of two-step sign-ins): remember what's typed in a password box,
+      // and offer once the page moves on, the box goes away, or the page closes.
+      var typed = { user: '', pw: '', href: location.href };
+      function userNear(pw) {
+        var scope = pw.form || document;
+        // Two-step sign-ins keep the username in a hidden field for password managers.
+        var hinted = scope.querySelector('input[autocomplete~="username"], input[name="identifier"], input[name="username"], input[type="email"]');
+        if (hinted && hinted !== pw && hinted.value) return hinted.value;
+        var users = Array.prototype.filter.call(scope.querySelectorAll('input'), function (i) {
+          return i !== pw && isTextInput(i) && i.value && (i.compareDocumentPosition(pw) & Node.DOCUMENT_POSITION_FOLLOWING);
+        });
+        return users.length ? users[users.length - 1].value : '';
+      }
+      function remember(e) {
+        var t = e.target;
+        if (!(t instanceof HTMLInputElement) || t.type !== 'password' || !t.value) return;
+        typed.pw = t.value; typed.user = userNear(t); typed.href = location.href;
+      }
+      document.addEventListener('input', remember, true);
+      document.addEventListener('change', remember, true);
+      function flush() {
+        if (!typed.pw) return;
+        var key = typed.user + '\u0000' + typed.pw;
+        if (key !== lastSent) {
+          lastSent = key;
+          post({ type: 'submit', username: typed.user.slice(0, 256), password: typed.pw.slice(0, 512) });
+        }
+        typed.pw = '';
+      }
+      window.addEventListener('pagehide', flush, true);
+      setInterval(function () {
+        if (!typed.pw) return;
+        var boxes = Array.prototype.filter.call(document.querySelectorAll('input[type=password]'), visible);
+        if (location.href !== typed.href || !boxes.length) flush();
+      }, 700);
 
       // Filling, in a way that frameworks like React notice.
       var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;

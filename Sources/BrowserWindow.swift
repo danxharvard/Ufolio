@@ -636,6 +636,9 @@ struct NavButtons: View {
 /// shouts louder than another. Colour only ever means "on" (Force Field, Stealth).
 enum ToolbarIcon {
     static let font = Font.system(size: 15, weight: .regular)
+    /// The shield draws narrower than round icons at the same size: one point up makes it
+    /// measure the same as the alien and ⋯ (it looked noticeably smaller).
+    static let shieldFont = Font.system(size: 16, weight: .regular)
     /// The square that drawn icons (not SF Symbols) fill, to match a 15 pt symbol.
     static let glyph: CGFloat = 16
     static let color = Color.primary.opacity(0.72)
@@ -696,7 +699,7 @@ struct ShieldsButton: View {
             // A shield, which everyone reads as "protection": ticked and in colour while Force
             // Field is on, crossed out and grey when it's off for this site.
             Image(systemName: shieldsUp ? "checkmark.shield" : "shield.slash")
-                .font(ToolbarIcon.font)
+                .font(ToolbarIcon.shieldFont)
                 .foregroundStyle(shieldsUp ? Color.accentColor : ToolbarIcon.color)
                 .scaleEffect(pulse ? 1.18 : 1)
                 .frame(width: ToolbarIcon.button.width, height: ToolbarIcon.button.height)

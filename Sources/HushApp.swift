@@ -383,9 +383,26 @@ enum SettingsWindow {
         window = w
         idleRelease?.cancel()
         if !presence.live { presence.live = true }
+        if !w.isVisible { centre(w) }
         NSApp.activate(ignoringOtherApps: true)
         w.makeKeyAndOrderFront(nil)
     }
+
+    /// Opens in the middle of your Ufolio window (or the screen), not wherever it was last left:
+    /// it used to come up at the far right.
+    private static func centre(_ w: NSWindow) {
+        w.layoutIfNeeded()
+        let size = w.frame.size
+        let anchor = (BrowserModel.frontmostNormal?.window ?? NSApp.mainWindow)?.frame
+            ?? (NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900))
+        var origin = NSPoint(x: anchor.midX - size.width / 2, y: anchor.midY - size.height / 2)
+        if let screen = (BrowserModel.frontmostNormal?.window?.screen ?? NSScreen.main)?.visibleFrame {
+            origin.x = min(max(origin.x, screen.minX), screen.maxX - size.width)
+            origin.y = min(max(origin.y, screen.minY), screen.maxY - size.height)
+        }
+        w.setFrameOrigin(origin)
+    }
+
 
     /// Lets go of the window (when memory is short), unless it's open.
     static func releaseNow() {
@@ -407,8 +424,7 @@ enum SettingsWindow {
         w.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
         w.isReleasedWhenClosed = false
         w.tabbingMode = .disallowed
-        if !w.setFrameUsingName("HushSettings") { w.center() }
-        w.setFrameAutosaveName("HushSettings")
+        UserDefaults.standard.removeObject(forKey: "NSWindow Frame HushSettings")   // the old remembered place
         WindowPlacement.keepOnScreen(w)
         closeObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: w, queue: .main) { _ in
             MainActor.assumeIsolated {

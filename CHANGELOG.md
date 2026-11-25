@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.50.2: Settings in the middle, matching icons, and saving passwords
+
+- Settings now opens in the middle of your Ufolio window. It used to come up at the far right.
+- The Force Field shield is now the same size as the Stealth alien and the ⋯ menu beside it.
+  It drew noticeably smaller.
+- Ufolio now offers to save your password on many more sign-ins: sites that check your password
+  without sending a normal form (most modern web apps), and the password step of two-step
+  sign-ins (it now picks up the email you entered on the step before). It offers as the page
+  moves on, the password box goes away, or the page closes.
+
 ## 0.50.1: eight fixes
 
 - Fixed a crash when the mouse was over the zoom or Full Screen buttons in the ⋯ panel as it
