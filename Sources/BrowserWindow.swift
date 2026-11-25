@@ -379,7 +379,7 @@ private struct MorePanel: View {
         VStack(spacing: 0) {
             group {
                 row("plus.square", "New Tab", .newTab) { model.newTab(focus: true) }
-                row("eyeglasses", "New Stealth Window", .privateWindow) { openWindow(id: "private") }
+                row("theatermasks", "New Stealth Window", .privateWindow) { openWindow(id: "private") }
             }
             divider
             group {

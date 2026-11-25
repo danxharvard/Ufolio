@@ -598,10 +598,13 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
         });
         return users.length ? users[users.length - 1].value : '';
       }
+      var watch = null;
       function remember(e) {
         var t = e.target;
         if (!(t instanceof HTMLInputElement) || t.type !== 'password' || !t.value) return;
         typed.pw = t.value; typed.user = userNear(t); typed.href = location.href;
+        // Only watched from the moment a password is typed until it's offered (no timer otherwise).
+        if (!watch) watch = setInterval(check, 700);
       }
       document.addEventListener('input', remember, true);
       document.addEventListener('change', remember, true);
@@ -613,13 +616,14 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
           post({ type: 'submit', username: typed.user.slice(0, 256), password: typed.pw.slice(0, 512) });
         }
         typed.pw = '';
+        if (watch) { clearInterval(watch); watch = null; }
       }
       window.addEventListener('pagehide', flush, true);
-      setInterval(function () {
-        if (!typed.pw) return;
+      function check() {
+        if (!typed.pw) { clearInterval(watch); watch = null; return; }
         var boxes = Array.prototype.filter.call(document.querySelectorAll('input[type=password]'), visible);
         if (location.href !== typed.href || !boxes.length) flush();
-      }, 700);
+      }
 
       // Filling, in a way that frameworks like React notice.
       var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;

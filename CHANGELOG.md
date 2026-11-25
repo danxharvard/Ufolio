@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.50.4: ten fixes
+
+- Tabs with a silent video Ufolio had paused in the background now go to sleep after a while
+  like other tabs (they never did, and kept their memory).
+- Switching tabs while typing in the address bar shows the new tab's address. Half-typed text
+  used to follow you, and Return then opened it in the other tab.
+- Pasting text with line breaks into the address bar works: a link split over two lines is
+  joined back up, and other text is searched as one line. It used to do nothing.
+- The Command Palette searches your history in the background, so typing there doesn't
+  stutter with a big history.
+- Revealing or copying a password in Settings no longer freezes Ufolio while macOS asks for
+  permission.
+- Ufolio's check for sign-ins no longer runs a timer in every page: it only watches from the
+  moment you type a password.
+- A Stealth download that finishes after the last Stealth window closes also leaves the list.
+- The planet in the planet-of-the-week card turns (it stood still in the card).
+- The Stealth icon in the ⋯ menu, Command Palette and sidebar matches the toolbar, and so does the
+  Area 51 badge.
+
 ## 0.50.3: seventeen fixes
 
 **Downloads**

@@ -123,8 +123,10 @@ struct AddressBar: View {
             if !isEditing || text.isEmpty { text = display(newURL) }
         }
         // Switching tabs must show the new tab's address (or nothing, for a new tab).
+        // (Even while typing: half-typed text used to follow you to the other tab, where Return
+        // then opened it.)
         .onChange(of: tab.id) { _, _ in
-            if !isEditing { text = display(model.selectedTab?.url) }
+            text = display(model.selectedTab?.url)
             suggestions.dismiss()
         }
         .onChange(of: showFullAddress) { _, _ in if !isEditing { text = display(model.selectedTab?.url) } }
@@ -341,8 +343,19 @@ final class FocusTextField: NSTextField {
 /// Turns what was typed into a URL: a web address if it looks like one, otherwise a Google search.
 enum URLResolver {
     static func resolve(_ raw: String) -> URL? {
-        let input = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        var input = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else { return nil }
+        // Pasted text with line breaks (a long link wrapped in an email, or a few lines of text)
+        // used to do nothing at all: a link is joined back up, anything else searched as one line.
+        if input.contains(where: \.isNewline) {
+            let joined = input.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }.joined()
+            if joined.contains("://") || looksLikeAddress(joined) {
+                input = joined
+            } else {
+                input = input.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }.joined(separator: " ")
+            }
+        }
 
         if let url = URL(string: input), let scheme = url.scheme?.lowercased(),
            ["http", "https", "file", "about"].contains(scheme) {

@@ -342,7 +342,7 @@ struct Achievement {
         [
             Achievement(title: "First Contact", detail: "1,000 ads and trackers blocked", symbol: "antenna.radiowaves.left.and.right",
                         earned: lifetime >= 1_000),
-            Achievement(title: "Area 51", detail: "Stealth Mode used on 30 different days", symbol: "eyeglasses",
+            Achievement(title: "Area 51", detail: "Stealth Mode used on 30 different days", symbol: "theatermasks.fill",
                         earned: StealthDays.count >= 30),
             Achievement(title: "Lightyear", detail: "1,000,000 ads and trackers blocked", symbol: "sparkles",
                         earned: lifetime >= 1_000_000),

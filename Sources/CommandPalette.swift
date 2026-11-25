@@ -69,6 +69,7 @@ final class PaletteModel: ObservableObject {
     @Published private(set) var items: [PaletteItem] = []
     @Published var selection = 0
     private weak var browser: BrowserModel?
+    private var historyTask: Task<Void, Never>?
     private var openWindow: OpenWindowAction?
 
     func attach(_ browser: BrowserModel, openWindow: OpenWindowAction) {
@@ -190,14 +191,31 @@ final class PaletteModel: ObservableObject {
                     browser?.open(mark.url)
                 }))
             }
-            for entry in browser.history.search(q, limit: 6) where !seen.contains(entry.url.absoluteString) {
-                seen.insert(entry.url.absoluteString)
-                let title = entry.title.isEmpty ? (entry.url.host ?? entry.url.absoluteString) : entry.title
-                scored.append((40, PaletteItem(id: "h-\(entry.url.absoluteString)", kind: .history, title: title,
-                                               subtitle: entry.url.host?.strippingWWW, symbol: "clock", siteURL: entry.url) { [weak browser] in
-                    browser?.open(entry.url)
-                }))
-                if seen.count > 12 { break }
+            // Pages from history are searched in the background and added a moment later: searching
+            // all of history on every keystroke made typing here stutter with a big history.
+            historyTask?.cancel()
+            let history = browser.history, seenNow = seen
+            historyTask = Task { @MainActor [weak self, weak browser] in
+                let found = await history.searchInBackground(q, limit: 6)
+                guard !Task.isCancelled, let self, self.query.trimmingCharacters(in: .whitespaces) == q else { return }
+                var seen = seenNow
+                var extra: [PaletteItem] = []
+                for entry in found where !seen.contains(entry.url.absoluteString) {
+                    seen.insert(entry.url.absoluteString)
+                    let title = entry.title.isEmpty ? (entry.url.host ?? entry.url.absoluteString) : entry.title
+                    extra.append(PaletteItem(id: "h-\(entry.url.absoluteString)", kind: .history, title: title,
+                                             subtitle: entry.url.host?.strippingWWW, symbol: "clock", siteURL: entry.url) { [weak browser] in
+                        browser?.open(entry.url)
+                    })
+                }
+                guard !extra.isEmpty else { return }
+                // After everything scoring higher, before the search row, keeping your selection.
+                let picked = self.items.indices.contains(self.selection) ? self.items[self.selection].id : nil
+                var merged = self.items
+                let at = merged.firstIndex { $0.kind == .search } ?? merged.count
+                merged.insert(contentsOf: extra, at: at)
+                self.items = Array(merged.prefix(14))
+                if let picked, let i = self.items.firstIndex(where: { $0.id == picked }) { self.selection = i }
             }
         }
 
@@ -223,7 +241,7 @@ final class PaletteModel: ObservableObject {
     private static let commands: [PaletteCommand] = {
         var list: [PaletteCommand] = [
             .init(title: "New Tab", symbol: "plus.square", shortcut: .newTab) { m, _ in m.newTab(focus: true) },
-            .init(title: "New Stealth Window", symbol: "eyeglasses", keywords: "incognito", shortcut: .privateWindow) { _, open in open(id: "private") },
+            .init(title: "New Stealth Window", symbol: "theatermasks", keywords: "incognito stealth private", shortcut: .privateWindow) { _, open in open(id: "private") },
             .init(title: "Reopen Closed Tab", symbol: "arrow.uturn.backward", keywords: "undo restore", shortcut: .reopenTab) { m, _ in m.reopenClosedTab() },
             .init(title: "Close Tab", symbol: "xmark.square", shortcut: .closeTab) { m, _ in m.closeSelectedTab() },
             .init(title: "Close Other Tabs", symbol: "xmark.square.fill", available: { $0.visibleTabs.count > 1 }) { m, _ in

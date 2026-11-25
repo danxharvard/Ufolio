@@ -818,18 +818,22 @@ final class PlanetNSView: NSView {
         observers.forEach(NotificationCenter.default.removeObserver)
         observers = []
         guard let window, spinning else { return }
-        for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification, NSWindow.didChangeOcclusionStateNotification] {
-            observers.append(NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+        observers.append(NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main) { [weak self] _ in
+            self?.updatePaused()
+        })
+        for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
+            observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 self?.updatePaused()
             })
         }
         updatePaused()
     }
 
-    /// Turns only while its window is in front and visible.
+    /// Turns only while Ufolio is the app in front and the planet can be seen. (It used to need
+    /// its own window to be the key one, which the planet card's popover usually isn't.)
     private func updatePaused() {
         guard let window else { return }
-        let run = window.isKeyWindow && window.occlusionState.contains(.visible)
+        let run = NSApp.isActive && window.occlusionState.contains(.visible)
         let layer = surface
         if run && layer.speed == 0 {
             let paused = layer.timeOffset
