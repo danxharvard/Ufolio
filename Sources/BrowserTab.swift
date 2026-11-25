@@ -314,6 +314,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         }
     }
 
+    /// Whether there's a picture for a preview (without decoding it).
+    var hasPreview: Bool { previewData != nil || snapshotData != nil }
+
     /// The best picture there is for a preview: the latest taken, or the one from when it slept.
     var previewImage: NSImage? {
         (previewData ?? snapshotData).flatMap(NSImage.init(data:))
@@ -342,6 +345,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         webView.takeSnapshot(with: config) { [weak self] image, _ in
             guard let self, !self.isAsleep, force || self.model?.selectedTab !== self else { return }
             self.dropParkedPages()
+            // The page that wakes is a fresh one: not paused, and not (yet) heavy.
+            if self.isPagePaused { self.isPagePaused = false }
+            if self.isHeavy { self.isHeavy = false }
             self.snapshotData = image.flatMap(Self.compressed)
             self.sleepState = self.webView.interactionState
             self.zoomBeforeSleep = self.webView.pageZoom   // the woken page gets it back
@@ -542,6 +548,10 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         observers.removeAll()
         old.navigationDelegate = nil
         old.uiDelegate = nil
+        // The page set aside stops playing (its video or podcast used to carry on, out of sight);
+        // the one coming in picks up again.
+        old.setAllMediaPlaybackSuspended(true)
+        view.setAllMediaPlaybackSuspended(false)
         objectWillChange.send()
         webView = view
         // The new page view's own state: a crash or error screen from the old one mustn't stay
@@ -1159,6 +1169,12 @@ final class HushWebView: WKWebView {
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         if onSplitDrag?(.drop, sender) == true { return true }
         return super.performDragOperation(sender)
+    }
+    /// A drag that ends any way at all (dropped elsewhere, or cancelled with Esc while over this
+    /// pane) clears the highlight; it could otherwise stay on.
+    override func draggingEnded(_ sender: NSDraggingInfo) {
+        _ = onSplitDrag?(.exited, sender)
+        super.draggingEnded(sender)
     }
 
     override init(frame: CGRect, configuration: WKWebViewConfiguration) {

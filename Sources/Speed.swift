@@ -358,7 +358,7 @@ enum Preloader {
     /// kept if not opened (a press on a link that never became a click, say on a web app that
     /// handles its own links, is let go after 2 seconds rather than 30).
     static func preload(_ url: URL, for tab: BrowserTab?, lifetime: TimeInterval = 30) {
-        guard enabled, let tab, !tab.isPrivate, !tab.isAsleep,
+        guard enabled, let tab, !tab.isPrivate, !tab.isAsleep, !tab.javaScriptOff,
               let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https", let host = url.host else { return }
         if let here = tab.url, same(here, url) { return }
         if let entry = current, entry.tabID == tab.id, same(entry.url, url), !entry.failed { return }
@@ -373,6 +373,9 @@ enum Preloader {
         ContentBlocker.shared.attach(config.userContentController)
         ContentBlocker.shared.update(config.userContentController, forHost: host)
         WebKitExtras.setMuted(true, view)
+        // Videos wait too: a page loading in the background used to play them (muted, but still
+        // decoding) for up to 30 seconds.
+        view.setAllMediaPlaybackSuspended(true)
         view.pageZoom = tab.webView.pageZoom
         view.load(URLRequest(url: url))
         let entry = Entry(url: url, tabID: tab.id, view: view)
@@ -405,6 +408,7 @@ enum Preloader {
         entry.view.navigationDelegate = nil
         entry.view.uiDelegate = nil
         WebKitExtras.setMuted(false, entry.view)
+        entry.view.setAllMediaPlaybackSuspended(false)
         return entry.view
     }
 
@@ -423,12 +427,18 @@ enum Preloader {
 
     /// Keeps a preloading page in its place: no pop-ups, downloads, dialogs or other apps.
     private final class Delegate: NSObject, WKNavigationDelegate, WKUIDelegate {
-        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
-                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, preferences: WKWebpagePreferences,
+                     decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
             let scheme = action.request.url?.scheme?.lowercased() ?? ""
             let ok = ["http", "https", "about", "blob", "data"].contains(scheme)
             if !ok, action.targetFrame?.isMainFrame ?? true { Preloader.fail(webView) }
-            decisionHandler(ok ? .allow : .cancel)
+            // JavaScript follows your settings exactly as in a tab (Settings, and a site set to block
+            // all scripts in Force Field): a preloaded page used to run scripts regardless.
+            let host = action.request.url?.host
+            let siteOn = !(host.map(ContentBlocker.shared.isShieldsDown) ?? false)
+            let blocked = siteOn && ShieldSettings.shared.effective(for: host).scripts == .blockAll
+            preferences.allowsContentJavaScript = Prefs.bool(Prefs.javaScript) && !blocked
+            decisionHandler(ok ? .allow : .cancel, preferences)
         }
         func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse,
                      decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {

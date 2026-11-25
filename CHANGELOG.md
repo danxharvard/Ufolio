@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.51.0-beta.8: twenty more fixes (beta)
+
+Everything in 0.50.4 (ten fixes), plus:
+- Instant pages:
+  - a page loading in the background no longer plays its videos;
+  - the page you swapped away from stops playing, instead of carrying on out of sight;
+  - preloaded pages follow your JavaScript settings (a tab with JavaScript off, and sites set to
+    block all scripts in Force Field), which they used to ignore.
+- Send to iPhone: the AirDrop button greys out when AirDrop is off or unavailable, and the File
+  menu item is never wrongly greyed out.
+- Tab previews no longer pop up while you're dragging tabs, and checking for one no longer
+  decodes its picture.
+- Split View: the drop highlight always clears, even if you cancel a drag over the other side.
+- The hang log only watches while Ufolio is in front: in the background macOS slows apps on
+  purpose, which isn't a hang.
+- A page you paused from the heavy page warning, then put to sleep, no longer shows as paused
+  after it wakes.
+
 ## 0.51.0-beta.7: twenty fixes (beta)
 
 Everything in 0.50.3 (seventeen fixes to downloads, bookmarks, Reader, translation, Find, the

@@ -239,7 +239,11 @@ final class BrowserModel: NSObject, ObservableObject {
             && Date().timeIntervalSince(tab.lastActive) >= seconds
             && tab.webView.cameraCaptureState == .none && tab.webView.microphoneCaptureState == .none {
             tab.webView.requestMediaPlaybackState { state in
-                if state == .none || state == .paused { tab.sleep() }
+                // "Suspended" is the silent video Ufolio pauses in background tabs itself: those tabs
+                // can sleep too (they never did). With background sound paused as well, a suspended
+                // tab might be your podcast, so it's left alone.
+                let suspendedSilently = state == .suspended && !PerformanceCenter.shared.pausesBackgroundMedia
+                if state == .none || state == .paused || suspendedSilently { tab.sleep() }
             }
         }
     }

@@ -222,7 +222,9 @@ struct HushCommands: Commands {
             Button("Send to iPhone…") {
                 if let b = browser, let tab = b.selectedTab, let url = tab.url { Beam.show(url, title: tab.displayTitle, in: b.window) }
             }
-            .disabled(browser?.selectedTab?.url == nil || browser?.isPrivate == true)
+            // (Not greyed out by the page: the menu bar isn't told when a page finishes loading, so
+            // it could stay greyed out on a loaded page. On a blank tab it simply does nothing.)
+            .disabled(browser?.isPrivate == true)
         }
 
         CommandGroup(before: .toolbar) {

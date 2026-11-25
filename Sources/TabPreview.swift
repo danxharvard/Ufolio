@@ -18,7 +18,8 @@ struct TabPreviewOnHover: ViewModifier {
                 if !inside { showing = false; return }
                 guard enabled, !isSelected else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    if hovering && !isSelected && tab.previewImage != nil { showing = true }
+                    // Not while a button is held (dragging tabs to reorder them).
+                    if hovering && !isSelected && tab.hasPreview && NSEvent.pressedMouseButtons == 0 { showing = true }
                 }
             }
             .onChange(of: isSelected) { _, selected in if selected { showing = false } }

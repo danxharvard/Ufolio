@@ -173,12 +173,27 @@ enum HangWatch {
     private static var waitingSince: UInt64 = 0     // when the unanswered ping was sent (0: none)
     private static var reported = false
 
+    private static var running = false
+
     static func start() {
         let t = DispatchSource.makeTimerSource(queue: queue)
         t.schedule(deadline: .now() + 5, repeating: .seconds(1), leeway: .milliseconds(500))
         t.setEventHandler(handler: tick)
-        t.resume()
         timer = t
+        // Only while Ufolio is the app in front: in the background macOS slows it on purpose
+        // (App Nap), which isn't a hang, and there's no need to wake at all then.
+        let center = NotificationCenter.default
+        center.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in setRunning(true) }
+        center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { _ in setRunning(false) }
+        setRunning(true)
+    }
+
+    private static func setRunning(_ on: Bool) {
+        queue.async {
+            guard let timer, on != running else { return }
+            running = on
+            if on { timer.resume() } else { timer.suspend(); waitingSince = 0; reported = false }
+        }
     }
 
     private static func tick() {

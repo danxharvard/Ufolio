@@ -1830,7 +1830,14 @@ private struct PasswordSettings: View {
                                 .lineLimit(1)
                             Button {
                                 if revealed[login.id] != nil { revealed[login.id] = nil }
-                                else { revealed[login.id] = PasswordVault.password(for: login) ?? "" }
+                                else {
+                                    // Read in the background: an older password still in the keychain makes
+                                    // macOS ask once, and Ufolio used to freeze behind that question.
+                                    DispatchQueue.global(qos: .userInitiated).async {
+                                        let password = PasswordVault.password(for: login) ?? ""
+                                        DispatchQueue.main.async { revealed[login.id] = password }
+                                    }
+                                }
                             } label: { Image(systemName: revealed[login.id] == nil ? "eye" : "eye.slash") }
                                 .buttonStyle(.borderless).accessibilityLabel("Show password")
                             Button { copy(login) } label: {
@@ -1962,7 +1969,13 @@ private struct PasswordSettings: View {
 
     /// Copies a password and clears it from the clipboard 90 s later (if it's still there).
     private func copy(_ login: SavedLogin) {
-        guard let password = PasswordVault.password(for: login) else { return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let password = PasswordVault.password(for: login) else { return }
+            DispatchQueue.main.async { putOnClipboard(password, for: login) }
+        }
+    }
+
+    private func putOnClipboard(_ password: String, for login: SavedLogin) {
         let board = NSPasteboard.general
         board.clearContents()
         board.setString(password, forType: .string)

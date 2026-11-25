@@ -275,6 +275,11 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
         item.progress = 1
         item.state = .finished
         finishedCount += 1
+        // A Stealth download that finished after the last Stealth window closed leaves the list
+        // too (only ones already finished were removed when the window closed).
+        if item.isPrivate, !BrowserModel.all.allObjects.contains(where: { $0.isPrivate }) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.forgetPrivateItems() }
+        }
         if let url = item.destination {
             DistributedNotificationCenter.default().post(name: .init("com.apple.DownloadFileFinished"), object: url.path)
             // Torrent tools: show what a .torrent holds before anything opens it.

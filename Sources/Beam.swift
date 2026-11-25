@@ -55,9 +55,12 @@ private struct BeamCard: View {
                 .font(.system(size: 11.5)).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 10) {
+                // Greyed out when AirDrop is off or unavailable (the button used to do nothing).
+                let airDrop = NSSharingService(named: .sendViaAirDrop)
                 Button {
-                    NSSharingService(named: .sendViaAirDrop)?.perform(withItems: [url])
+                    airDrop?.perform(withItems: [url])
                 } label: { Label("AirDrop", systemImage: "airplayaudio") }
+                .disabled(!(airDrop?.canPerform(withItems: [url]) ?? false))
                 ShareButton(url: url)
             }
             .controlSize(.large)
