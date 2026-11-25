@@ -84,4 +84,4 @@ jobs:
             "build/HushBrowser-$V.zip" \
             "build/HushBrowser-$V.zip.sig" \
             --title "Ufolio Browser $V" \
-            --notes "$(awk -v v="## $V" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md | sed '1{/^$/d}'; echo; sed "s/VERSION/$V/g" .github/release-notes.md)"
+            --notes "$(awk -v v="## $V" '$0==v || index($0, v":")==1 {f=1;next} /^## /{f=0} f' CHANGELOG.md | sed '1{/^$/d}'; echo; sed "s/VERSION/$V/g" .github/release-notes.md)"

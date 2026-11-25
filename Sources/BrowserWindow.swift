@@ -9,7 +9,9 @@ struct BrowserWindow: View {
         _model = StateObject(wrappedValue: BrowserModel(isPrivate: isPrivate))
     }
 
-    @StateObject private var suggestions = SuggestionsModel()
+    /// Held without being watched here: every keystroke changes the suggestions, and watching them
+    /// in the window redrew the whole window per letter typed. SuggestionOverlay watches them.
+    @State private var suggestions = SuggestionsModel()
     @Environment(\.colorScheme) private var systemScheme
     @AppStorage(Prefs.showBookmarkBar) private var showBookmarkBar = true
     @State private var isFullScreen = false
@@ -38,14 +40,8 @@ struct BrowserWindow: View {
         .coordinateSpace(name: "window")
         // Address suggestions float over everything, lined up under the address bar wherever it is.
         .overlay(alignment: .topLeading) {
-            if suggestions.isVisible {
-                SuggestionList(suggestions: suggestions) { choice in go(choice.text) }
-                    .frame(width: min(max(380, addressFrame.width), 680))
-                    .offset(x: addressFrame.minX, y: addressFrame.maxY + 6)
-                    .transition(.opacity.combined(with: .offset(y: -4)))
-            }
+            SuggestionOverlay(suggestions: suggestions, anchor: addressFrame) { choice in go(choice.text) }
         }
-        .animation(.easeOut(duration: 0.12), value: suggestions.isVisible)
         .onPreferenceChange(AddressFrameKey.self) { addressFrame = $0 }
         .background(WindowReader { window in
             // Remember the window's size and position between launches.
@@ -54,8 +50,11 @@ struct BrowserWindow: View {
                 window.setFrameAutosaveName("HushBrowserWindow")
             }
             model.window = window
+            if window != nil { ExtensionEvents.windowOpened(model) }
             TrafficLights.align(in: window)
         })
+        // Turning Magic Theme on picks up the current site's colour straight away.
+        .onChange(of: magicTheme) { _, on in siteColor = on ? model.selectedTab?.siteColor : nil }
         .onChange(of: tabLayout) { _, _ in
             DispatchQueue.main.async { TrafficLights.align(in: model.window) }
         }
@@ -66,6 +65,9 @@ struct BrowserWindow: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResizeNotification)) { note in
             if (note.object as? NSWindow) === model.window { TrafficLights.align(in: model.window) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { note in
+            if (note.object as? NSWindow) === model.window { ExtensionEvents.windowClosed(model) }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { note in
             if (note.object as? NSWindow) === model.window { isFullScreen = true }
@@ -175,7 +177,11 @@ struct BrowserWindow: View {
             .environment(\.colorScheme, tint?.scheme ?? systemScheme)
             .animation(.easeInOut(duration: 0.35), value: siteColor)
             .background(SelectedTab(model: model) { tab in
-                SiteColorReader(tab: tab) { color in if color != siteColor { siteColor = color } }
+                SiteColorReader(tab: tab) { color in
+                    // Only with Magic Theme on: otherwise each site's colour redrew the whole window for nothing.
+                    let wanted = magicTheme && !model.isPrivate ? color : nil
+                    if wanted != siteColor { siteColor = wanted }
+                }
                     .id(tab.id)
             })
 
@@ -251,7 +257,11 @@ struct BrowserWindow: View {
             .padding(.top, 4)
         }
         .background(SelectedTab(model: model) { tab in
-            SiteColorReader(tab: tab) { color in if color != siteColor { siteColor = color } }
+            SiteColorReader(tab: tab) { color in
+                    // Only with Magic Theme on: otherwise each site's colour redrew the whole window for nothing.
+                    let wanted = magicTheme && !model.isPrivate ? color : nil
+                    if wanted != siteColor { siteColor = wanted }
+                }
                 .id(tab.id)
         })
     }
@@ -294,7 +304,7 @@ struct BrowserWindow: View {
 /// "⋯" at the end of the toolbar: a frosted panel with the everyday commands, their shortcuts
 /// and a live zoom control.
 struct MoreMenuButton: View {
-    @ObservedObject var model: BrowserModel
+    let model: BrowserModel   // only handed to the panel (which watches it while open)
     @State private var showing = false
     @State private var hovering = false
 
@@ -1393,6 +1403,26 @@ private struct FindBarHost: View {
             }
             .transition(.move(edge: .top).combined(with: .opacity))
         }
+    }
+}
+
+/// The address bar's suggestions, floating under it. The only part of the window that redraws
+/// as they change.
+private struct SuggestionOverlay: View {
+    @ObservedObject var suggestions: SuggestionsModel
+    let anchor: CGRect
+    let onChoose: (Suggestion) -> Void
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            if suggestions.isVisible {
+                SuggestionList(suggestions: suggestions, onChoose: onChoose)
+                    .frame(width: min(max(380, anchor.width), 680))
+                    .offset(x: anchor.minX, y: anchor.maxY + 6)
+                    .transition(.opacity.combined(with: .offset(y: -4)))
+            }
+        }
+        .animation(.easeOut(duration: 0.12), value: suggestions.isVisible)
     }
 }
 

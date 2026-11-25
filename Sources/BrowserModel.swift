@@ -21,6 +21,17 @@ final class BrowserModel: NSObject, ObservableObject {
             }
             if let tab = selectedTab, !tab.isAsleep { tab.webView.setAllMediaPlaybackSuspended(false) }
             if let tab = selectedTab, tab.crashed, tab.crashedWhileHidden { tab.recoverFromCrash() }
+            // Keyboard focus follows to the new tab's page (Space and the arrow keys scrolled the old
+            // page, or nothing), unless you're typing somewhere such as the address bar.
+            if let tab = selectedTab, tab !== old, !tab.isBlank {
+                DispatchQueue.main.async { [weak self, weak tab] in
+                    guard let self, let tab, self.selectedTab === tab, let window = tab.webView.window else { return }
+                    let current = window.firstResponder
+                    if current == nil || current === window || current is WKWebView {
+                        window.makeFirstResponder(tab.webView)
+                    }
+                }
+            }
             if let tab = selectedTab, tab !== old { ExtensionEvents.activated(tab, previous: old) }
             if selectedTab !== old { PerformanceCenter.shared.tabSwitched() }
         }
@@ -297,7 +308,8 @@ final class BrowserModel: NSObject, ObservableObject {
             if selectedID == nil { selectedID = visibleTabs.first?.id }
         }
         // Pinned tabs always come back, at the left, loading when you click them.
-        if !isPrivate, !Self.didRestoreSession || tabs.count > 0 {
+        // (Also when the window is closed and opened again: they used to be missing until Ufolio restarted.)
+        if !isPrivate {
             let pinnedText = (UserDefaults.standard.stringArray(forKey: "pinnedTabs") ?? []).prefix(30)
             let pinnedSpaces = UserDefaults.standard.stringArray(forKey: "pinnedTabSpaces") ?? []
             var placed: [BrowserTab] = []

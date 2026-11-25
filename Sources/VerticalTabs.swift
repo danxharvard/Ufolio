@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 /// the tab list. Drag its edge to resize; narrow it right down for icons only.
 struct SideTabBar: View {
     @ObservedObject var model: BrowserModel
-    @ObservedObject var suggestions: SuggestionsModel
+    let suggestions: SuggestionsModel   // passed on to the address bar; the column needn't redraw as you type
     let onGo: (String) -> Void
     @AppStorage(Prefs.sideTabsWidth) private var storedWidth = 250.0
     @State private var dragStart: Double?

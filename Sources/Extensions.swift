@@ -344,6 +344,17 @@ enum ExtensionEvents {
         MainActor.assumeIsolated { ExtensionManager.shared.tabMoved(tab, from: index, in: model) }
     }
 
+    /// A browser window appeared or went away. Extensions were only told about windows when they
+    /// loaded, so a reopened window's tabs were invisible to them, and closed windows were kept.
+    static func windowOpened(_ model: BrowserModel) {
+        guard active, !model.isPrivate, #available(macOS 15.4, *) else { return }
+        MainActor.assumeIsolated { ExtensionManager.shared.windowOpened(model) }
+    }
+    static func windowClosed(_ model: BrowserModel) {
+        guard active, !model.isPrivate, #available(macOS 15.4, *) else { return }
+        MainActor.assumeIsolated { ExtensionManager.shared.windowClosed(model) }
+    }
+
     static func changed(_ tab: BrowserTab) {
         guard active, !tab.isPrivate, #available(macOS 15.4, *) else { return }
         MainActor.assumeIsolated { ExtensionManager.shared.tabChanged(tab) }
@@ -401,9 +412,11 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
                 for tab in model.tabs where tab.webView.configuration.webExtensionController == nil { tab.adoptExtensions() }
             }
             if let model = BrowserModel.frontmostNormal {
-                controller.didOpenWindow(model)
-                for tab in model.tabs { controller.didOpenTab(tab) }
-                if let selected = model.selectedTab { controller.didActivateTab(selected) }
+                if announcedWindows.contains(ObjectIdentifier(model)) {
+                    for tab in model.tabs { controller.didOpenTab(tab) }   // as before: this extension is new
+                } else {
+                    windowOpened(model, includingTabs: true)
+                }
             }
         } catch {
             NSLog("Ufolio: couldn't load extension \(record.name): \(error)")
@@ -458,6 +471,22 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
     }
 
     // MARK: Telling extensions what the browser is doing
+
+    /// `includingTabs`: also announce the window's tabs (when an extension has just loaded and
+    /// knows none of them; a new window's tabs are announced one by one as they're made).
+    func windowOpened(_ model: BrowserModel, includingTabs: Bool = false) {
+        guard !announcedWindows.contains(ObjectIdentifier(model)) else { return }
+        announcedWindows.insert(ObjectIdentifier(model))
+        controller.didOpenWindow(model)
+        if includingTabs { for tab in model.tabs where !tab.isPrivate { controller.didOpenTab(tab) } }
+        if let selected = model.selectedTab { controller.didActivateTab(selected) }
+    }
+    func windowClosed(_ model: BrowserModel) {
+        guard announcedWindows.remove(ObjectIdentifier(model)) != nil else { return }
+        for tab in model.tabs { controller.didCloseTab(tab, windowIsClosing: true) }
+        controller.didCloseWindow(model)
+    }
+    private var announcedWindows: Set<ObjectIdentifier> = []
 
     func tabOpened(_ tab: BrowserTab) { controller.didOpenTab(tab) }
     func tabClosed(_ tab: BrowserTab) { controller.didCloseTab(tab) }

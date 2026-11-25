@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.43.14: ten more fixes
+
+**Smoother**
+- Typing in the address bar no longer redraws the whole window for every letter; only the
+  suggestions update.
+- With Magic Theme off, moving between sites no longer redraws the whole window.
+- The ⋯ menu button no longer redraws whenever anything in the window changes.
+
+**Keyboard**
+- Pressing Esc in the address bar hands the keyboard back to the page, so Space and the arrow
+  keys scroll it again.
+- After switching or closing tabs, the keyboard goes to the page you're now looking at.
+
+**Fixes**
+- Pinned tabs come back when you close the window and open it again (they were missing until
+  Ufolio restarted).
+- Extensions are told when windows open and close, so they see a reopened window's tabs, and
+  closed windows are let go.
+- The address bar shows an open padlock when a secure page loads parts of itself insecurely.
+- A local file open in a tab shows its name rather than "New Tab".
+- Release notes on GitHub include each version's "What's new" again.
+
 ## 0.43.13: ten more fixes
 
 **Fixes**

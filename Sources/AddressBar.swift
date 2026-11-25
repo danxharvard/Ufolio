@@ -35,6 +35,8 @@ struct AddressBar: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: 14)
+                .help(leadingSymbol == "lock.open" ? "Parts of this page aren’t sent securely"
+                      : leadingSymbol == "lock.fill" ? "Secure connection" : "")
 
             AddressTextField(
                 register: { [weak model] field in model?.addressField = field },
@@ -59,6 +61,10 @@ struct AddressBar: View {
                         return false
                     }
                     text = displayText
+                    // Back to the page, so Space and the arrow keys scroll it again (focus used to go nowhere).
+                    if let page = model.selectedTab?.webView, !(model.selectedTab?.isBlank ?? true) {
+                        DispatchQueue.main.async { page.window?.makeFirstResponder(page) }
+                    }
                     return true
                 },
                 onEndEditing: {
@@ -117,7 +123,9 @@ struct AddressBar: View {
 
     private var leadingSymbol: String {
         if isEditing || tab.url == nil { return "magnifyingglass" }
-        return tab.url?.scheme == "https" ? "lock.fill" : "globe"
+        guard tab.url?.scheme == "https" else { return "globe" }
+        // Secure address, but parts of the page came over plain http: an open padlock, honestly.
+        return tab.isSecure || tab.isLoading ? "lock.fill" : "lock.open"
     }
 }
 

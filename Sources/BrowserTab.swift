@@ -338,7 +338,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     var displayTitle: String {
         if !title.isEmpty { return title }
-        if let host = url?.host { return host.strippingWWW }
+        if let host = url?.host, !host.isEmpty { return host.strippingWWW }
+        // A local file (or other address with no host) shows its name, not "New Tab".
+        if let url, url.isFileURL, !url.lastPathComponent.isEmpty, url.lastPathComponent != "/" { return url.lastPathComponent }
         return "New Tab"
     }
 
