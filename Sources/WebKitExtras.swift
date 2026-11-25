@@ -57,7 +57,7 @@ enum WebCryptoKey {
             try key.write(to: file, options: .atomic)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
         } catch {
-            NSLog("Ufolio: couldn't persist its WebCrypto key: \\(error)")
+            NSLog("Ufolio: couldn't persist its WebCrypto key: \(error)")
         }
         return key
     }()
