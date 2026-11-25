@@ -79,6 +79,9 @@ private struct SplitPane: View {
                     .foregroundStyle(isActive ? .primary : .secondary)
                     .lineLimit(1)
                 Spacer(minLength: 4)
+                PaneButton(symbol: side == .left ? "arrow.right.square" : "arrow.left.square",
+                           help: model.splitLinksAcross ? "Stop opening links in the other pane" : "Open links in the other pane",
+                           active: model.splitLinksAcross) { model.splitLinksAcross.toggle() }
                 PaneButton(symbol: "arrow.left.arrow.right", help: "Swap Sides") { model.swapSplit() }
                 PaneButton(symbol: "xmark", help: "Close This Side (keeps the tab open)") { model.closeSplit(keeping: side == .left ? model.splitPair?.right : model.splitPair?.left) }
             }
@@ -89,6 +92,19 @@ private struct SplitPane: View {
             .onTapGesture { model.selectedID = tab.id }
             TabPageContent(model: model, tab: tab)
                 .id(tab.id)
+                .overlay {
+                    // A link from the other pane is being dragged here: a soft highlight.
+                    if tab.isDropTarget {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.accentColor.opacity(0.10))
+                            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .strokeBorder(Color.accentColor.opacity(0.75), lineWidth: 2.5))
+                            .padding(3)
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
+                }
+                .animation(Effects.on ? .easeOut(duration: 0.15) : nil, value: tab.isDropTarget)
         }
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -102,6 +118,7 @@ private struct SplitPane: View {
 private struct PaneButton: View {
     let symbol: String
     let help: String
+    var active = false
     let action: () -> Void
     @State private var hovering = false
 
@@ -109,9 +126,9 @@ private struct PaneButton: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 9.5, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(active ? Color.accentColor : .secondary)
                 .frame(width: 18, height: 18)
-                .background(Circle().fill(Color.primary.opacity(hovering ? 0.1 : 0)))
+                .background(Circle().fill(active ? Color.accentColor.opacity(0.15) : Color.primary.opacity(hovering ? 0.1 : 0)))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)

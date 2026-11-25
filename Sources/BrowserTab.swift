@@ -42,6 +42,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     @Published private(set) var blockedSites: [String: Int] = [:]
     /// Set when a page was stopped because it looks like a fake copy of a site you use.
     @Published var lookalike: (match: Lookalike.Match, url: URL)?
+    /// A link from the other Split View pane is being dragged over this one.
+    @Published private(set) var isDropTarget = false
     /// Torrent site mode, on this page: pop-ups and redirects stopped, and traps marked.
     @Published private(set) var torrentPopupsBlocked = 0
     @Published private(set) var torrentTrapsMarked = 0
@@ -204,6 +206,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         (view as? HushWebView)?.onHideElements = { [weak self] in
             guard let self else { return }
             ElementZapper.shared.start(in: self)
+        }
+        (view as? HushWebView)?.onSplitDrag = { [weak self] phase, info in
+            self?.handleSplitDrag(phase, info) ?? false
         }
         (view as? HushWebView)?.onFocus = { [weak self] in
             guard let self, let model = self.model, model.isInSplit(self), model.selectedID != self.id else { return }
@@ -417,6 +422,45 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         webView.load(URLRequest(url: url))
     }
 
+    // MARK: Split View drops
+
+    /// A link, address or picture dragged from the other pane opens here (replacing this page), or
+    /// in a new tab with ⌥ held. Only web addresses: never javascript:, file: or data:.
+    private func handleSplitDrag(_ phase: HushWebView.SplitDrag, _ info: NSDraggingInfo) -> Bool {
+        guard let model, let other = model.otherPane(of: self),
+              let source = info.draggingSource as? WKWebView, source === other.webView,
+              let url = Self.webAddress(in: info.draggingPasteboard) else {
+            if isDropTarget { isDropTarget = false }
+            return false
+        }
+        switch phase {
+        case .entered, .updated:
+            if !isDropTarget { isDropTarget = true }
+        case .exited:
+            if isDropTarget { isDropTarget = false }
+        case .drop:
+            isDropTarget = false
+            if NSEvent.modifierFlags.contains(.option) {
+                model.newTab(url: url, select: false)
+            } else {
+                load(url)
+                model.selectedID = id
+            }
+        }
+        return true
+    }
+
+    /// The first http(s) address on a drag: a link, a picture's address or dragged text.
+    static func webAddress(in pasteboard: NSPasteboard) -> URL? {
+        var candidates = (pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL]) ?? []
+        if let text = pasteboard.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !text.contains(" "), let url = URL(string: text) { candidates.append(url) }
+        return candidates.first { url in
+            guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return false }
+            return url.host?.isEmpty == false
+        }
+    }
+
     // MARK: Instant pages
 
     /// A preloaded page has its own (empty) history, so the page you came from is kept to one
@@ -569,6 +613,14 @@ extension BrowserTab: WKNavigationDelegate {
            let url = action.request.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
             model?.newTab(url: url, select: false)
             decisionHandler(.cancel, preferences)
+            return
+        }
+        // Split View, "Open links in the other pane": a plain click opens on the other side.
+        if action.navigationType == .linkActivated, action.targetFrame?.isMainFrame ?? false,
+           let model, model.splitLinksAcross, let other = model.otherPane(of: self),
+           let url = action.request.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+            decisionHandler(.cancel, preferences)
+            other.load(url)
             return
         }
         // A link you clicked that was already loading in the background (pressed a moment ago):
@@ -929,6 +981,12 @@ extension BrowserTab: WKUIDelegate {
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         guard let model else { return nil }
+        // Split View, "Open links in the other pane": links meant for a new window go there too.
+        if model.splitLinksAcross, action.navigationType == .linkActivated, let other = model.otherPane(of: self),
+           let url = action.request.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+            other.load(url)
+            return nil
+        }
         // Torrent site mode: only a real click on a link to the same site may open a new tab.
         // Scripts opening pop-unders, and links to ad networks, are stopped.
         if TorrentTools.siteModeOn, TorrentTools.isIndexSite(webView.url?.host) {
@@ -1025,6 +1083,29 @@ extension BrowserTab: WKUIDelegate {
 
 /// Hush's web view: adds "Hide Elements on This Page…" to the page's right-click menu.
 final class HushWebView: WKWebView {
+    // MARK: Dropping links from the other Split View pane
+
+    enum SplitDrag { case entered, updated, exited, drop }
+    /// Answers whether this pane takes the drag (only one from the other pane, with a web address).
+    var onSplitDrag: ((SplitDrag, NSDraggingInfo) -> Bool)?
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        if onSplitDrag?(.entered, sender) == true { return .copy }
+        return super.draggingEntered(sender)
+    }
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        if onSplitDrag?(.updated, sender) == true { return .copy }
+        return super.draggingUpdated(sender)
+    }
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        if let sender { _ = onSplitDrag?(.exited, sender) }
+        super.draggingExited(sender)
+    }
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        if onSplitDrag?(.drop, sender) == true { return true }
+        return super.performDragOperation(sender)
+    }
+
     override init(frame: CGRect, configuration: WKWebViewConfiguration) {
         super.init(frame: frame, configuration: configuration)
         LiveCount.change(\.webViews, by: 1)

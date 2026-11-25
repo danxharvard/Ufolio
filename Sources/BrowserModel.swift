@@ -258,6 +258,17 @@ final class BrowserModel: NSObject, ObservableObject {
 
     func isInSplit(_ tab: BrowserTab) -> Bool { splitPair?.contains(tab.id) ?? false }
 
+    /// "Open links in the other pane" (off by default, from the split view controls): a link
+    /// clicked on one side opens on the other, for a list on one side and reading on the other.
+    @Published var splitLinksAcross = false
+
+    /// The tab on the other side of Split View.
+    func otherPane(of tab: BrowserTab) -> BrowserTab? {
+        guard let pair = splitPair, pair.contains(tab.id) else { return nil }
+        let other = pair.left == tab.id ? pair.right : pair.left
+        return tabs.first { $0.id == other }
+    }
+
     /// Shows a tab beside the current one. Splitting the current tab itself opens a new tab beside it.
     func openSplit(with tab: BrowserTab? = nil) {
         guard let current = selectedTab else { return }
@@ -279,6 +290,7 @@ final class BrowserModel: NSObject, ObservableObject {
     func closeSplit(keeping id: UUID? = nil) {
         guard splitPair != nil else { return }
         splitPair = nil
+        splitLinksAcross = false
         if let id { selectedID = id }
     }
 

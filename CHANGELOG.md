@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.51.0-beta.2: drag links between Split View panes (beta)
+
+**Split View**
+- Drag a link from one side and drop it on the other: it opens there, replacing that side's
+  page. It works both ways, and with dragged pictures and web addresses too.
+- Hold ⌥ as you drop to open it in a new tab instead.
+- The side you're dragging over gets a soft highlight (it simply appears, without fading, with
+  Reduce Motion or Effects off).
+- Only web addresses are accepted: never javascript:, file: or data: ones. Dropping files or
+  text onto a page (uploads, search boxes) works as before, since only drags from the other
+  pane are taken.
+- New: "Open links in the other pane" (the arrow button at the top of either side, off by
+  default). A normal click on a link opens it on the other side: a list on one side, reading
+  on the other. Switches itself off when you leave Split View.
+
+Also includes everything in 0.51.0-beta.1 (Instant pages).
+
 ## 0.51.0-beta.1: Instant pages (beta)
 
 **Instant pages** (Settings › Performance › Speed, on by default)
