@@ -1223,8 +1223,7 @@ private struct AdBlockerSettings: View {
                             if off { blocker.setShields(true, for: site) }
                             siteShields.reset(site)
                         }
-                        .controlSize(.small)
-                        .help("Use your defaults on this site again")
+                        .controlSize(.small)   // (no tooltip: the row vanishes when clicked, see TabStrip)
                     }
                 }
             } header: { SectionTitle("Site settings") }
@@ -1732,10 +1731,19 @@ private struct PasswordSettings: View {
                             }
                             .buttonStyle(.borderless).help("Copy password (cleared from the clipboard after 90 seconds)")
                             Button {
-                                PasswordVault.delete(login)
-                                logins.removeAll { $0.id == login.id }
+                                // Asks first: one stray click used to delete a saved password for good.
+                                DialogHost.settings.present(HushDialog(
+                                    art: .symbol("key.fill"), theme: .danger, motion: .drift,
+                                    title: "Delete the password for \(login.host)?",
+                                    message: "\(login.account.isEmpty ? "This password" : "The password for \(login.account)") will be removed from your keychain. This can’t be undone.",
+                                    choices: [.init(title: "Cancel", role: .cancel), .init(title: "Delete", role: .destructive)],
+                                    completion: { choice, _ in
+                                        guard choice == 1 else { return }
+                                        PasswordVault.delete(login)
+                                        logins.removeAll { $0.id == login.id }
+                                    }))
                             } label: { Image(systemName: "trash") }
-                                .buttonStyle(.borderless).help("Delete")
+                                .buttonStyle(.borderless).accessibilityLabel("Delete")
                         }
                     }
                 }
@@ -1774,10 +1782,18 @@ private struct PasswordSettings: View {
                         Text(card.label)
                         Spacer()
                         Button {
-                            CardVault.delete(card.id)
-                            cardList = CardVault.list()
+                            DialogHost.settings.present(HushDialog(
+                                art: .symbol("creditcard.fill"), theme: .danger, motion: .drift,
+                                title: "Delete “\(card.label)”?",
+                                message: "This card will be removed from your keychain. This can’t be undone.",
+                                choices: [.init(title: "Cancel", role: .cancel), .init(title: "Delete", role: .destructive)],
+                                completion: { choice, _ in
+                                    guard choice == 1 else { return }
+                                    CardVault.delete(card.id)
+                                    cardList = CardVault.list()
+                                }))
                         } label: { Image(systemName: "trash") }
-                            .buttonStyle(.borderless).help("Delete")
+                            .buttonStyle(.borderless).accessibilityLabel("Delete")
                     }
                 }
             } header: { SectionTitle("Credit cards") }

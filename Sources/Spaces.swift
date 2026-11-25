@@ -364,7 +364,7 @@ struct SpacesSettings: View {
                         Button(role: .destructive) { store.removeSpace(space.id) } label: { Image(systemName: "trash") }
                             .buttonStyle(.borderless)
                             .disabled(store.spaces.count <= 1)
-                            .help(store.spaces.count <= 1 ? "You need at least one Orbit" : "Remove Orbit (its tabs move to the first Orbit)")
+                            .accessibilityLabel("Remove Orbit")   // no tooltip: the row vanishes when clicked
                     }
                 }
                 .onMove { store.moveSpace(fromOffsets: $0, toOffset: $1) }

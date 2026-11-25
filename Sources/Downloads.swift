@@ -532,6 +532,5 @@ private struct RowButton: View {
             Image(systemName: symbol).font(.system(size: 15)).foregroundStyle(tint)
         }
         .buttonStyle(.plain)
-        .help(help)
     }
 }

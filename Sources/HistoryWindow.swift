@@ -109,7 +109,6 @@ private struct HistoryRow: View {
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
                 .opacity(hovering ? 1 : 0)
-                .help("Remove from history")
         }
         .contentShape(Rectangle())
         .onHover { hovering = $0 }

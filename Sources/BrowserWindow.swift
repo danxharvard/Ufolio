@@ -848,7 +848,7 @@ struct ShieldsPanel: View {
                 VStack(spacing: 6) {
                     ForEach(groups.prefix(10)) { group in
                         HStack(alignment: .top, spacing: 9) {
-                            Favicon(url: URL(string: "https://\(group.sites.first ?? "")"), size: 15)
+                            Favicon(url: URL(string: "https://\(group.sites.first ?? "")"), size: 15, offline: true)
                                 .frame(width: 22, height: 18)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(group.company).font(.system(size: 12, weight: .medium)).lineLimit(1)

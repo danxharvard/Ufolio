@@ -81,17 +81,47 @@ private struct PrivateFact: View {
 
 // MARK: - The Stealth saucer
 
-/// A small saucer, half cloaked: the Stealth button's icon.
+/// The Stealth button's icon: an alien in dark glasses, travelling incognito. (It used to be a
+/// half-cloaked saucer, which looked too much like the Force Field saucer beside it.)
 struct StealthIcon: View {
     var color: Color
 
     var body: some View {
         ZStack {
-            HushMark(color: color.opacity(0.35), showStars: false)
-            HushMark(color: color, showStars: false)
-                .mask(LinearGradient(colors: [.black, .black, .clear], startPoint: .leading, endPoint: .trailing))
+            AlienHead().fill(color)
+            // The shades are cut out of the head, so the icon is one colour like the others.
+            Group {
+                Capsule().frame(width: 6.2, height: 3.6).rotationEffect(.degrees(18)).offset(x: -3.3, y: -0.6)
+                Capsule().frame(width: 6.2, height: 3.6).rotationEffect(.degrees(-18)).offset(x: 3.3, y: -0.6)
+                Rectangle().frame(width: 2.4, height: 0.9).offset(y: -1.1)
+            }
+            .blendMode(.destinationOut)
         }
-        .frame(width: 19, height: 15)
+        .compositingGroup()
+        .frame(width: 15, height: 17)
+    }
+}
+
+/// An alien's head: a wide dome narrowing to a small chin.
+private struct AlienHead: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        let w = r.width, h = r.height, x = r.minX, y = r.minY
+        p.move(to: CGPoint(x: x + w * 0.5, y: y + h))
+        p.addCurve(to: CGPoint(x: x, y: y + h * 0.38),
+                   control1: CGPoint(x: x + w * 0.30, y: y + h),
+                   control2: CGPoint(x: x, y: y + h * 0.72))
+        p.addCurve(to: CGPoint(x: x + w * 0.5, y: y),
+                   control1: CGPoint(x: x, y: y + h * 0.12),
+                   control2: CGPoint(x: x + w * 0.22, y: y))
+        p.addCurve(to: CGPoint(x: x + w, y: y + h * 0.38),
+                   control1: CGPoint(x: x + w * 0.78, y: y),
+                   control2: CGPoint(x: x + w, y: y + h * 0.12))
+        p.addCurve(to: CGPoint(x: x + w * 0.5, y: y + h),
+                   control1: CGPoint(x: x + w, y: y + h * 0.72),
+                   control2: CGPoint(x: x + w * 0.70, y: y + h))
+        p.closeSubpath()
+        return p
     }
 }
 
@@ -100,8 +130,6 @@ struct StealthIcon: View {
 struct CloakedSaucer: View {
     @State private var cloaked = false
     @State private var sweep = false
-    @Environment(\.controlActiveState) private var activeState
-
     var body: some View {
         ZStack {
             // A soft violet glow behind it.
@@ -130,7 +158,6 @@ struct CloakedSaucer: View {
                 }
         }
         .onAppear { animate(Effects.on) }
-        .onChange(of: activeState) { _, state in animate(Effects.on && state != .inactive) }
         .accessibilityHidden(true)
     }
 
@@ -141,7 +168,16 @@ struct CloakedSaucer: View {
             withTransaction(still) { cloaked = false; sweep = false }
             return
         }
-        withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) { cloaked = true }
-        withAnimation(.linear(duration: 2.2).delay(0.4).repeatForever(autoreverses: false)) { sweep = true }
+        // A couple of shimmers as the page appears, then it rests. Running forever, this redrew
+        // the frosted window behind it on every frame, which made the whole Stealth window lag.
+        withAnimation(.linear(duration: 2.2).delay(0.4)) { sweep = true }
+        Task { @MainActor in
+            for _ in 0..<2 {
+                withAnimation(.easeInOut(duration: 1.3)) { cloaked = true }
+                try? await Task.sleep(nanoseconds: 1_300_000_000)
+                withAnimation(.easeInOut(duration: 1.3)) { cloaked = false }
+                try? await Task.sleep(nanoseconds: 1_300_000_000)
+            }
+        }
     }
 }

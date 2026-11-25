@@ -293,7 +293,6 @@ private struct ClosedTabPill: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.12), value: hovering)
-        .help(tab.url.absoluteString)
     }
 }
 
@@ -541,7 +540,7 @@ private struct TrackerList: View {
                 VStack(spacing: 0) {
                     ForEach(summary.trackers.prefix(50), id: \.tracker) { item in
                         HStack {
-                            Favicon(url: URL(string: "https://\(item.tracker)"), size: 16)
+                            Favicon(url: URL(string: "https://\(item.tracker)"), size: 16, offline: true)
                             Text(item.tracker).font(.system(size: 12.5))
                             Spacer()
                             Text("\(item.sites) site\(item.sites == 1 ? "" : "s")")

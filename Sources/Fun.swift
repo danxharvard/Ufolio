@@ -158,11 +158,14 @@ struct SeededRandom {
 
 /// A faint shimmer running round the edge of a Stealth window.
 struct CloakingField: View {
-    @Environment(\.controlActiveState) private var activeState
     @State private var angle = 0.0
+    @State private var done = false
 
     var body: some View {
-        let moving = Effects.on && activeState != .inactive
+        if !done && Effects.on { field }
+    }
+
+    private var field: some View {
         RoundedRectangle(cornerRadius: 11, style: .continuous)
             .strokeBorder(AngularGradient(colors: [Color(red: 0.62, green: 0.48, blue: 1).opacity(0.0),
                                                    Color(red: 0.62, green: 0.48, blue: 1).opacity(0.55),
@@ -170,18 +173,13 @@ struct CloakingField: View {
                                                    Color(red: 0.62, green: 0.48, blue: 1).opacity(0.0)],
                                           center: .center, angle: .degrees(angle)), lineWidth: 1.5)
             .allowsHitTesting(false)
-            .onAppear { spin(moving) }
-            .onChange(of: moving) { _, on in spin(on) }
-    }
-
-    private func spin(_ on: Bool) {
-        if on {
-            withAnimation(.linear(duration: 9).repeatForever(autoreverses: false)) { angle = 360 }
-        } else {
-            var still = Transaction(animation: nil)
-            still.disablesAnimations = true
-            withTransaction(still) { angle = 0 }
-        }
+            // One sweep as the Stealth window opens, then the field is removed altogether: a
+            // window-sized layer kept over the page made every redraw in the window slower.
+            .task {
+                withAnimation(.easeInOut(duration: 3)) { angle += 360 }
+                try? await Task.sleep(nanoseconds: 3_200_000_000)
+                done = true
+            }
     }
 }
 
@@ -204,8 +202,10 @@ struct MiniSaucer: View {
         }
         .offset(y: bob ? -1.5 : 1.5)
         .onAppear {
+            // A few bobs as it arrives, then it rests: a never-ending animation kept the start page
+            // redrawing (and the Mac working) the whole time it was open.
             guard Effects.on else { return }
-            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { bob = true }
+            withAnimation(.easeInOut(duration: 1.6).repeatCount(5, autoreverses: true)) { bob = true }
         }
     }
 }
@@ -264,7 +264,7 @@ struct AbductionLog: View {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(summary.todayTrackers.prefix(40), id: \.tracker) { item in
                             HStack(spacing: 8) {
-                                Favicon(url: URL(string: "https://\(item.tracker)"), size: 14).frame(width: 18)
+                                Favicon(url: URL(string: "https://\(item.tracker)"), size: 14, offline: true).frame(width: 18)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(item.tracker).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
                                     let owner = TrackerCompanies.owner(of: item.tracker)
@@ -349,12 +349,21 @@ struct Achievement {
     }
 }
 
+/// Today's date as yyyy-MM-dd in your own time zone. (The ISO 8601 formatter uses UTC, so "today"
+/// used to change at 1 am in a UK summer, or in the evening in America.)
+enum LocalDay {
+    static var today: String {
+        let c = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+    }
+}
+
 /// How many different days Stealth Mode has been used: only a count and the last day are kept,
 /// never which days.
 enum StealthDays {
     static var count: Int { UserDefaults.standard.integer(forKey: "stealthDayCount") }
     static func recordToday() {
-        let today = Date().formatted(.iso8601.year().month().day())
+        let today = LocalDay.today
         guard UserDefaults.standard.string(forKey: "stealthLastDay") != today else { return }
         UserDefaults.standard.set(today, forKey: "stealthLastDay")
         UserDefaults.standard.set(count + 1, forKey: "stealthDayCount")
@@ -399,7 +408,7 @@ enum FeatureUsage: String, CaseIterable {
 struct SignalFromSpace: View {
     @State private var hidden = false
 
-    private var today: String { Date().formatted(.iso8601.year().month().day()) }
+    private var today: String { LocalDay.today }
 
     private var feature: FeatureUsage? {
         guard UserDefaults.standard.string(forKey: "signalDismissedDay") != today else { return nil }
@@ -420,7 +429,6 @@ struct SignalFromSpace: View {
                 } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .bold)) }
                 .buttonStyle(.plain)
                 .foregroundStyle(.tertiary)
-                .help("Hide today’s signal")
             }
             .padding(.horizontal, 12).padding(.vertical, 6)
             .background(Capsule().fill(Color.primary.opacity(0.05)))

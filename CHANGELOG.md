@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.46.2: Stealth Mode is smooth again, and a new Stealth icon
+
+**Stealth Mode**
+- Fixed: Stealth windows lagged when hovering over buttons, opening tabs and so on. The saucer
+  on the Stealth start page shimmered non-stop, which redrew the frosted window behind it on
+  every frame. It now shimmers a couple of times as the page opens, then rests.
+- Fixed: the cloaking field round a Stealth window's edge stayed as a window-sized layer over
+  the page (sweeping again every 15 seconds), slowing every redraw. It now sweeps once as the
+  window opens and is then removed.
+- New Stealth icon: an alien in dark glasses, travelling incognito, so it no longer looks like
+  the Force Field saucer beside it.
+
+**Privacy**
+- Fixed: the Abduction log, the start page's tracker list and the Force Field panel fetched
+  each blocked tracker's icon from the tracker's own server, contacting the very trackers
+  Ufolio had just blocked. They now only use icons already saved, or a letter.
+
+**Fixes**
+- Fixed a crash when the mouse was over a tab's close, mute or other small button as it
+  disappeared (closing tabs quickly, side tabs, History, Downloads, the start page, banners
+  and tips). Those buttons no longer use hover tooltips, which caused it.
+- Fixed the same crash in Settings rows (Reset, Delete) and on Remove Orbit.
+- Deleting a saved password or card in Settings › Passwords now asks first. One stray click
+  used to delete it for good.
+- The little saucer on the start page bobs a few times as it arrives, then rests, instead of
+  bobbing (and keeping the Mac working) the whole time.
+- The daily tip, daily photo and the count of days you've used Stealth Mode now change at your
+  own midnight, not at midnight in London (1 am in a UK summer, the evening in America).
+- Clicking Connect again while Hushlist is still downloading no longer queues a second full
+  download and rebuild of its 240,000 rules.
+
 ## 0.46.1: a new look for Stealth Mode
 
 **Stealth Mode**

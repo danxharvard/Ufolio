@@ -226,7 +226,6 @@ private struct SideTabRow: View {
                             .contentShape(Rectangle())   // clickable around the icon, not just on it
                     }
                     .buttonStyle(.plain)
-                    .help(tab.isMuted ? "Unmute this tab" : "Mute this tab")
                 }
                 if hovering || selected {
                     Button { model.close(tab) } label: {
@@ -238,7 +237,6 @@ private struct SideTabRow: View {
                             .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .help("Close Tab (⌘W)")
                 }
             }
         }
@@ -253,7 +251,6 @@ private struct SideTabRow: View {
         .contentShape(Rectangle())
         .onTapGesture { model.selectedID = tab.id }
         .onHover { hovering = $0 }
-        .help(tab.url?.host?.strippingWWW ?? tab.displayTitle)
         .contextMenu { TabMenuItems(model: model, tab: tab, vertical: true) }
         .animation(.easeOut(duration: 0.12), value: hovering)
     }
@@ -294,7 +291,6 @@ private struct PinnedTile: View {
             .contentShape(Rectangle())
             .onTapGesture { model.selectedID = tab.id }
             .onHover { hovering = $0 }
-            .help(tab.displayTitle)
             .contextMenu { TabMenuItems(model: model, tab: tab, vertical: true) }
     }
 }

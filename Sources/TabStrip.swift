@@ -224,7 +224,6 @@ private struct ChromeTab: View {
                     Image(systemName: "rectangle.split.2x1")
                         .font(.system(size: 9.5, weight: .semibold))
                         .foregroundStyle(Color.accentColor)
-                        .help("In Split View")
                 }
                 Text(tab.displayTitle)
                     .font(.system(size: 12.5, weight: isSelected ? .medium : .regular))
@@ -243,7 +242,6 @@ private struct ChromeTab: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help(tab.isMuted ? "Unmute this tab" : "Mute this tab")
             }
             if showsClose {
                 Button { model.close(tab) } label: {
@@ -255,7 +253,6 @@ private struct ChromeTab: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .help("Close Tab (⌘W)")
             }
         }
         .padding(.horizontal, showsTitle ? 12 : 0)
@@ -288,7 +285,8 @@ private struct ChromeTab: View {
         .onHover { inside in
             if inside { hoveredID = tab.id } else if hoveredID == tab.id { hoveredID = nil }
         }
-        .help(tab.url?.host?.strippingWWW ?? tab.displayTitle)
+        // No tooltips on tabs or their buttons: macOS's tooltip timer could reach a tab that had
+        // just been closed under the pointer and crash Ufolio (a SwiftUI fault).
         .contextMenu { TabMenuItems(model: model, tab: tab) }
         .animation(.easeOut(duration: 0.12), value: hovering)
     }
@@ -365,7 +363,6 @@ private struct OverflowTabsButton: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .onHover { hovering = $0 }
-        .help("\(tabs.count) more tabs")
     }
 }
 

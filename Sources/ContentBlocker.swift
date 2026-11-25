@@ -333,13 +333,16 @@ final class ContentBlocker: ObservableObject {
         }
         // One list at a time: two building rules at once could overwrite each other's results.
         // Others wait their turn (several old lists can be refreshed one after another at launch).
+        // The same list already downloading: a second click (or hushlist.online asking again)
+        // used to queue a second full download and rebuild of all its rules.
+        if url == downloading { return }
         guard !isWorking else {
             if !waiting.contains(where: { $0.url == url }) { waiting.append((url, name)) }
             status = "Waiting for another filter list to finish…"
             statusIsError = false
             return
         }
-        isWorking = true; statusIsError = false; status = "Downloading…"   // straight away, so a second click can't slip in
+        isWorking = true; downloading = url; statusIsError = false; status = "Downloading…"   // straight away, so a second click can't slip in
         Task {
             do {
                 var request = URLRequest(url: url)
@@ -486,6 +489,8 @@ final class ContentBlocker: ObservableObject {
 
     /// Lists from the web waiting for the one being set up to finish.
     private var waiting: [(url: URL, name: String?)] = []
+    /// The web list being set up right now, if any.
+    private var downloading: URL?
 
     private func report(_ message: String, error: Bool) async {
         await MainActor.run {
@@ -497,6 +502,7 @@ final class ContentBlocker: ObservableObject {
                 }
             }
             self.isWorking = false
+            self.downloading = nil
             self.status = message
             self.statusIsError = error
         }

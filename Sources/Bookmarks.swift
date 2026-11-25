@@ -446,6 +446,9 @@ extension EnvironmentValues {
 struct Favicon: View {
     let url: URL?
     let size: CGFloat
+    /// For blocked trackers: never contact the server for its icon (that would reach the very
+    /// tracker Ufolio just blocked); show a cached icon or the monogram.
+    var offline = false
     @State private var image: NSImage?
     @Environment(\.isPrivateWindow) private var isPrivateWindow
 
@@ -463,7 +466,7 @@ struct Favicon: View {
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
         .task(id: url?.host) {
-            image = await FaviconCache.shared.icon(for: url, saveToDisk: !isPrivateWindow)
+            image = await FaviconCache.shared.icon(for: url, saveToDisk: !isPrivateWindow, offline: offline)
         }
     }
 }
@@ -514,8 +517,13 @@ actor FaviconCache {
     private var misses: [String: Date] = [:]
     private var inFlight: [String: Task<SiteIcon?, Never>] = [:]
 
-    func icon(for url: URL?, saveToDisk: Bool = true) async -> NSImage? {
-        await info(for: url, saveToDisk: saveToDisk)?.image
+    func icon(for url: URL?, saveToDisk: Bool = true, offline: Bool = false) async -> NSImage? {
+        if offline {
+            guard let host = url?.host else { return nil }
+            if let hit = cache.object(forKey: host as NSString) { return hit.icon.image }
+            return Self.cached(host).flatMap(Self.makeIcon)?.image
+        }
+        return await info(for: url, saveToDisk: saveToDisk)?.image
     }
 
     /// Fetches each site's icon once, even when many views ask at the same moment.

@@ -131,7 +131,7 @@ final class BackgroundStore: ObservableObject {
         }
     }
 
-    private static var today: String { Date().formatted(.iso8601.year().month().day()) }
+    private static var today: String { LocalDay.today }
 
     /// The largest the picture ever needs to be: the biggest screen, in pixels.
     private static var screenPixels: Int {
@@ -164,7 +164,7 @@ enum DailyPhoto {
     }()
 
     static func today() async -> (URL?, String?) {
-        let day = Date().formatted(.iso8601.year().month().day())
+        let day = LocalDay.today
         let file = BackgroundStore.folder.appendingPathComponent("daily-\(day).jpg")
         let creditFile = BackgroundStore.folder.appendingPathComponent("daily-\(day).txt")
         if FileManager.default.fileExists(atPath: file.path) {

@@ -65,7 +65,6 @@ struct DefaultBrowserBanner: View {
             }
             .buttonStyle(.plain)
             .onHover { hoveringClose = $0 }
-            .help("Not now")
 
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
