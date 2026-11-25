@@ -35,7 +35,9 @@ final class BookmarkStore: ObservableObject {
         didSet {
             keys = Set(items.map { Self.key($0.url) })
             byFolder = Dictionary(grouping: items, by: \.folder)
-            if self !== Self.shared { BookmarkMenuSignal.shared.changed() }
+            // Never refer to `shared` here: this runs while `shared` itself is being created (it
+            // loads its bookmarks in init), and asking for it then stopped Ufolio at launch.
+            if isOtherProfile { BookmarkMenuSignal.shared.changed() }
         }
     }
     /// Bookmarks grouped by folder, worked out once per change: the sidebar, bookmarks bar and
@@ -45,8 +47,11 @@ final class BookmarkStore: ObservableObject {
     /// redraw of the address bar) is a quick lookup rather than a pass over every bookmark.
     private var keys: Set<String> = []
     private let fileURL: URL
+    /// A profile other than the default one.
+    private let isOtherProfile: Bool
 
     private init(profile: UUID?) {
+        isOtherProfile = profile != nil
         let folder = AppPaths.folder(forProfile: profile)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         fileURL = folder.appendingPathComponent("bookmarks.json")
