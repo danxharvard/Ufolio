@@ -140,6 +140,12 @@ final class ExtensionStore: ObservableObject {
                 .init(name: "x", value: "id=\(id)&uc"),
             ]
             let (data, response) = try await URLSession.shared.data(from: components.url!)
+            let finalURL = response.url
+            let finalHost = finalURL?.host?.lowercased() ?? ""
+            guard finalURL?.scheme?.lowercased() == "https",
+                  finalHost == "clients2.google.com" || finalHost.hasSuffix(".googleusercontent.com") else {
+                throw ExtensionError("The Chrome Web Store redirected the extension download to an untrusted address.")
+            }
             guard (response as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty else {
                 throw ExtensionError("The Chrome Web Store didn’t provide this extension.")
             }
