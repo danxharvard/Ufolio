@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased: security and robustness fixes
+- Torrent previews now scan every file entry for executable disguises, shortcuts and scam indicators, even when the visible list is capped at 20,000 files.
+- Reject malformed bencoded torrent data with trailing bytes and prevent declared file sizes from overflowing preview totals.
+- Correct torrent-site off-site detection for multi-part domains such as `.co.uk`.
+- Refuse browser-extension ZIP archives that declare more than 500 MB of expanded data before extracting them.
+- Reject filter-list downloads that follow an HTTPS URL with a redirect to HTTP.
+
 ## 0.48.0: torrent tools (off unless you switch them on)
 
 **Torrent tools** (Settings › Privacy & Security › Torrent tools)
