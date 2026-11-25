@@ -349,10 +349,7 @@ enum URLResolver {
             return url
         }
         if looksLikeAddress(input) {
-            // Local servers usually don't do HTTPS.
-            let host = input.split(separator: "/").first.map { String($0.split(separator: ":").first ?? "") } ?? ""
-            let local = host.lowercased() == "localhost" || host.lowercased().hasSuffix(".local") || isIPv4(host)
-            let url = URL(string: (local ? "http://" : "https://") + input)
+            let url = addressURL(input)
             if let url { lastGuess = (url, input) }
             return url
         }
@@ -362,6 +359,14 @@ enum URLResolver {
     /// The last address guessed from typed text (e.g. "node.js" → https://node.js). If no such
     /// server exists, the tab searches for the text instead (see BrowserTab).
     static var lastGuess: (url: URL, text: String)?
+
+    /// The web address typed text stands for (no record of the guess is kept: see resolve()).
+    static func addressURL(_ input: String) -> URL? {
+        // Local servers usually don't do HTTPS.
+        let host = input.split(separator: "/").first.map { String($0.split(separator: ":").first ?? "") } ?? ""
+        let local = host.lowercased() == "localhost" || host.lowercased().hasSuffix(".local") || isIPv4(host)
+        return URL(string: (local ? "http://" : "https://") + input)
+    }
 
     static func searchURL(for query: String) -> URL? {
         SearchEngine.current.searchURL(query)

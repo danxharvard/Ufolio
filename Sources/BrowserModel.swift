@@ -368,6 +368,13 @@ final class BrowserModel: NSObject, ObservableObject {
 
     deinit {
         LiveCount.change(\.windows, by: -1)
+        // The last Stealth window gone: its downloads leave the list too (the files stay in your
+        // Downloads folder, as the Stealth page says; they used to stay listed until Ufolio quit).
+        if isPrivate {
+            DispatchQueue.main.async {
+                if !BrowserModel.all.allObjects.contains(where: { $0.isPrivate }) { Downloads.shared.forgetPrivateItems() }
+            }
+        }
         // A closed window's timers stop with it.
         sleepTimer?.invalidate()
         audioTimer?.invalidate()

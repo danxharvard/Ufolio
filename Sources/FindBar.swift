@@ -12,6 +12,9 @@ final class FindModel: ObservableObject {
     /// The query the match count belongs to, so Next/Previous don't count the page again.
     private var countedQuery: String?
     private weak var countedPage: WKWebView?
+    /// The page address the count belongs to: a new page in the same tab is counted again (it
+    /// used to keep the old page's "3 of 12").
+    private var countedURL: URL?
     private var pendingSearch: DispatchWorkItem?
 
     /// Searches after a short pause in typing: counting matches reads the whole page's text,
@@ -51,7 +54,8 @@ final class FindModel: ObservableObject {
             guard let self, self.query == text else { return }
             if !result.matchFound { self.matches = 0; self.current = 0; return }
             // Already counted on this page: just step the position.
-            if self.countedQuery == text, self.countedPage === webView, let total = self.matches, total > 0 {
+            if self.countedQuery == text, self.countedPage === webView, self.countedURL == webView.url,
+               let total = self.matches, total > 0 {
                 self.current = backwards ? (self.current - 2 + total) % total + 1 : self.current % total + 1
                 return
             }
@@ -74,6 +78,7 @@ final class FindModel: ObservableObject {
             self.matches = total
             self.countedQuery = text
             self.countedPage = webView
+            self.countedURL = webView.url
             guard total > 0 else { self.current = 0; return }
             if self.current == 0 { self.current = 1 } else {
                 self.current = backwards ? (self.current - 2 + total) % total + 1 : self.current % total + 1

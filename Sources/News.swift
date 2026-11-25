@@ -166,9 +166,15 @@ final class NewsStore: ObservableObject {
 
     // MARK: Refreshing
 
+    /// After a refresh that got nothing (offline, say), the next waits three minutes: every new
+    /// tab used to fetch every feed again.
+    private var lastAttempt = Date.distantPast
+
     func refreshIfNeeded() {
         guard Prefs.bool(Prefs.startNews) else { return }
         if let lastUpdated, Date().timeIntervalSince(lastUpdated) < 15 * 60, !articles.isEmpty { return }
+        if Date().timeIntervalSince(lastAttempt) < 180 { return }
+        lastAttempt = Date()
         Task { await refresh() }
     }
 

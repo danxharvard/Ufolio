@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.50.3: seventeen fixes
+
+**Downloads**
+- Paused downloads are no longer thrown away by Clear or by the daily tidy-up (which lost any
+  way to resume them), and the trimmed list is now saved.
+- Downloads made in a Stealth window leave the downloads list when the last Stealth window
+  closes. (The files stay in your Downloads folder, as the Stealth page says.)
+
+**Bookmarks**
+- Two pages whose addresses differ only in capitals (like /wiki/Apple and /wiki/APPLE) can both be
+  bookmarked. They used to count as the same page.
+- Move Up and Move Down move a bookmark within its own folder. It used to swap with a bookmark
+  in another folder, so nothing seemed to happen.
+- A new, empty folder is kept when Ufolio quits. It used to vanish until something was put in it.
+- Renaming a folder to the name of another merges them, instead of listing the name twice.
+
+**Pages**
+- Reader no longer opens the previous page's article if you move on while it's gathering it.
+- The translation offer no longer belongs to the page you just left.
+- Find counts again on a new page in the same tab, instead of keeping the old page's count.
+- Typing an address in the Command Palette no longer leaves a stale guess behind, which could
+  later turn a failed page on that site into a search.
+
+**Settings and the rest**
+- Removing an Orbit asks first, and says where its tabs go.
+- Settings opens over the window you're using, including a Stealth window.
+- The torrent app list shows each app once.
+- Offline, the weather and News no longer try again every time you open a new tab: they wait
+  a couple of minutes.
+- Galaxy rank counts the days already in your history once history has finished loading (since
+  history started loading in the background, that first count could find nothing).
+
 ## 0.50.2: Settings in the middle, matching icons, and saving passwords
 
 - Settings now opens in the middle of your Ufolio window. It used to come up at the far right.

@@ -91,6 +91,8 @@ final class HistoryStore: ObservableObject {
                 if !fromDisk.isEmpty { self.entries = fromDisk.merging(self.entries) { _, recent in recent } }
                 self.isLoaded = true
                 self.prune()
+                // Galaxy rank counts the days already in your history once; it waits for them to load.
+                if self === HistoryStore.shared { GalaxyRank.recordToday() }
             }
         }
     }

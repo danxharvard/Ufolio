@@ -362,7 +362,16 @@ struct SpacesSettings: View {
                                     editing = nil
                                 }
                             }
-                        Button(role: .destructive) { store.removeSpace(space.id) } label: { Image(systemName: "trash") }
+                        Button(role: .destructive) {
+                            // Asks first: one stray click used to remove the Orbit straight away.
+                            let first = store.spaces.first { $0.id != space.id }?.name ?? "your first Orbit"
+                            DialogHost.settings.present(HushDialog(
+                                art: .symbol(space.symbol), theme: .danger, motion: .drift,
+                                title: "Remove the “\(space.name)” Orbit?",
+                                message: "Its open tabs move to \(first). Its name, icon and colour are gone for good.",
+                                choices: [.init(title: "Cancel", role: .cancel), .init(title: "Remove", role: .destructive)],
+                                completion: { choice, _ in if choice == 1 { store.removeSpace(space.id) } }))
+                        } label: { Image(systemName: "trash") }
                             .buttonStyle(.borderless)
                             .disabled(store.spaces.count <= 1)
                             .accessibilityLabel("Remove Orbit")   // no tooltip: the row vanishes when clicked

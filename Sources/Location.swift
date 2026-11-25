@@ -219,13 +219,19 @@ final class LocalWeather: ObservableObject {
     }
 
     /// Refreshes at most every 20 minutes.
+    /// When the weather was last asked for: after a failure (offline, say) it waits two minutes,
+    /// instead of asking again every time you open a new tab.
+    private var lastAttempt = Date.distantPast
+
     func refreshIfNeeded() {
         if let lastUpdate, Date().timeIntervalSince(lastUpdate) < 20 * 60, temperature != nil { return }
+        if Date().timeIntervalSince(lastAttempt) < 120 { return }
         refresh()
     }
 
     func refresh() {
         guard let place, !loading else { return }
+        lastAttempt = Date()
         loading = true
         Task {
             await self.update(for: place)
