@@ -215,6 +215,9 @@ enum Bencode {
     static func decode(_ data: Data) throws -> Value {
         var reader = Reader(bytes: [UInt8](data))
         let value = try reader.value(depth: 0)
+        // A valid bencoded document is exactly one value. Ignore neither appended junk nor a
+        // second value: accepting trailing bytes makes malformed downloads look trustworthy.
+        guard reader.i == reader.bytes.count else { throw DecodeError() }
         return value
     }
 
@@ -325,7 +328,10 @@ struct TorrentContents {
 
         func add(_ parts: [String], _ length: Int64) {
             count += 1
-            total = total &+ max(0, length)
+            // A hostile torrent can declare many enormous files. Wrapping arithmetic could turn
+            // their combined size into a small or negative number in the preview.
+            let (sum, overflow) = total.addingReportingOverflow(max(0, length))
+            total = overflow ? Int64.max : sum
             if !hiddenDirection, parts.contains(where: TorrentTools.hasHiddenDirection) { hiddenDirection = true }
             if parts.contains(where: { $0 == ".." || $0 == "." || $0.contains("/") || $0.contains("\\") || $0.contains(":") }) {
                 unsafePath = true
@@ -517,7 +523,10 @@ enum TorrentSiteGuard {
     static let script = """
     const MARK = 'data-ufolio-torrent';
     const here = location.hostname.replace(/^www\\./, '');
-    const site = h => h.split('.').slice(-2).join('.');
+    // Compare hostnames by exact/subdomain relationship. Taking the last two labels
+    // incorrectly treats every *.co.uk (and other multi-part suffix) as one site.
+    const site = h => h.toLowerCase().replace(/^www\\./, '');
+    const sameSite = (a, b) => a === b || a.endsWith('.' + b) || b.endsWith('.' + a);
     const magnets = document.querySelectorAll('a[href^="magnet:"]').length;
     const torrentLinks = document.querySelectorAll('a[href$=".torrent"], a[href*=".torrent?"]').length;
     const isIndex = magnets + torrentLinks >= 3;
