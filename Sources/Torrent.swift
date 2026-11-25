@@ -522,11 +522,14 @@ enum TorrentSiteGuard {
     /// index, and how many traps it marked.
     static let script = """
     const MARK = 'data-ufolio-torrent';
-    const here = location.hostname.replace(/^www\\./, '');
+    const here = location.hostname.replace(/^www\\./, '').toLowerCase();
     // Compare hostnames by exact/subdomain relationship. Taking the last two labels
     // incorrectly treats every *.co.uk (and other multi-part suffix) as one site.
-    const site = h => h.toLowerCase().replace(/^www\\./, '');
-    const sameSite = (a, b) => a === b || a.endsWith('.' + b) || b.endsWith('.' + a);
+    const sameSite = (a, b) => {
+      a = a.toLowerCase().replace(/^www\\./, '');
+      b = b.toLowerCase().replace(/^www\\./, '');
+      return a === b || a.endsWith('.' + b) || b.endsWith('.' + a);
+    };
     const magnets = document.querySelectorAll('a[href^="magnet:"]').length;
     const torrentLinks = document.querySelectorAll('a[href$=".torrent"], a[href*=".torrent?"]').length;
     const isIndex = magnets + torrentLinks >= 3;
@@ -560,7 +563,7 @@ enum TorrentSiteGuard {
         const imgText = img ? ((img.alt || '') + ' ' + (img.src || '')) : '';
         let target = null;
         try { target = href ? new URL(href, location.href) : null; } catch (e) {}
-        const offsite = target && /^https?:$/.test(target.protocol) && site(target.hostname) !== site(here);
+        const offsite = target && /^https?:$/.test(target.protocol) && !sameSite(target.hostname, here);
         if (target && /\\.(exe|scr|bat|cmd|msi|dmg|pkg|apk|jar|vbs|lnk)(\\?|$)/i.test(target.pathname) && /(mp4|mkv|avi|mov|1080p|720p|movie|episode|season|video)/i.test(text + ' ' + target.pathname)) {
           badge(el, 'Program, not a video', '#d93636'); marked++; continue;
         }
