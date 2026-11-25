@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.49.0: much faster browsing
+
+Measured on a test copy of Ufolio, loading eight busy sites three times each, before and after:
+- Back and Forward: about 2 seconds down to about 0.3 seconds (84% faster).
+- Returning to a site: it appears 22% sooner and finishes loading 26% sooner.
+- A site you've never visited appears 15% sooner.
+
+**What changed**
+- Safari's engine settings, which WebKit switches off for every app except Safari, are now on:
+  - a fresh page process is kept ready, so a new tab or site doesn't wait for one to start;
+  - recent sites' processes are kept and reused;
+  - the addresses of links on a page are looked up before you click.
+- Back and Forward show the page straight from memory. Memory Saver used to switch this off,
+  so Back reloaded the whole page. WebKit still lets these pages go when memory runs short.
+- Ufolio gets the connection to a site ready before you get there, so pages start sooner:
+  - when you point at a link (or press on it);
+  - when you point at a favourite, a suggestion on the start page, or a bookmark;
+  - while you type in the address bar, to the site you're most likely heading for;
+  - to your search engine as soon as you click into the address bar.
+  Only the connection is opened. Nothing is downloaded until you choose.
+- Pages that say what you're likely to open next can have it fetched ahead of time.
+- The look-alike site check no longer rebuilds its list of your sites in the middle of
+  opening a page.
+- All of these step back in Power Saver mode, and cached page processes are given back when
+  your Mac runs short of memory.
+
+**Fixes**
+- After Back or Forward showed a page from memory, the title in History, the Reader button
+  and translation weren't updated. They now are.
+
 ## 0.48.2: Ufolio opens again
 
 - Fixed: Ufolio 0.48.0 and 0.48.1 closed straight away when opened, if you had any bookmarks.

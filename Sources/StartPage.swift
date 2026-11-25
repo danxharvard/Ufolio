@@ -361,7 +361,11 @@ private struct FavouriteTile: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .onHover { inside in
+            hovering = inside
+            // Pointing at a favourite: get its connection ready before the click.
+            if inside { Speed.preconnect(bookmark.url, in: model.selectedTab?.webView) }
+        }
         .animation(.spring(response: 0.25, dampingFraction: 0.75), value: hovering)
         .help(bookmark.url.absoluteString)
         .task(id: bookmark.url) {
@@ -467,7 +471,10 @@ private struct SuggestionCard: View {
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .onHover { inside in
+            hovering = inside
+            if inside { Speed.preconnect(site.url, in: model.selectedTab?.webView) }
+        }
         .animation(.spring(response: 0.28, dampingFraction: 0.8), value: hovering)
         .animation(.easeOut(duration: 0.3), value: icon?.pixels)
         .help(site.url.absoluteString)

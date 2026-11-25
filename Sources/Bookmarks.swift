@@ -430,7 +430,10 @@ private struct BookmarkChip: View {
                 .fill(Color.primary.opacity(hovering ? 0.08 : 0))
         )
         .contentShape(Rectangle())
-        .onHover { hovering = $0 }
+        .onHover { inside in
+            hovering = inside
+            if inside { Speed.preconnect(bookmark.url, in: model.selectedTab?.webView) }
+        }
         .animation(.easeOut(duration: 0.1), value: hovering)
         .onTapGesture {
             let newTab = NSEvent.modifierFlags.contains(.command)

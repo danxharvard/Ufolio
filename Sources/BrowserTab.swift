@@ -45,6 +45,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     /// Torrent site mode, on this page: pop-ups and redirects stopped, and traps marked.
     @Published private(set) var torrentPopupsBlocked = 0
     @Published private(set) var torrentTrapsMarked = 0
+    /// Pages committed in this tab, and the one whose follow-up has run.
+    private var commitCount = 0
+    private var finishedCommit: Int?
     /// When you last clicked a link to another site on a torrent site (its redirects may follow).
     private var torrentOutboundClick = Date.distantPast
     /// Quick translation: the page's language when it isn't yours, and where translation is up to.
@@ -140,6 +143,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     static func makeConfiguration(privately: Bool = false, store: WKWebsiteDataStore? = nil) -> WKWebViewConfiguration {
         let config = WKWebViewConfiguration()
+        // Safari's speed settings: a page process kept ready, and recent sites' processes reused.
+        config.processPool = Speed.pool
         // Private windows keep cookies and site data in memory only, apart from everything else.
         config.websiteDataStore = store ?? .default()
         config.userContentController = WKUserContentController()
@@ -190,6 +195,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         if isMuted { WebKitExtras.setMuted(true, view) }
         ContentBlocker.shared.attach(view.configuration.userContentController)
         HushlistLink.shared.register(view.configuration.userContentController)
+        Speed.Handler.shared.register(view.configuration.userContentController)
         AutofillCenter.shared.register(self)
         ElementZapper.shared.register(self)
         (view as? HushWebView)?.onHideElements = { [weak self] in
@@ -715,7 +721,30 @@ extension BrowserTab: WKNavigationDelegate {
         }
     }
 
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        if SpeedBenchmark.active { NotificationCenter.default.post(name: SpeedBenchmark.committed, object: self) }
+        commitCount &+= 1
+        finishedCommit = nil
+        // A page shown instantly from the back/forward cache never reports "finished", so its
+        // follow-up (title, history, Reader, translation) is done here once it's settled.
+        let commit = commitCount
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.commitCount == commit, self.finishedCommit != commit, !self.webView.isLoading else { return }
+                self.pageFinished()
+            }
+        }
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        if SpeedBenchmark.active { NotificationCenter.default.post(name: SpeedBenchmark.finished, object: self) }
+        guard finishedCommit != commitCount else { return }
+        pageFinished()
+    }
+
+    /// What happens once a page has loaded (or been restored from the back/forward cache).
+    @MainActor private func pageFinished() {
+        finishedCommit = commitCount
         checkTorrentSite()
         // The guessed address worked: forget the guess (a later hiccup on that site mustn't turn
         // into a search for something typed long ago).

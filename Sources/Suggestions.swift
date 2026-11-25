@@ -31,6 +31,8 @@ final class SuggestionsModel: ObservableObject {
         active = true
         items = []
         selectedIndex = nil
+        // Most of what's typed here becomes a search: have the search engine's connection ready.
+        Speed.preconnect(SearchEngine.current.searchURL("a"), in: browser?.selectedTab?.webView)
     }
 
     func dismiss() {
@@ -64,6 +66,11 @@ final class SuggestionsModel: ObservableObject {
         task = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 90_000_000) // wait for a pause in typing
             guard !Task.isCancelled else { return }
+            // Connect to the site you're most likely heading for, so Return opens it sooner.
+            if let first = local.first, first.kind != .search,
+               let url = URL(string: first.kind == .website && !first.text.contains("://") ? "https://" + first.text : first.text) {
+                Speed.preconnect(url, in: self?.browser?.selectedTab?.webView)
+            }
             // Addresses and pasted links (which can carry private tokens) never go to the search engine.
             let isAddress = URLResolver.looksLikeAddress(q) || q.contains("://") || q.lowercased().hasPrefix("file:")
             let remote = Prefs.bool(Prefs.searchSuggestions) && !isAddress ? await Self.fetchSuggestions(q) : []

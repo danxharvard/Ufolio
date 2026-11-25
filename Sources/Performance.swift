@@ -114,8 +114,9 @@ final class PerformanceCenter: ObservableObject {
 
         let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
         source.setEventHandler { [weak self, weak source] in
-            // Pictures kept in memory can always be fetched again.
+            // Pictures kept in memory can always be fetched again, and so can cached page processes.
             Task { await FaviconCache.shared.purgeMemory(); await NewsImages.shared.purgeMemory() }
+            Speed.releaseCachedProcesses()
             MainActor.assumeIsolated {
                 SettingsWindow.releaseNow()          // rebuilt next time you open Settings
                 BackgroundStore.shared.purgeIfHidden()   // the start page picture, if no start page shows
@@ -335,10 +336,15 @@ final class PerformanceCenter: ObservableObject {
         let mode = effectiveMode
         // Up to 120 Hz on ProMotion displays instead of WebKit's usual 60.
         Self.setFeature("PreferPageRenderingUpdatesNear60FPSEnabled", mode != .performance, in: preferences)
-        // Look up the addresses of links on a page before you click them.
-        Self.setFeature("DNSPrefetchingEnabled", mode == .performance, in: preferences)
-        // Memory Saver: don't keep whole pages alive in memory just to make Back instant.
-        Self.setFeature("UsesBackForwardCache", !Self.memorySaverOn || mode == .performance, in: preferences)
+        // Look up the addresses of links on a page before you click them, as Safari does
+        // (it was only on in Performance mode).
+        Self.setFeature("DNSPrefetchingEnabled", Speed.enabled ? !isPowerSaving : mode == .performance, in: preferences)
+        // Pages may fetch what they say you'll open next (<link rel="prefetch">), ready in the cache.
+        Self.setFeature("LinkPrefetchEnabled", Speed.enabled && !isPowerSaving, in: preferences)
+        // Back and Forward show the page instantly from memory, as in Safari. (Memory Saver used
+        // to switch this off, so Back reloaded the whole page; WebKit already drops these pages
+        // by itself when memory runs short.)
+        Self.setFeature("UsesBackForwardCache", Speed.enabled || !Self.memorySaverOn || mode == .performance, in: preferences)
         // 3D graphics on the energy-saving graphics chip, where a Mac has two.
         Self.setFeature("ForceWebGLUsesLowPower", isPowerSaving, in: preferences)
         // Background tabs' timers slow down further the longer they're hidden.

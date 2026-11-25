@@ -76,7 +76,7 @@ struct PerformanceSettings: View {
                     }
                 }
                 SettingsSwitch(title: "Memory Saver",
-                               detail: "Keeps Ufolio under its memory limit by putting the tabs you used least recently to sleep, and doesn’t keep old pages in memory just to make Back instant.",
+                               detail: "Keeps Ufolio under its memory limit by putting the tabs you used least recently to sleep.",
                                symbol: "memorychip", colors: PowerMode.eco.colors, isOn: $memorySaver)
                 if memorySaver {
                     LabeledContent("Memory limit") {

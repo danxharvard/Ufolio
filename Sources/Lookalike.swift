@@ -61,7 +61,9 @@ enum Lookalike {
     /// Checks a host before its page loads.
     static func check(host: String) -> Match? {
         guard Prefs.bool(Prefs.lookalikeWarning) else { return nil }
-        if Date().timeIntervalSince(builtAt) > 60 { refreshKnown() }
+        // Rebuilt just after this check, never during it: reading every bookmark and your most
+        // visited history used to hold up the page you were opening, once a minute.
+        if Date().timeIntervalSince(builtAt) > 60 { DispatchQueue.main.async { refreshKnown() } }
         let site = Domains.site(host)
         guard !site.isEmpty, !knownSet.contains(site), !allowedAnyway(site) else { return nil }
 
