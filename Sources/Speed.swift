@@ -138,7 +138,7 @@ enum Speed {
             if let body = message.body as? [String: Any], let text = body["preload"] as? String, text.count < 2000,
                let url = URL(string: text), let webView = message.webView {
                 let tab = BrowserModel.all.allObjects.lazy.flatMap(\.tabs).first { $0.webView === webView }
-                Preloader.preload(url, for: tab)
+                Preloader.preload(url, for: tab, lifetime: 2)
                 return
             }
             guard let text = message.body as? String, text.count < 300, let url = URL(string: text) else { return }
@@ -340,18 +340,24 @@ enum Preloader {
 
     /// The same page, however it was written (trailing slash, #section).
     static func same(_ a: URL, _ b: URL) -> Bool {
+        // Only the scheme and host ignore case: paths don't (/wiki/Apple and /wiki/APPLE are
+        // different pages, and used to count as the same, so the wrong one could be swapped in).
         func key(_ u: URL) -> String {
-            var c = URLComponents(url: u, resolvingAgainstBaseURL: false)
-            c?.fragment = nil
-            var s = (c?.string ?? u.absoluteString).lowercased()
+            guard var c = URLComponents(url: u, resolvingAgainstBaseURL: false) else { return u.absoluteString }
+            c.fragment = nil
+            c.scheme = c.scheme?.lowercased()
+            c.host = c.host?.lowercased().strippingWWW
+            var s = c.string ?? u.absoluteString
             if s.hasSuffix("/") { s.removeLast() }
-            return s.replacingOccurrences(of: "://www.", with: "://")
+            return s
         }
         return key(a) == key(b)
     }
 
-    /// Starts loading `url` for `tab`, replacing any earlier preload.
-    static func preload(_ url: URL, for tab: BrowserTab?) {
+    /// Starts loading `url` for `tab`, replacing any earlier preload. `lifetime`: how long it's
+    /// kept if not opened (a press on a link that never became a click, say on a web app that
+    /// handles its own links, is let go after 2 seconds rather than 30).
+    static func preload(_ url: URL, for tab: BrowserTab?, lifetime: TimeInterval = 30) {
         guard enabled, let tab, !tab.isPrivate, !tab.isAsleep,
               let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https", let host = url.host else { return }
         if let here = tab.url, same(here, url) { return }
@@ -371,17 +377,17 @@ enum Preloader {
         view.load(URLRequest(url: url))
         let entry = Entry(url: url, tabID: tab.id, view: view)
         current = entry
-        DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak entry] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + lifetime) { [weak entry] in
             if let entry, current === entry { discard() }
         }
     }
 
     /// Preloads after the pointer has rested for a moment (cancelled if it moves away).
-    static func preloadSoon(_ url: URL, for tab: BrowserTab?) {
+    static func preloadSoon(_ url: URL, for tab: BrowserTab?, delay: TimeInterval = 0.25) {
         pending?.cancel()
-        let work = DispatchWorkItem { preload(url, for: tab) }
+        let work = DispatchWorkItem { [weak tab] in preload(url, for: tab) }
         pending = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     static func cancelSoon() {
@@ -461,6 +467,30 @@ enum Preloader {
         @objc(_webCryptoMasterKeyForWebView:completionHandler:)
         func webCryptoKey(_ webView: WKWebView, completionHandler: @escaping (Data?) -> Void) {
             completionHandler(WebCryptoKey.key(privately: false))
+        }
+    }
+}
+
+
+/// UFOLIO_AUTOFILL_TEST=<address of a sign-in page>: loads it, fills it in and sends it, so the
+/// offer to save can be checked (testing only).
+enum AutofillTest {
+    static func startIfAsked(in model: BrowserModel) {
+        guard let address = ProcessInfo.processInfo.environment["UFOLIO_AUTOFILL_TEST"], let url = URL(string: address) else { return }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard let tab = model.selectedTab else { return }
+            tab.load(url)
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            let fill = """
+            for (const [sel, v] of [['#user', 'dan@example.com'], ['#pw', 'hunter2-test']]) {
+              const el = document.querySelector(sel); el.value = v;
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            document.querySelector('#go').click(); return 1;
+            """
+            _ = try? await tab.webView.callAsyncJavaScript(fill, contentWorld: .page)
+            AutofillCenter.note("test: filled and clicked")
         }
     }
 }

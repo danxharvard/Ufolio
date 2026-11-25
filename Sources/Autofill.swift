@@ -83,15 +83,20 @@ struct SavedLogin: Identifiable, Hashable {
 
 /// Saved passwords, in Ufolio's own encrypted vault (see Vault).
 enum PasswordVault {
+    /// Saved logins: the vault's, plus any older ones still in the keychain (which move into the
+    /// vault the first time they're used, so macOS asks once per password, and only when needed).
     static func logins(for host: String? = nil) -> [SavedLogin] {
-        Vault.read().logins
+        let own = Vault.read().logins
             .filter { host == nil || $0.host == host }
             .map { SavedLogin(host: $0.host, account: $0.account, modified: $0.modified) }
-            .sorted { ($0.host, $0.account) < ($1.host, $1.account) }
+        return (own + Vault.keychainLogins(for: host)).sorted { ($0.host, $0.account) < ($1.host, $1.account) }
     }
 
     static func password(for login: SavedLogin) -> String? {
-        Vault.read().logins.first { $0.host == login.host && $0.account == login.account }?.password
+        if let saved = Vault.read().logins.first(where: { $0.host == login.host && $0.account == login.account }) {
+            return saved.password
+        }
+        return Vault.takeFromKeychain(host: login.host, account: login.account)
     }
 
     @discardableResult
@@ -108,6 +113,8 @@ enum PasswordVault {
 
     static func delete(_ login: SavedLogin) {
         Vault.update { $0.logins.removeAll { $0.host == login.host && $0.account == login.account } }
+        // An older copy in the keychain stays there, but isn't shown again.
+        Vault.hideKeychainLogin(host: login.host, account: login.account)
     }
 
     // Sites the user said never to save passwords for.
@@ -178,12 +185,15 @@ enum CardVault {
         let label: String
     }
 
+    /// The vault's cards, plus older ones still in the keychain (moved in when first used).
     static func list() -> [Summary] {
-        Vault.read().cards.map { Summary(id: $0.id, label: "\($0.label) · \($0.expiry)") }.sorted { $0.label < $1.label }
+        let own = Vault.read().cards.map { Summary(id: $0.id, label: "\($0.label) · \($0.expiry)") }
+        let ownIDs = Set(own.map(\.id))
+        return (own + Vault.keychainCards().filter { !ownIDs.contains($0.id) }).sorted { $0.label < $1.label }
     }
 
     static func card(_ id: UUID) -> SavedCard? {
-        Vault.read().cards.first { $0.id == id }
+        Vault.read().cards.first { $0.id == id } ?? Vault.takeCardFromKeychain(id)
     }
 
     @discardableResult
@@ -195,6 +205,7 @@ enum CardVault {
 
     static func delete(_ id: UUID) {
         Vault.update { $0.cards.removeAll { $0.id == id } }
+        Vault.hideKeychainLogin(host: "card", account: id.uuidString)
     }
 }
 
@@ -274,7 +285,12 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
         }
     }
 
+    /// UFOLIO_AUTOFILL_TRACE: notes each step of offering to save (for testing only).
+    static let trace = ProcessInfo.processInfo.environment["UFOLIO_AUTOFILL_TRACE"] != nil
+    static func note(_ text: String) { if trace { FileHandle.standardError.write(("autofill: " + text + "\n").data(using: .utf8)!) } }
+
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        Self.note("message \((message.body as? [String: Any])?["type"] ?? "?") main=\(message.frameInfo.isMainFrame) tabKnown=\(message.webView.flatMap { tabs.object(forKey: $0) } != nil)")
         guard message.frameInfo.isMainFrame,
               let webView = message.webView,
               let tab = tabs.object(forKey: webView),
@@ -298,6 +314,7 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
                   let password = body["password"] as? String, !password.isEmpty, password.count <= 512,
                   !tab.isPrivate || generatedPasswords.contains(password) else { return }
             let username = String((body["username"] as? String ?? "").prefix(256))
+            Self.note("submit for \(host), offering to save")
             offerToSave(username: username, password: password, host: host, tab: tab)
         default:
             break
@@ -465,8 +482,11 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
         // The keychain is read in the background: it can be slow (or ask permission), and
         // sending a sign-in form used to freeze the window while it did.
         DispatchQueue.global(qos: .userInitiated).async { [weak self, weak tab] in
-            let existing = PasswordVault.logins(for: host).first { $0.account == username }
-            let unchanged = existing.map { PasswordVault.password(for: $0) == password } ?? false
+            // Only Ufolio's own vault is checked: comparing with an older keychain copy would make
+            // macOS ask for your Mac password in the middle of signing in.
+            let saved = Vault.read().logins.first { $0.host == host && $0.account == username }
+            let existing = saved.map { SavedLogin(host: $0.host, account: $0.account, modified: $0.modified) }
+            let unchanged = saved?.password == password
             DispatchQueue.main.async {
                 guard let self, let tab, !unchanged else { return }
                 self.showSaveOffer(existing: existing, username: username, password: password, host: host, tab: tab)
@@ -475,6 +495,7 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
     }
 
     private func showSaveOffer(existing: SavedLogin?, username: String, password: String, host: String, tab: BrowserTab) {
+        Self.note("show offer: window=\(tab.webView.window != nil) busy=\(DialogHost.isBusy(tab.webView.window))")
         guard let window = tab.webView.window, !DialogHost.isBusy(window) else { return }
 
         let who = username.isEmpty ? "" : " for “\(username)”"
@@ -549,7 +570,8 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
         var users = Array.prototype.filter.call(form.querySelectorAll('input'), function (i) {
           return i !== pw && isTextInput(i) && i.value && (i.compareDocumentPosition(pw) & Node.DOCUMENT_POSITION_FOLLOWING);
         });
-        var user = users.length ? users[users.length - 1].value : '';
+        var hinted = form.querySelector('input[autocomplete~="username"], input[name="identifier"], input[name="username"], input[type="email"]');
+        var user = users.length ? users[users.length - 1].value : (hinted && hinted !== pw ? hinted.value || '' : '');
         var key = user + '\u0000' + pw.value;
         if (key === lastSent) return;
         lastSent = key;
@@ -563,6 +585,43 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
       document.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && e.target && e.target.type === 'password') capture(e.target.form || document);
       }, true);
+
+      // Sign-ins that never send a form (web apps that check the password in the background,
+      // and the password step of two-step sign-ins): remember what's typed in a password box,
+      // and offer once the page moves on, the box goes away, or the page closes.
+      var typed = { user: '', pw: '', href: location.href };
+      function userNear(pw) {
+        var scope = pw.form || document;
+        // Two-step sign-ins keep the username in a hidden field for password managers.
+        var hinted = scope.querySelector('input[autocomplete~="username"], input[name="identifier"], input[name="username"], input[type="email"]');
+        if (hinted && hinted !== pw && hinted.value) return hinted.value;
+        var users = Array.prototype.filter.call(scope.querySelectorAll('input'), function (i) {
+          return i !== pw && isTextInput(i) && i.value && (i.compareDocumentPosition(pw) & Node.DOCUMENT_POSITION_FOLLOWING);
+        });
+        return users.length ? users[users.length - 1].value : '';
+      }
+      function remember(e) {
+        var t = e.target;
+        if (!(t instanceof HTMLInputElement) || t.type !== 'password' || !t.value) return;
+        typed.pw = t.value; typed.user = userNear(t); typed.href = location.href;
+      }
+      document.addEventListener('input', remember, true);
+      document.addEventListener('change', remember, true);
+      function flush() {
+        if (!typed.pw) return;
+        var key = typed.user + '\u0000' + typed.pw;
+        if (key !== lastSent) {
+          lastSent = key;
+          post({ type: 'submit', username: typed.user.slice(0, 256), password: typed.pw.slice(0, 512) });
+        }
+        typed.pw = '';
+      }
+      window.addEventListener('pagehide', flush, true);
+      setInterval(function () {
+        if (!typed.pw) return;
+        var boxes = Array.prototype.filter.call(document.querySelectorAll('input[type=password]'), visible);
+        if (location.href !== typed.href || !boxes.length) flush();
+      }, 700);
 
       // Filling, in a way that frameworks like React notice.
       var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;

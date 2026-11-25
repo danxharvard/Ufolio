@@ -272,6 +272,13 @@ final class Updater: ObservableObject {
     private func launchSwap(relaunch: Bool) {
         guard let pending else { return }
         self.pending = nil
+        // The installer's log only ever grew: keep its last couple of hundred lines.
+        let log = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Ufolio Browser Update.log")
+        if let size = (try? log.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size > 200_000,
+           let text = try? String(contentsOf: log, encoding: .utf8) {
+            try? text.split(separator: "\n", omittingEmptySubsequences: false).suffix(200).joined(separator: "\n")
+                .write(to: log, atomically: true, encoding: .utf8)
+        }
         let target = currentBundle.path
         let backup = target + ".old-\(Int(Date().timeIntervalSince1970))"
         let script = pending.workDir.appendingPathComponent("install.sh")

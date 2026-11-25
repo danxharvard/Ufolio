@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.51.0-beta.4: password moving fixed, and more fixes (beta)
+
+**Passwords**
+- Older passwords still in your keychain no longer have to be moved all at once (macOS asked for
+  your Mac password once for every single one). They're listed as normal, and each moves into
+  Ufolio's vault the first time it's used: macOS asks once for that password, then never
+  again. No more popup at launch. Settings › Passwords › Move All is still there if you want
+  it, with a clear warning.
+- Ufolio offers to save your password on many more sign-ins: web apps that never send a normal
+  form, and the password step of two-step sign-ins (with the email from the step before).
+- Offering to save never makes macOS ask for your Mac password.
+- "Later" on moving keychain passwords waits a week instead of asking at every launch.
+
+**Look**
+- Settings opens in the middle of your Ufolio window, not at the far right.
+- The Force Field shield is the same size as the Stealth alien and the ⋯ menu.
+
+**Instant pages and Split View**
+- Back from a page opened instantly in a new tab no longer leads to an empty start page.
+- Pressing on a link a web app handles itself no longer keeps a hidden copy of the page loading
+  for 30 seconds: it's let go after 2.
+- Holding an arrow key through address-bar suggestions no longer starts and discards a page for
+  each one.
+- Two addresses differing only in capitals (like /wiki/Apple and /wiki/APPLE) are no longer
+  treated as the same page.
+- A crash or error screen from the previous page no longer stays over an instantly opened page.
+- Dragging a link between Split View panes recognises more ways WebKit starts a drag.
+
+**Also in 0.50.1**: eight fixes (tooltip crashes, the arrival sound, history clearing at
+launch, the saucer pet and planet following Effects, the rollback question, the update log, big
+torrent files).
+
 ## 0.51.0-beta.3: no more password prompts (beta)
 
 **Passwords and cards, kept by Ufolio itself**

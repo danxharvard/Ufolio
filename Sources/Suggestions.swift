@@ -52,9 +52,13 @@ final class SuggestionsModel: ObservableObject {
         if next < -1 { next = items.count - 1 }
         if next >= items.count { next = -1 }
         selectedIndex = next == -1 ? nil : next
-        // Arrowed onto a suggestion: start loading it, so Return opens it instantly.
+        // Arrowed onto a suggestion: start loading it, so Return opens it instantly. (After a
+        // moment's pause: holding an arrow key down used to start and throw away a page for
+        // every suggestion it passed.)
         if let chosen = selected, let url = destination(of: chosen.text, kind: chosen.kind) {
-            Preloader.preload(url, for: browser?.selectedTab)
+            Preloader.preloadSoon(url, for: browser?.selectedTab, delay: 0.15)
+        } else {
+            Preloader.cancelSoon()
         }
     }
 

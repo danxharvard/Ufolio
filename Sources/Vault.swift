@@ -20,6 +20,8 @@ enum Vault {
     struct Contents: Codable {
         var logins: [Login] = []
         var cards: [SavedCard] = []
+        /// Passwords still in the keychain that you deleted in Ufolio ("host\0account"): not shown again.
+        var hiddenKeychain: [String]? = nil
     }
 
     private static let lock = NSLock()
@@ -86,6 +88,78 @@ enum Vault {
         return true
     }
 
+    // MARK: Passwords still in the keychain, moved one at a time as they're used
+
+    /// Ufolio's passwords still in the keychain (names only, which macOS never asks about),
+    /// leaving out ones already in the vault or deleted in Ufolio.
+    static func keychainLogins(for host: String? = nil) -> [SavedLogin] {
+        var query: [String: Any] = [kSecClass as String: kSecClassInternetPassword, kSecAttrCreator as String: creator,
+                                    kSecMatchLimit as String: kSecMatchLimitAll, kSecReturnAttributes as String: true]
+        if let host { query[kSecAttrServer as String] = host }
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let items = result as? [[String: Any]] else { return [] }
+        let contents = read()
+        let hidden = Set(contents.hiddenKeychain ?? [])
+        return items.compactMap { item -> SavedLogin? in
+            guard let server = item[kSecAttrServer as String] as? String, let account = item[kSecAttrAccount as String] as? String,
+                  !hidden.contains(server + "\u{0}" + account),
+                  !contents.logins.contains(where: { $0.host == server && $0.account == account }) else { return nil }
+            return SavedLogin(host: server, account: account, modified: item[kSecAttrModificationDate as String] as? Date)
+        }
+    }
+
+    /// Reads one password from the keychain (macOS asks this once) and moves it into the vault.
+    static func takeFromKeychain(host: String, account: String) -> String? {
+        let query: [String: Any] = [kSecClass as String: kSecClassInternetPassword, kSecAttrCreator as String: creator,
+                                    kSecAttrServer as String: host, kSecAttrAccount as String: account,
+                                    kSecMatchLimit as String: kSecMatchLimitOne, kSecReturnData as String: true]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let data = result as? Data,
+              let password = String(data: data, encoding: .utf8) else { return nil }
+        update { contents in
+            if !contents.logins.contains(where: { $0.host == host && $0.account == account }) {
+                contents.logins.append(Login(host: host, account: account, password: password, modified: Date()))
+            }
+        }
+        return password
+    }
+
+    /// Cards still in the keychain (their labels only, which macOS never asks about).
+    static func keychainCards() -> [CardVault.Summary] {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: cardService,
+                                    kSecMatchLimit as String: kSecMatchLimitAll, kSecReturnAttributes as String: true]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let items = result as? [[String: Any]] else { return [] }
+        let hidden = Set(read().hiddenKeychain ?? [])
+        return items.compactMap { item in
+            guard let account = item[kSecAttrAccount as String] as? String, let id = UUID(uuidString: account),
+                  !hidden.contains("card\u{0}" + account) else { return nil }
+            return CardVault.Summary(id: id, label: item[kSecAttrLabel as String] as? String ?? "Card")
+        }
+    }
+
+    /// Reads one card from the keychain (macOS asks this once) and moves it into the vault.
+    static func takeCardFromKeychain(_ id: UUID) -> SavedCard? {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: cardService,
+                                    kSecAttrAccount as String: id.uuidString, kSecMatchLimit as String: kSecMatchLimitOne,
+                                    kSecReturnData as String: true]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let data = result as? Data,
+              let card = try? JSONDecoder().decode(SavedCard.self, from: data) else { return nil }
+        update { contents in if !contents.cards.contains(where: { $0.id == card.id }) { contents.cards.append(card) } }
+        return card
+    }
+
+    /// Stops showing a keychain password that was deleted in Ufolio.
+    static func hideKeychainLogin(host: String, account: String) {
+        update { contents in
+            var hidden = contents.hiddenKeychain ?? []
+            let key = host + "\u{0}" + account
+            if !hidden.contains(key) { hidden.append(key) }
+            contents.hiddenKeychain = hidden
+        }
+    }
+
     // MARK: Moving passwords out of the keychain
 
     private static let movedKey = "vault.movedFromKeychain"
@@ -96,6 +170,8 @@ enum Vault {
     /// to move them in. (Only their names are looked at first, which macOS never asks about.)
     static func offerToMoveIfNeeded() {
         guard !UserDefaults.standard.bool(forKey: movedKey) else { return }
+        // "Later" means a week from now, not every launch (the button in Settings is always there).
+        if let later = UserDefaults.standard.object(forKey: "vault.moveLater") as? Date, later > Date() { return }
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 8) {
             let count = keychainItemCount()
             DispatchQueue.main.async {
@@ -106,7 +182,10 @@ enum Vault {
                     message: "Ufolio now keeps saved passwords and cards in its own encrypted vault, so you won’t be asked for your Mac password every time you sign in to something. macOS will ask one last time to let Ufolio copy them across. The copies in your keychain stay as they are.",
                     choices: [.init(title: "Later", role: .cancel), .init(title: "Move Now", role: .primary)],
                     completion: { choice, _ in
-                        guard choice == 1 else { return }
+                        guard choice == 1 else {
+                            UserDefaults.standard.set(Date().addingTimeInterval(7 * 86_400), forKey: "vault.moveLater")
+                            return
+                        }
                         DispatchQueue.global(qos: .userInitiated).async {
                             let moved = moveFromKeychain()
                             DispatchQueue.main.async {

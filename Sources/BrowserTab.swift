@@ -427,8 +427,11 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     /// A link, address or picture dragged from the other pane opens here (replacing this page), or
     /// in a new tab with ⌥ held. Only web addresses: never javascript:, file: or data:.
     private func handleSplitDrag(_ phase: HushWebView.SplitDrag, _ info: NSDraggingInfo) -> Bool {
-        guard let model, let other = model.otherPane(of: self),
-              let source = info.draggingSource as? WKWebView, source === other.webView,
+        // The drag must come from the other pane's page (WebKit may report the page view itself,
+        // or a view inside it, as where the drag began).
+        let source = info.draggingSource as? NSView
+        guard let model, let other = model.otherPane(of: self), let source,
+              source === other.webView || source.isDescendant(of: other.webView),
               let url = Self.webAddress(in: info.draggingPasteboard) else {
             if isDropTarget { isDropTarget = false }
             return false
@@ -500,6 +503,11 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         old.uiDelegate = nil
         objectWillChange.send()
         webView = view
+        // The new page view's own state: a crash or error screen from the old one mustn't stay
+        // on top of it.
+        if crashed { crashed = false; crashedWhileHidden = false }
+        if loadError != nil { loadError = nil }
+        if reader != nil { reader = nil }
         setUp(view)
         view.pageZoom = zoom
         if isMuted { WebKitExtras.setMuted(true, view) }
@@ -512,7 +520,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         let previous = show(view)
         dropParked(&parkedBack)
         dropParked(&parkedForward)
-        parkedBack = previous
+        // A new tab's empty start page isn't somewhere to go Back to (Back used to lead to it).
+        if previous.url != nil { parkedBack = previous } else { var blank: WKWebView? = previous; dropParked(&blank) }
         refreshNavigation()
         // It finished loading before it was handed over, so its follow-up (history, Reader) runs now.
         if !view.isLoading { DispatchQueue.main.async { [weak self] in self?.pageFinished() } }

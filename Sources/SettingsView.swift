@@ -1760,12 +1760,12 @@ private struct PasswordSettings: View {
                 }
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Passwords saved in your keychain")
-                        Text(moveMessage ?? "From older versions of Ufolio. macOS asks once to let Ufolio copy them.")
+                        Text("Passwords from older versions of Ufolio")
+                        Text(moveMessage ?? "Still in your keychain, and listed here. Each moves into Ufolio the first time it’s used (macOS asks once for that password). Move All asks once for every one.")
                             .font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Move into Ufolio") {
+                    Button("Move All") {
                         moveMessage = "Moving…"
                         DispatchQueue.global(qos: .userInitiated).async {
                             let moved = Vault.moveFromKeychain()

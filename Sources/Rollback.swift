@@ -54,6 +54,9 @@ enum Rollback {
     }
 
     private static func offer(_ previous: String) {
+        // Asked before any window exists: bring Ufolio forward so the question isn't hidden
+        // behind other apps.
+        NSApplication.shared.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Ufolio \(current) didn’t start properly"

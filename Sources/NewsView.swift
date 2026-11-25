@@ -232,7 +232,7 @@ private struct StoryButton<Label: View>: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: hovering)
-        .help(article.title)
+        .accessibilityLabel(article.title)
         .contextMenu {
             Button { NewsStore.shared.markRead(article); model.open(article.link) } label: { SwiftUI.Label("Open", systemImage: "arrow.up.forward.square") }
             Button { NewsStore.shared.markRead(article); model.open(article.link, inNewTab: true) } label: { SwiftUI.Label("Open in New Tab", systemImage: "plus.square.on.square") }

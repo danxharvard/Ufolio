@@ -83,7 +83,12 @@ final class HistoryStore: ObservableObject {
             let loaded = Dictionary(saved.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             DispatchQueue.main.async {
                 guard let self else { return }
-                if !loaded.isEmpty { self.entries = loaded.merging(self.entries) { _, recent in recent } }
+                // Anything cleared or forgotten while it was being read stays gone.
+                var fromDisk = self.clearedWhileLoading ? [:] : loaded
+                for removed in self.removedWhileLoading { fromDisk = fromDisk.filter { !removed($0.value) } }
+                self.clearedWhileLoading = false
+                self.removedWhileLoading = []
+                if !fromDisk.isEmpty { self.entries = fromDisk.merging(self.entries) { _, recent in recent } }
                 self.isLoaded = true
                 self.prune()
             }
@@ -92,6 +97,9 @@ final class HistoryStore: ObservableObject {
 
     /// Whether history has been read from disk yet (nothing is written over it before then).
     private(set) var isLoaded = false
+    /// Clear History or Forget This Site used in the moment before history was read.
+    private var clearedWhileLoading = false
+    private var removedWhileLoading: [(HistoryEntry) -> Bool] = []
 
     /// Searches a copy of history away from the main thread, so typing in the address bar never
     /// waits on it.
@@ -197,6 +205,7 @@ final class HistoryStore: ObservableObject {
 
     /// Removes one page from history.
     func remove(_ entry: HistoryEntry) {
+        if !isLoaded { let id = entry.id; removedWhileLoading.append { $0.id == id } }
         entries[entry.id] = nil
         scheduleSave()
     }
@@ -204,6 +213,7 @@ final class HistoryStore: ObservableObject {
     /// Removes every page from a site (Forget This Site).
     func remove(site: String) {
         let site = Domains.site(site)
+        if !isLoaded { removedWhileLoading.append { Domains.site($0.url.host ?? "") == site } }
         entries = entries.filter { Domains.site($0.value.url.host ?? "") != site }
         scheduleSave()
     }
@@ -216,6 +226,7 @@ final class HistoryStore: ObservableObject {
     func clear() {
         BookmarkOffer.shared.reset()
         DispatchQueue.global(qos: .utility).async { FaviconCache.clearDisk() }
+        if !isLoaded { clearedWhileLoading = true }
         entries = [:]
         hiddenHosts = []
         UserDefaults.standard.removeObject(forKey: hiddenKey)
