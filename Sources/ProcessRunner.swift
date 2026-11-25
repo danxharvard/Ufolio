@@ -31,6 +31,10 @@ enum FolderSafety {
     /// other files) or is unreasonably large.
     static func check(_ folder: URL, maxBytes: Int = 500_000_000, maxFiles: Int = 50_000) throws {
         let keys: [URLResourceKey] = [.isSymbolicLinkKey, .fileSizeKey]
+        let rootValues = try folder.resourceValues(forKeys: Set(keys))
+        if rootValues.isSymbolicLink == true {
+            throw ExtensionError("This extension folder is a link to another location, so Ufolio didn’t add it.")
+        }
         var inspectionError: Error?
         guard let walker = FileManager.default.enumerator(
             at: folder, includingPropertiesForKeys: keys, options: [],
