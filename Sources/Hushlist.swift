@@ -216,10 +216,17 @@ final class HushlistLink: NSObject, WKScriptMessageHandler {
         return WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true)
     }
 
-    func register(_ controller: WKUserContentController) {
-        guard !registered.contains(controller) else { return }
-        registered.add(controller)
-        controller.add(self, contentWorld: .page, name: Self.handlerName)
+    /// The bridge lives in the page's own script world (the site calls it), so it's only there
+    /// while the page is hushlist.online: on every site it let any page spot that you use Ufolio.
+    func sync(_ controller: WKUserContentController, host: String?) {
+        let wanted = host.map { Self.hosts.contains($0.lowercased()) } ?? false
+        if wanted, !registered.contains(controller) {
+            registered.add(controller)
+            controller.add(self, contentWorld: .page, name: Self.handlerName)
+        } else if !wanted, registered.contains(controller) {
+            registered.remove(controller)
+            controller.removeScriptMessageHandler(forName: Self.handlerName, contentWorld: .page)
+        }
     }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {

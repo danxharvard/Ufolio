@@ -179,6 +179,7 @@ final class ContentBlocker: ObservableObject {
     func update(_ controller: WKUserContentController, forHost host: String?) {
         let old = hostOf.object(forKey: controller) as String?
         if let host { hostOf.setObject(host as NSString, forKey: controller) } else { hostOf.removeObject(forKey: controller) }
+        HushlistLink.shared.sync(controller, host: host)
         let shields = ShieldSettings.shared
         if old.map(isShieldsDown) != host.map(isShieldsDown) || old == nil || shields.effective(for: old) != shields.effective(for: host)
             || old.map(isInsecureAllowed) != host.map(isInsecureAllowed) {

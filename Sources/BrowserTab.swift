@@ -243,7 +243,6 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         // finished loading (sound could start playing first).
         if isMuted { WebKitExtras.setMuted(true, view) }
         ContentBlocker.shared.attach(view.configuration.userContentController)
-        HushlistLink.shared.register(view.configuration.userContentController)
         Speed.Handler.shared.register(view.configuration.userContentController)
         AutofillCenter.shared.register(self)
         ElementZapper.shared.register(self)
