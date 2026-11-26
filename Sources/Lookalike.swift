@@ -51,6 +51,8 @@ enum Lookalike {
 
     /// Allowed from Stealth windows: until Ufolio quits only, never written down.
     private static var sessionAllowed: Set<String> = []
+    /// The last Stealth window closed: its "visit anyway" answers go with it.
+    static func stealthEnded() { sessionAllowed = [] }
 
     static func allow(_ site: String, remember: Bool = true) {
         guard remember else { sessionAllowed.insert(site); return }

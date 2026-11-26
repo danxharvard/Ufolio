@@ -431,7 +431,16 @@ final class BrowserModel: NSObject, ObservableObject {
         // Downloads folder, as the Stealth page says; they used to stay listed until Ufolio quit).
         if isPrivate {
             DispatchQueue.main.async {
-                if !BrowserModel.all.allObjects.contains(where: { $0.isPrivate }) { Downloads.shared.forgetPrivateItems() }
+                // The last Stealth window gone: its downloads leave the list, and every answer given
+                // in Stealth goes (they used to last until Ufolio quit): Force Field switched off for
+                // a site, site settings, hidden elements, look-alike and permission answers.
+                guard !BrowserModel.all.allObjects.contains(where: { $0.isPrivate }) else { return }
+                Downloads.shared.forgetPrivateItems()
+                ContentBlocker.shared.stealthEnded()
+                ShieldSettings.shared.stealthEnded()
+                ElementZapper.shared.stealthEnded()
+                Lookalike.stealthEnded()
+                SitePermissions.shared.stealthEnded()
             }
         }
         // A closed window's timers stop with it.
