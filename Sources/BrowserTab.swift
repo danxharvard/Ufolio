@@ -345,9 +345,16 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         let config = WKSnapshotConfiguration()
         config.snapshotWidth = 340
         webView.takeSnapshot(with: config) { [weak self] image, _ in
-            guard let self, let image, let data = Self.compressed(image) else { return }
-            self.previewData = data
-            self.previewTaken = Date()
+            // Encoded away from the main thread: this runs on every tab switch, which should be instant.
+            guard let cg = image?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+            DispatchQueue.global(qos: .utility).async {
+                let data = NSBitmapImageRep(cgImage: cg).representation(using: .jpeg, properties: [.compressionFactor: 0.5])
+                DispatchQueue.main.async {
+                    guard let self, let data else { return }
+                    self.previewData = data
+                    self.previewTaken = Date()
+                }
+            }
         }
     }
 
@@ -387,7 +394,18 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             // The page that wakes is a fresh one: not paused, and not (yet) heavy.
             if self.isPagePaused { self.isPagePaused = false }
             if self.isHeavy { self.isHeavy = false }
-            self.snapshotData = image.flatMap(Self.compressed)
+            // Squeezed to JPEG away from the main thread for tabs out of sight: putting dozens to
+            // sleep at once (Sleep Other Tabs, memory running short) froze the window while each
+            // was encoded. The tab you're looking at gets its picture straight away.
+            if self.model?.selectedTab === self || image == nil {
+                self.snapshotData = image.flatMap(Self.compressed)
+            } else if let cg = image?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                self.snapshotData = nil
+                DispatchQueue.global(qos: .utility).async { [weak self] in
+                    let data = NSBitmapImageRep(cgImage: cg).representation(using: .jpeg, properties: [.compressionFactor: 0.5])
+                    DispatchQueue.main.async { if let self, self.isAsleep, self.snapshotData == nil { self.snapshotData = data } }
+                }
+            }
             self.sleepState = self.webView.interactionState
             self.zoomBeforeSleep = self.webView.pageZoom   // the woken page gets it back
             self.observers.removeAll()
