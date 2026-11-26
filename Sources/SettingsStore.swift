@@ -379,6 +379,17 @@ enum AutoplayPolicy: String, CaseIterable, Identifiable {
     }
 
     static var current: AutoplayPolicy { AutoplayPolicy(rawValue: Prefs.string(Prefs.autoplay)) ?? .stopSound }
+
+    /// WebKit's per-page auto-play policy and quirks for this choice (as Safari sets them):
+    /// "Stop media with sound" still lets a page you opened yourself play its video with sound
+    /// (it inherits your click), which is what made YouTube links start at once in Safari.
+    var webKitPolicy: (policy: Int, quirks: Int) {
+        switch self {
+        case .allow: return (1, 0)
+        case .stopSound: return (2, 1 | 2 | 4 | 8)   // pause events, inherited and arbitrary gestures, per-document
+        case .never: return (3, 0)
+        }
+    }
 }
 
 enum PermissionPolicy: String, CaseIterable, Identifiable {

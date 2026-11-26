@@ -141,6 +141,19 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         WebKitExtras.setMuted(isMuted, webView)
     }
 
+    /// The tab you're looking at never stays with its sound and video held paused (Ufolio pauses
+    /// them in tabs you can't see; if a way back ever missed releasing them, a video in front
+    /// wouldn't play until Ufolio restarted). Called with the audio check, for tabs on screen.
+    func ensureMediaRunning() {
+        guard !isAsleep, !isPagePaused else { return }
+        webView.requestMediaPlaybackState { [weak self] state in
+            guard let self, state == .suspended, !self.isPagePaused,
+                  let model = self.model, model.selectedTab === self || (model.splitPair?.contains(self.id) ?? false && model.splitPair?.contains(model.selectedID) ?? false)
+            else { return }
+            self.webView.setAllMediaPlaybackSuspended(false)
+        }
+    }
+
     func checkAudio() {
         guard !isAsleep else { if isPlayingAudio { isPlayingAudio = false }; return }
         let playing = WebKitExtras.isPlayingAudio(webView)
@@ -363,6 +376,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         config.snapshotWidth = NSNumber(value: min(Double(webView.bounds.width), 900))
         webView.takeSnapshot(with: config) { [weak self] image, _ in
             guard let self, !self.isAsleep, force || self.model?.selectedTab !== self else { return }
+            // Unfrozen before its page process is let go (see tearDown).
+            if self.isPagePaused { WebKitExtras.setPageSuspended(false, self.webView) }
             self.dropParkedPages()
             // The page that wakes is a fresh one: not paused, and not (yet) heavy.
             if self.isPagePaused { self.isPagePaused = false }
@@ -709,6 +724,12 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     }
 
     func tearDown() {
+        // A floating video goes first, so WebKit isn't left with a window for a page that's gone.
+        if !isAsleep, WebKitExtras.isPictureInPictureActive(webView) { WebKitExtras.togglePictureInPicture(webView) }
+        // A paused page is unfrozen before it closes: its page process can be kept for a moment and
+        // reused for the next visit to that site, which then loaded frozen (a YouTube video that
+        // wouldn't play until Ufolio restarted).
+        if isPagePaused { WebKitExtras.setPageSuspended(false, webView); isPagePaused = false }
         dropParkedPages()
         Preloader.discard(forTab: id)
         observers.removeAll()
@@ -846,6 +867,11 @@ extension BrowserTab: WKNavigationDelegate {
         let siteOn = !(scriptHost.map(ContentBlocker.shared.isShieldsDown) ?? false)
         let scriptsBlocked = siteOn && ShieldSettings.shared.effective(for: scriptHost).scripts == .blockAll
         preferences.allowsContentJavaScript = Prefs.bool(Prefs.javaScript) && !javaScriptOff && !scriptsBlocked
+        // Auto-play, as Safari does it (see WebKitExtras.setAutoplay). Eco keeps everything stopped.
+        if action.targetFrame?.isMainFrame ?? true {
+            let rules = PerformanceCenter.shared.isEco ? (policy: 3, quirks: 0) : AutoplayPolicy.current.webKitPolicy
+            WebKitExtras.setAutoplay(policy: rules.policy, quirks: rules.quirks, preferences)
+        }
         decisionHandler(action.shouldPerformDownload ? .download : .allow, preferences)
     }
 
@@ -992,7 +1018,10 @@ extension BrowserTab: WKNavigationDelegate {
         CookieCleaner.lastActivity = Date()   // browsing: the cleaner waits for a quiet spell
         if isHeavy { isHeavy = false }
         heavyDismissed = false
-        if isPagePaused { isPagePaused = false }
+        // A page you paused from the heavy page warning: the tab is unfrozen for the next page too.
+        // (Only the Paused bar used to go: the next page, YouTube say, loaded frozen and its video
+        // wouldn't play until Ufolio restarted.)
+        if isPagePaused { WebKitExtras.setPageSuspended(false, webView); isPagePaused = false }
         if crashed { crashed = false }
         if loadError != nil { loadError = nil }
         // Going back (or anywhere else) from a look-alike warning takes the warning away too.
