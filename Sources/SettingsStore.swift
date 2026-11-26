@@ -19,7 +19,6 @@ enum Prefs {
     static let funEffects = "funEffects"
     /// Opt-in badges on the weekly report card.
     static let achievements = "achievements"
-    /// The saucer pet and the planet of the week on the start page.
     /// Torrent tools (off by default) and their options.
     /// Clears the page cache as Ufolio quits, so it takes almost no disk space between sessions.
     static let clearCacheOnQuit = "clearCacheOnQuit"

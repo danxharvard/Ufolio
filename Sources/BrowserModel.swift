@@ -369,7 +369,9 @@ final class BrowserModel: NSObject, ObservableObject {
             // You come back to the tab you were on (it used to be the first tab every time).
             let wanted = UserDefaults.standard.object(forKey: "lastSessionSelected") as? Int
             var restored: [Int: BrowserTab] = [:]
-            for (index, text) in saved.prefix(200).enumerated() {
+            // Up to 500 (they wait unloaded): the limit used to be 200, so anyone with more lost
+            // the rest at the next launch, and the next save made that permanent.
+            for (index, text) in saved.prefix(500).enumerated() {
                 guard let url = URL(string: text), ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { continue }
                 let space = savedSpaces.indices.contains(index)
                     ? UUID(uuidString: savedSpaces[index]).flatMap { SpaceStore.shared.space($0)?.id } : nil
