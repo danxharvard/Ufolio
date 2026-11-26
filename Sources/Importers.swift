@@ -143,7 +143,8 @@ enum PasswordImporter {
         var row: [String] = []
         var field = ""
         var quoted = false
-        var chars = Array(text.replacingOccurrences(of: "\r\n", with: "\n"))
+        // Windows line endings, and old Mac ones (a lone return, from Excel's "CSV (Macintosh)").
+        var chars = Array(text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n"))
         if chars.first == "\u{FEFF}" { chars.removeFirst() }   // byte-order mark
         var i = 0
         while i < chars.count {
@@ -180,14 +181,19 @@ enum PasswordImporter {
             guard ok else { return }
             DispatchQueue.global(qos: .userInitiated).async {
                 let message: String
+                var imported = false
                 do {
                     let r = try importCSV(file)
                     message = "Imported \(r.added) new and updated \(r.updated) passwords" + (r.skipped > 0 ? " (\(r.skipped) skipped)." : ".")
+                    imported = r.added + r.updated > 0
                 } catch {
                     message = error.localizedDescription
                 }
                 DispatchQueue.main.async {
                     completion(message)
+                    // Only once the passwords are safely in Ufolio: after a failed import it used to
+                    // offer to bin the file anyway, which could be your only copy of them.
+                    guard imported else { return }
                     DialogHost.settings.present(HushDialog(
                         art: .symbol("doc.text.fill"), badge: "trash.fill", theme: .caution, motion: .drift,
                         title: "Move the exported file to the Trash?",
