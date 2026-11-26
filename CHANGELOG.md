@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.52.0-beta.6: a smoother Stealth Mode (beta)
+
+- Stealth windows no longer lag as you move the pointer over links, buttons and bookmarks. The
+  window's dark glass was being drawn the slow way on every hover; it now costs your Mac the same
+  as a normal window. Pages inside Stealth keep following your Mac's Day or Night look.
+- Websites can no longer tell you use Ufolio: a small bridge only hushlist.online needs was
+  visible to every site. It now exists only on hushlist.online.
+- The setup guide moves between steps without stutter: it no longer asks macOS for each browser's
+  icon on every hover and click.
+- A tab or bookmark dragged out of the sidebar (onto a page, say) no longer stays faded.
+- Dropping a bookmark onto one in another folder moves it into that folder.
+
+Everything in 0.51.6 is in this beta too.
+
 ## 0.52.0-beta.5: everything frosted, less clutter (beta)
 
 **Frosted everywhere**
