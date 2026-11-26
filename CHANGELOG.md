@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.52.0-beta.2: a premium Force Field, and logins waiting for you (beta)
+
+Everything in 0.51.3 (lighter when you're not using it), plus:
+
+**Force Field animation, redrawn**
+- A detailed saucer: brushed-metal hull with panel seams, a ring of running lights chasing round
+  its rim, and a glowing engine ring underneath.
+- A little green alien pilot sitting in the glass canopy, with big glossy eyes, glowing
+  antennae, a gentle sway and the odd blink.
+- The Force Field itself: a violet energy bubble round the saucer with a bright arc sweeping
+  round its edge. It's gone when the shield is down.
+- Two layers of drifting stars with glints, a tapered tractor beam, and ads bursting into a
+  flash, a shock ring, sparks and fragments.
+- The status reads "Force Field Active".
+
+**Saved logins, typed in and waiting**
+- On a sign-in page, your saved login is filled in as the page loads, ready for you to press
+  Sign In. Two-step sign-ins get your email first, then your password.
+- Only on secure pages, only into visible empty boxes (never over what you've typed), and the
+  most recently used login if you have several. If you've chosen to be asked before filling
+  (Settings › Passwords › Security), Ufolio asks as before.
+
+## 0.51.3: lighter when you're not using it
+
+- Ufolio left open with nobody at the Mac now uses next to no processor time: about 0.02
+  seconds a minute, down from 2.4. The start page's little moves (the saucer pet, shooting
+  stars) only play while you're using the mouse or keyboard, so a new tab sitting open no longer
+  keeps your Mac working.
+- When news can't load (offline, say), the start page shows a still note with Try Again,
+  instead of a shimmering placeholder that ran for as long as the page was open.
+- The check that the tab you're looking at never stays with its video held paused now happens
+  when you click in the page, instead of every second and a half (which kept waking the page).
+- Tabs opened in the background keep their sound and video waiting until you switch to them.
+- A few lists kept during a long session (sites with no icon, recent visits) now tidy themselves.
+- Settings › Privacy & Security says correctly when Auto-play changes apply.
+
 ## 0.52.0-beta.1: a new look for Force Field (beta)
 
 Everything in 0.51.2 (YouTube videos start straight away), plus:

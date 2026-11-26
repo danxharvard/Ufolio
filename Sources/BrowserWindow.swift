@@ -802,7 +802,7 @@ struct ShieldsPanel: View {
                     .fill(shieldsUp ? GuardPalette.beam : Color.orange)
                     .frame(width: 6, height: 6)
                     .shadow(color: (shieldsUp ? GuardPalette.beam : .orange).opacity(0.9), radius: 4)
-                Text(shieldsUp ? "Shield up · \(shields.blocking.label)" : (blockingMode == .off ? "Off everywhere" : "Shield down on this site"))
+                Text(shieldsUp ? "Force Field Active" : (blockingMode == .off ? "Force Field Off Everywhere" : "Force Field Off for This Site"))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.78))
             }
@@ -1242,26 +1242,319 @@ struct GuardIllustration: View {
     }
 }
 
+/// The Force Field scene, drawn in one pass: deep-space stars, the saucer with its alien pilot
+/// inside a Force Field bubble, and ads drifting in below to be zapped. With the shield down,
+/// the bubble is gone, the saucer greys and the ads just float.
 private struct GuardScene: View {
     let on: Bool
     let blocked: Int
     let t: Double
     let size: CGSize
 
+    // Colours.
+    private static let laser = Color(red: 0.55, green: 1.0, blue: 0.55)
+    private static let alienTop = Color(red: 0.62, green: 1.0, blue: 0.55)
+    private static let alienBottom = Color(red: 0.20, green: 0.70, blue: 0.40)
+    private static let adColors = [Color(red: 1.0, green: 0.42, blue: 0.36), Color(red: 1.0, green: 0.62, blue: 0.25), Color(red: 0.95, green: 0.35, blue: 0.6)]
+    private static let lightColors = [Color(red: 1.0, green: 0.45, blue: 0.55), Color(red: 1.0, green: 0.85, blue: 0.35),
+                                      Color(red: 0.45, green: 1.0, blue: 0.7), Color(red: 0.45, green: 0.8, blue: 1.0)]
+
+    // Stars: a far layer drifting slowly and a nearer, brighter one.
+    private static let far: [(x: Double, y: Double, r: Double, s: Double)] = (0..<24).map { i in
+        let d = Double(i)
+        return ((d * 0.618).truncatingRemainder(dividingBy: 1), (d * 0.377 + 0.05).truncatingRemainder(dividingBy: 1),
+                0.5 + (d * 0.29).truncatingRemainder(dividingBy: 0.6), 0.003 + (d * 0.0007).truncatingRemainder(dividingBy: 0.003))
+    }
+    private static let near: [(x: Double, y: Double, r: Double, s: Double)] = (0..<7).map { i in
+        let d = Double(i)
+        return ((d * 0.413 + 0.1).truncatingRemainder(dividingBy: 1), (d * 0.271 + 0.12).truncatingRemainder(dividingBy: 0.8),
+                1.0 + (d * 0.37).truncatingRemainder(dividingBy: 0.9), 0.008 + (d * 0.0013).truncatingRemainder(dividingBy: 0.006))
+    }
+
     var body: some View {
-        let moonSize = size.height * 0.5
-        // The saucer hovers in the upper half, bobbing gently, with ads to zap below it.
-        let center = CGPoint(x: size.width * 0.5, y: size.height * 0.34 + CGFloat(sin(t * 1.6)) * 2.5)
-        ZStack {
-            GuardStars(on: on, t: t, size: size)
-            GuardLasers(on: on, t: t, size: size, saucer: center, saucerWidth: moonSize)
-            HushMoon(colors: on
-                     ? [Color(red: 0.80, green: 0.72, blue: 1.0), Color(red: 0.40, green: 0.28, blue: 0.85)]
-                     : [Color(white: 0.88), Color(white: 0.52)])
-                .frame(width: moonSize, height: moonSize)
-                .shadow(color: (on ? Color(red: 0.25, green: 0.15, blue: 0.65) : .black).opacity(0.35), radius: 12, y: 7)
-                .position(center)
+        Canvas { ctx, size in
+            let w = size.width, h = size.height
+            let bob = CGFloat(sin(t * 1.6)) * 2.6
+            let tilt = sin(t * 0.8) * 1.6   // degrees
+            let c = CGPoint(x: w * 0.5, y: h * 0.38 + bob)
+            let hullW: CGFloat = 132, hullH: CGFloat = 30
+
+            drawStars(ctx, w: w, h: h)
+            if on { drawShield(ctx, c: c, hullW: hullW, back: true) }
+            drawAdsAndBeams(ctx, w: w, h: h, emitter: CGPoint(x: c.x, y: c.y + hullH * 0.62))
+
+            var saucer = ctx
+            saucer.translateBy(x: c.x, y: c.y)
+            saucer.rotate(by: .degrees(tilt))
+            drawSaucer(saucer, hullW: hullW, hullH: hullH)
+            if on { drawShield(ctx, c: c, hullW: hullW, back: false) }
         }
+        .allowsHitTesting(false)
+    }
+
+    // MARK: Stars
+
+    private func drawStars(_ ctx: GraphicsContext, w: CGFloat, h: CGFloat) {
+        let tint = on ? Color(red: 0.74, green: 0.66, blue: 1.0) : Color.white
+        for (i, star) in Self.far.enumerated() {
+            let x = (star.x + t * star.s).truncatingRemainder(dividingBy: 1)
+            let twinkle = 0.35 + 0.65 * (sin(t * (0.8 + Double(i) * 0.13) + Double(i)) + 1) / 2
+            let edge = min(1, min(x, 1 - x, star.y, 1 - star.y) * 5)
+            let r = CGFloat(star.r)
+            ctx.fill(Path(ellipseIn: CGRect(x: CGFloat(x) * w - r, y: CGFloat(star.y) * h - r, width: r * 2, height: r * 2)),
+                     with: .color(tint.opacity(twinkle * edge * (on ? 0.7 : 0.35))))
+        }
+        for (i, star) in Self.near.enumerated() {
+            let x = (star.x + t * star.s).truncatingRemainder(dividingBy: 1)
+            let twinkle = 0.45 + 0.55 * (sin(t * (1.3 + Double(i) * 0.21) + Double(i) * 2) + 1) / 2
+            let edge = min(1, min(x, 1 - x, star.y, 1 - star.y) * 5)
+            let p = CGPoint(x: CGFloat(x) * w, y: CGFloat(star.y) * h)
+            let r = CGFloat(star.r)
+            let alpha = twinkle * edge * (on ? 1 : 0.45)
+            ctx.fill(Path(ellipseIn: CGRect(x: p.x - r * 3, y: p.y - r * 3, width: r * 6, height: r * 6)),
+                     with: .radialGradient(Gradient(colors: [tint.opacity(0.35 * alpha), .clear]), center: p, startRadius: 0, endRadius: r * 3))
+            ctx.fill(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)), with: .color(.white.opacity(alpha)))
+            if i % 3 == 0 {
+                // A four-point glint on the brightest.
+                let len = r * 4.5 * CGFloat(twinkle)
+                var glint = Path()
+                glint.move(to: CGPoint(x: p.x - len, y: p.y)); glint.addLine(to: CGPoint(x: p.x + len, y: p.y))
+                glint.move(to: CGPoint(x: p.x, y: p.y - len)); glint.addLine(to: CGPoint(x: p.x, y: p.y + len))
+                ctx.stroke(glint, with: .color(.white.opacity(alpha * 0.55)), lineWidth: 0.6)
+            }
+        }
+    }
+
+    // MARK: The Force Field bubble
+
+    private func drawShield(_ ctx: GraphicsContext, c: CGPoint, hullW: CGFloat, back: Bool) {
+        let rx = hullW * 0.66, ry: CGFloat = 54
+        let rect = CGRect(x: c.x - rx, y: c.y - ry - 6, width: rx * 2, height: ry * 2)
+        let pulse = 0.5 + 0.5 * sin(t * 2.2)
+        if back {
+            // The shell: a soft violet glow, brighter towards its edge.
+            ctx.fill(Path(ellipseIn: rect), with: .radialGradient(
+                Gradient(stops: [.init(color: Color(red: 0.55, green: 0.42, blue: 1.0).opacity(0.02), location: 0),
+                                 .init(color: Color(red: 0.55, green: 0.42, blue: 1.0).opacity(0.10 + 0.04 * pulse), location: 0.82),
+                                 .init(color: Color(red: 0.70, green: 0.62, blue: 1.0).opacity(0.22), location: 1)]),
+                center: CGPoint(x: rect.midX, y: rect.midY), startRadius: 0, endRadius: rx))
+            return
+        }
+        // The rim, and a bright arc sweeping round it.
+        ctx.stroke(Path(ellipseIn: rect), with: .color(Color(red: 0.78, green: 0.72, blue: 1.0).opacity(0.28 + 0.12 * pulse)), lineWidth: 1)
+        let start = t * 0.9
+        var arc = Path()
+        for k in 0...28 {
+            let a = start + Double(k) / 28 * 0.9
+            let p = CGPoint(x: rect.midX + CGFloat(cos(a)) * rx, y: rect.midY + CGFloat(sin(a)) * ry)
+            if k == 0 { arc.move(to: p) } else { arc.addLine(to: p) }
+        }
+        ctx.stroke(arc, with: .color(Color(red: 0.60, green: 1.0, blue: 0.85).opacity(0.18)), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+        ctx.stroke(arc, with: .color(.white.opacity(0.75)), style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
+    }
+
+    // MARK: The saucer and its pilot
+
+    private func drawSaucer(_ ctx: GraphicsContext, hullW: CGFloat, hullH: CGFloat) {
+        let metalTop = on ? [Color(red: 0.95, green: 0.94, blue: 1.0), Color(red: 0.66, green: 0.62, blue: 0.86)]
+                          : [Color(white: 0.88), Color(white: 0.58)]
+        let metalBottom = on ? [Color(red: 0.42, green: 0.38, blue: 0.62), Color(red: 0.20, green: 0.17, blue: 0.36)]
+                             : [Color(white: 0.45), Color(white: 0.25)]
+
+        // Glow underneath.
+        let glowRect = CGRect(x: -hullW * 0.42, y: hullH * 0.2, width: hullW * 0.84, height: hullH * 1.1)
+        ctx.fill(Path(ellipseIn: glowRect), with: .radialGradient(
+            Gradient(colors: [(on ? Color(red: 0.45, green: 0.85, blue: 1.0) : Color.white).opacity(on ? 0.35 : 0.08), .clear]),
+            center: CGPoint(x: 0, y: hullH * 0.75), startRadius: 0, endRadius: hullW * 0.42))
+
+        // Underside and engine ring.
+        let under = CGRect(x: -hullW * 0.32, y: hullH * 0.05, width: hullW * 0.64, height: hullH * 0.62)
+        ctx.fill(Path(ellipseIn: under), with: .linearGradient(Gradient(colors: metalBottom),
+                                                              startPoint: CGPoint(x: 0, y: under.minY), endPoint: CGPoint(x: 0, y: under.maxY)))
+        let ring = under.insetBy(dx: hullW * 0.08, dy: hullH * 0.12).offsetBy(dx: 0, dy: hullH * 0.06)
+        let engine = 0.6 + 0.4 * sin(t * 3.1)
+        ctx.stroke(Path(ellipseIn: ring), with: .color((on ? Color(red: 0.45, green: 0.95, blue: 1.0) : Color(white: 0.6)).opacity(on ? 0.25 * engine : 0.2)), lineWidth: 4)
+        ctx.stroke(Path(ellipseIn: ring), with: .color((on ? Color(red: 0.75, green: 1.0, blue: 1.0) : Color(white: 0.7)).opacity(on ? 0.9 * engine : 0.4)), lineWidth: 1.2)
+        ctx.fill(Path(ellipseIn: CGRect(x: -4, y: under.maxY - 6, width: 8, height: 4)), with: .color((on ? Self.laser : Color(white: 0.6)).opacity(on ? 0.9 : 0.4)))
+
+        // The canopy: glass over the pilot.
+        let domeW: CGFloat = 54, domeH: CGFloat = 44
+        let dome = CGRect(x: -domeW / 2, y: -hullH * 0.35 - domeH * 0.78, width: domeW, height: domeH)
+        let domePath = Path(ellipseIn: dome)
+        ctx.fill(domePath, with: .linearGradient(Gradient(colors: [Color(red: 0.55, green: 0.85, blue: 1.0).opacity(0.22), Color(red: 0.25, green: 0.30, blue: 0.70).opacity(0.35)]),
+                                                 startPoint: CGPoint(x: 0, y: dome.minY), endPoint: CGPoint(x: 0, y: dome.maxY)))
+        var inside = ctx
+        inside.clip(to: domePath)
+        drawAlien(inside, base: CGPoint(x: 0, y: -hullH * 0.28))
+        // Glass highlights.
+        ctx.stroke(domePath, with: .color(.white.opacity(0.45)), lineWidth: 0.9)
+        var shine = Path()
+        shine.addArc(center: CGPoint(x: dome.midX, y: dome.midY + 4), radius: domeW * 0.40, startAngle: .degrees(200), endAngle: .degrees(245), clockwise: false)
+        ctx.stroke(shine, with: .color(.white.opacity(0.75)), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+        ctx.fill(Path(ellipseIn: CGRect(x: dome.midX + domeW * 0.18, y: dome.minY + domeH * 0.18, width: 4, height: 3)), with: .color(.white.opacity(0.6)))
+
+        // The hull: brushed metal with a lit top edge and panel seams.
+        let hull = CGRect(x: -hullW / 2, y: -hullH * 0.5, width: hullW, height: hullH)
+        let hullPath = Path(ellipseIn: hull)
+        ctx.fill(hullPath, with: .linearGradient(Gradient(colors: metalTop + [metalBottom[0]]),
+                                                 startPoint: CGPoint(x: 0, y: hull.minY), endPoint: CGPoint(x: 0, y: hull.maxY)))
+        ctx.stroke(hullPath, with: .color(.white.opacity(on ? 0.55 : 0.35)), lineWidth: 0.8)
+        var seams = Path()
+        for k in [-0.30, -0.12, 0.12, 0.30] {
+            let x = hullW * CGFloat(k)
+            seams.move(to: CGPoint(x: x * 0.92, y: hull.minY + hullH * 0.18))
+            seams.addQuadCurve(to: CGPoint(x: x * 1.08, y: hull.maxY - hullH * 0.22), control: CGPoint(x: x * 1.04, y: 0))
+        }
+        ctx.stroke(seams, with: .color(.black.opacity(0.12)), lineWidth: 0.7)
+        // A rim band, with running lights chasing round.
+        let band = hull.insetBy(dx: 3, dy: hullH * 0.26).offsetBy(dx: 0, dy: hullH * 0.08)
+        ctx.stroke(Path(ellipseIn: band), with: .color(.black.opacity(0.18)), lineWidth: 1.2)
+        let lit = Int(t * 7) % 9
+        for k in 0..<9 {
+            let a = Double.pi * (0.10 + 0.80 * Double(k) / 8)   // along the front half
+            let p = CGPoint(x: band.midX + CGFloat(cos(a)) * band.width / 2 * -1, y: band.midY + CGFloat(sin(a)) * band.height / 2)
+            let base = on ? Self.lightColors[k % Self.lightColors.count] : Color(white: 0.7)
+            let bright = on && k == lit
+            if bright {
+                ctx.fill(Path(ellipseIn: CGRect(x: p.x - 5, y: p.y - 5, width: 10, height: 10)),
+                         with: .radialGradient(Gradient(colors: [base.opacity(0.8), .clear]), center: p, startRadius: 0, endRadius: 5))
+            }
+            ctx.fill(Path(ellipseIn: CGRect(x: p.x - 1.9, y: p.y - 1.9, width: 3.8, height: 3.8)),
+                     with: .color(bright ? .white : base.opacity(on ? 0.9 : 0.5)))
+        }
+    }
+
+    /// The pilot: a little green alien with big almond eyes, sitting in the canopy.
+    private func drawAlien(_ ctx: GraphicsContext, base: CGPoint) {
+        let sway = CGFloat(sin(t * 0.9)) * 1.4
+        let blink = t.truncatingRemainder(dividingBy: 4.3) < 0.12
+        var a = ctx
+        a.translateBy(x: base.x + sway, y: base.y)
+        let skin = on ? [Self.alienTop, Self.alienBottom] : [Color(white: 0.80), Color(white: 0.55)]
+        // Shoulders, then the head.
+        a.fill(Path(ellipseIn: CGRect(x: -15, y: -10, width: 30, height: 18)),
+               with: .linearGradient(Gradient(colors: [skin[1], skin[1].opacity(0.8)]), startPoint: CGPoint(x: 0, y: -10), endPoint: CGPoint(x: 0, y: 8)))
+        let head = CGRect(x: -11, y: -33, width: 22, height: 26)
+        a.fill(Path(ellipseIn: head), with: .linearGradient(Gradient(colors: skin), startPoint: CGPoint(x: 0, y: head.minY), endPoint: CGPoint(x: 0, y: head.maxY)))
+        // Antennae with glowing tips.
+        for side: CGFloat in [-1, 1] {
+            var stalk = Path()
+            stalk.move(to: CGPoint(x: side * 4, y: head.minY + 3))
+            stalk.addQuadCurve(to: CGPoint(x: side * 9, y: head.minY - 9), control: CGPoint(x: side * 5, y: head.minY - 6))
+            a.stroke(stalk, with: .color(skin[1]), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
+            let tip = CGPoint(x: side * 9, y: head.minY - 9)
+            let glow = 0.6 + 0.4 * sin(t * 4 + Double(side))
+            a.fill(Path(ellipseIn: CGRect(x: tip.x - 4, y: tip.y - 4, width: 8, height: 8)),
+                   with: .radialGradient(Gradient(colors: [(on ? Self.laser : Color.white).opacity(0.7 * glow), .clear]), center: tip, startRadius: 0, endRadius: 4))
+            a.fill(Path(ellipseIn: CGRect(x: tip.x - 1.6, y: tip.y - 1.6, width: 3.2, height: 3.2)), with: .color(on ? Color(red: 0.85, green: 1.0, blue: 0.8) : .white))
+        }
+        // Big almond eyes, with a glint each.
+        for side: CGFloat in [-1, 1] {
+            var eye = a
+            eye.translateBy(x: side * 5, y: head.minY + 13)
+            eye.rotate(by: .degrees(Double(side) * 28))
+            let h: CGFloat = blink ? 0.8 : 7
+            eye.fill(Path(ellipseIn: CGRect(x: -4.2, y: -h / 2, width: 8.4, height: h)), with: .color(Color(red: 0.04, green: 0.06, blue: 0.08)))
+            if !blink {
+                eye.fill(Path(ellipseIn: CGRect(x: -2.2, y: -2.6, width: 2.2, height: 1.8)), with: .color(.white.opacity(0.9)))
+            }
+        }
+        // A small smile.
+        var mouth = Path()
+        mouth.addArc(center: CGPoint(x: 0, y: head.minY + 19), radius: 2.4, startAngle: .degrees(20), endAngle: .degrees(160), clockwise: false)
+        a.stroke(mouth, with: .color(.black.opacity(0.35)), lineWidth: 0.8)
+    }
+
+    // MARK: Ads, beams and bursts
+
+    private func drawAdsAndBeams(_ ctx: GraphicsContext, w: CGFloat, h: CGFloat, emitter: CGPoint) {
+        let lanes: [CGFloat] = [0.18, 0.5, 0.82]
+        let groundY = h * 0.86
+        for (i, lane) in lanes.enumerated() {
+            let phase = ((t / 3.0) + Double(i) / 3).truncatingRemainder(dividingBy: 1)
+            let x = w * lane + CGFloat(sin(t * 0.9 + Double(i) * 2)) * 6
+            let y = groundY + CGFloat(sin(t * 1.3 + Double(i))) * 3
+            let ad = CGRect(x: x - 14, y: y - 8.5, width: 28, height: 17)
+            let color = Self.adColors[i % Self.adColors.count]
+            guard on else { drawAd(ctx, ad, color: color, alpha: 0.7); continue }
+            switch phase {
+            case ..<0.40:
+                drawAd(ctx, ad.offsetBy(dx: 0, dy: CGFloat((0.4 - phase) * 18)), color: color, alpha: min(1, phase * 4))
+            case ..<0.52:
+                drawAd(ctx, ad, color: color, alpha: 1)
+                let k = (phase - 0.40) / 0.12
+                let head = CGPoint(x: emitter.x + (x - emitter.x) * k, y: emitter.y + (y - emitter.y) * k)
+                drawBeam(ctx, from: emitter, to: head)
+            case ..<0.82:
+                let k = (phase - 0.52) / 0.30
+                drawBurst(ctx, at: CGPoint(x: x, y: y), k: k, color: color, seed: i)
+            default:
+                break
+            }
+        }
+    }
+
+    /// A tapered beam: wide glow, green body and a white-hot core.
+    private func drawBeam(_ ctx: GraphicsContext, from a: CGPoint, to b: CGPoint) {
+        let dx = b.x - a.x, dy = b.y - a.y, len = max(1, sqrt(dx * dx + dy * dy))
+        let nx = -dy / len, ny = dx / len
+        func taper(_ startW: CGFloat, _ endW: CGFloat) -> Path {
+            var p = Path()
+            p.move(to: CGPoint(x: a.x + nx * startW, y: a.y + ny * startW))
+            p.addLine(to: CGPoint(x: b.x + nx * endW, y: b.y + ny * endW))
+            p.addLine(to: CGPoint(x: b.x - nx * endW, y: b.y - ny * endW))
+            p.addLine(to: CGPoint(x: a.x - nx * startW, y: a.y - ny * startW))
+            p.closeSubpath()
+            return p
+        }
+        ctx.fill(taper(3, 9), with: .color(Self.laser.opacity(0.16)))
+        ctx.fill(taper(1.6, 4), with: .linearGradient(Gradient(colors: [Self.laser.opacity(0.9), Self.laser.opacity(0.5)]), startPoint: a, endPoint: b))
+        ctx.fill(taper(0.6, 1.4), with: .color(.white.opacity(0.95)))
+        ctx.fill(Path(ellipseIn: CGRect(x: a.x - 5, y: a.y - 3.5, width: 10, height: 7)),
+                 with: .radialGradient(Gradient(colors: [.white, Self.laser.opacity(0)]), center: a, startRadius: 0, endRadius: 5))
+    }
+
+    /// An ad bursting: a flash, a shock ring, sparks and tumbling fragments.
+    private func drawBurst(_ ctx: GraphicsContext, at p: CGPoint, k: Double, color: Color, seed: Int) {
+        let fade = 1 - k
+        let flash = 10 + 30 * CGFloat(k)
+        ctx.fill(Path(ellipseIn: CGRect(x: p.x - flash / 2, y: p.y - flash / 2, width: flash, height: flash)),
+                 with: .radialGradient(Gradient(colors: [.white.opacity(0.9 * fade), Self.laser.opacity(0.5 * fade), .clear]),
+                                       center: p, startRadius: 0, endRadius: flash / 2))
+        let ring = 6 + 34 * CGFloat(k)
+        ctx.stroke(Path(ellipseIn: CGRect(x: p.x - ring / 2, y: p.y - ring / 4, width: ring, height: ring / 2)),
+                   with: .color(Self.laser.opacity(0.6 * fade)), lineWidth: 1.2)
+        for f in 0..<8 {
+            let angle = Double(f) / 8 * 2 * .pi + Double(seed)
+            let reach = CGFloat(5 + 24 * k)
+            // Sparks: short streaks flying out.
+            let s0 = CGPoint(x: p.x + CGFloat(cos(angle)) * reach * 0.6, y: p.y + CGFloat(sin(angle)) * reach * 0.6)
+            let s1 = CGPoint(x: p.x + CGFloat(cos(angle)) * reach, y: p.y + CGFloat(sin(angle)) * reach)
+            var spark = Path(); spark.move(to: s0); spark.addLine(to: s1)
+            ctx.stroke(spark, with: .color(.white.opacity(0.8 * fade)), style: StrokeStyle(lineWidth: 1, lineCap: .round))
+            // Fragments of the ad, falling as they go.
+            if f % 2 == 0 {
+                let fp = CGPoint(x: p.x + CGFloat(cos(angle + 0.4)) * reach * 0.8, y: p.y + CGFloat(sin(angle + 0.4)) * reach * 0.8 + CGFloat(k * k * 12))
+                var frag = ctx
+                frag.translateBy(x: fp.x, y: fp.y)
+                frag.rotate(by: .radians(angle + k * 6))
+                let side = 4.5 * CGFloat(1 - k * 0.5)
+                frag.fill(Path(roundedRect: CGRect(x: -side / 2, y: -side / 2, width: side, height: side * 0.7), cornerRadius: 1), with: .color(color.opacity(fade)))
+            }
+        }
+    }
+
+    /// A glossy "AD" tag.
+    private func drawAd(_ ctx: GraphicsContext, _ rect: CGRect, color: Color, alpha: Double) {
+        let path = Path(roundedRect: rect, cornerRadius: 5)
+        ctx.fill(path, with: .linearGradient(Gradient(colors: [color.opacity(alpha), color.opacity(alpha * 0.75)]),
+                                             startPoint: CGPoint(x: rect.midX, y: rect.minY), endPoint: CGPoint(x: rect.midX, y: rect.maxY)))
+        ctx.stroke(path, with: .color(.white.opacity(0.35 * alpha)), lineWidth: 0.8)
+        var shine = Path()
+        shine.move(to: CGPoint(x: rect.minX + 4, y: rect.minY + 2.5)); shine.addLine(to: CGPoint(x: rect.maxX - 4, y: rect.minY + 2.5))
+        ctx.stroke(shine, with: .color(.white.opacity(0.35 * alpha)), style: StrokeStyle(lineWidth: 1, lineCap: .round))
+        ctx.draw(Text("AD").font(.system(size: 8.5, weight: .heavy, design: .rounded)).foregroundStyle(.white.opacity(alpha)),
+                 at: CGPoint(x: rect.midX, y: rect.midY + 0.5))
     }
 }
 
@@ -1295,128 +1588,6 @@ struct GuardStars: View {
             .frame(width: seed.r * 2, height: seed.r * 2)
             .opacity(twinkle * min(1, edge) * (on ? 0.95 : 0.5))
             .position(x: CGFloat(x) * size.width, y: CGFloat(seed.y) * size.height)
-    }
-}
-
-/// Tracker beads drifting into the moon's curve and fading (on), or roaming free (off).
-private struct GuardBeads: View {
-    let on: Bool
-    let blocked: Int
-    let t: Double
-    let center: CGPoint
-    let moonSize: CGFloat
-
-    var body: some View {
-        ZStack {
-            ForEach(0..<count, id: \.self) { i in
-                bead(i)
-            }
-        }
-    }
-
-    private var count: Int { on ? min(max(blocked, 1), 6) : 4 }
-
-    private func bead(_ i: Int) -> some View {
-        let index = Double(i)
-        let period: Double = on ? 3.4 : 10
-        let phase = (t / period + index / 6).truncatingRemainder(dividingBy: 1)
-        let angle = index * 1.1 - 0.4 + (on ? 0 : t * 0.22)
-        let reach: Double = on ? (1 - phase) : 0.85 + 0.12 * sin(t * 0.7 + index)
-        let target = CGPoint(x: center.x + moonSize * 0.18, y: center.y - moonSize * 0.14)
-        let x = target.x + CGFloat(cos(angle) * reach) * moonSize * 0.95
-        let y = target.y + CGFloat(sin(angle) * reach) * moonSize * 0.62
-        let diameter: CGFloat = on ? 9 - CGFloat(phase) * 3 : 9
-        let opacity: Double = on ? min(1, (1 - phase) * 2.2) : 0.95
-        return TrackerBead(color: on ? Color(red: 0.72, green: 0.64, blue: 1.0) : Color(red: 1.0, green: 0.55, blue: 0.40),
-                           size: diameter)
-            .opacity(opacity)
-            .position(x: x, y: y)
-    }
-}
-
-/// The saucer zapping ads: little "AD" cards drift in below it, a laser bolt shoots down, and
-/// each card bursts into a flash and fragments. With Force Field off, the ads just float there.
-private struct GuardLasers: View {
-    let on: Bool
-    let t: Double
-    let size: CGSize
-    let saucer: CGPoint
-    let saucerWidth: CGFloat
-
-    private static let laser = Color(red: 0.55, green: 1.0, blue: 0.55)
-    private static let adColors = [Color(red: 1.0, green: 0.42, blue: 0.36), Color(red: 1.0, green: 0.62, blue: 0.25), Color(red: 0.95, green: 0.35, blue: 0.6)]
-
-    var body: some View {
-        Canvas { ctx, _ in
-            let lanes: [CGFloat] = [0.2, 0.5, 0.8]
-            let groundY = size.height * 0.84
-            let muzzle = CGPoint(x: saucer.x, y: saucer.y + saucerWidth * 0.2)
-            for (i, lane) in lanes.enumerated() {
-                let period = 3.0
-                let phase = ((t / period) + Double(i) / 3).truncatingRemainder(dividingBy: 1)
-                let x = size.width * lane + CGFloat(sin(t * 0.9 + Double(i) * 2)) * 6
-                let y = groundY + CGFloat(sin(t * 1.3 + Double(i))) * 3
-                let ad = CGRect(x: x - 13, y: y - 8, width: 26, height: 16)
-                let color = Self.adColors[i % Self.adColors.count]
-
-                guard on else {
-                    // Force Field off: the ads stay, dimmed, nothing fires.
-                    drawAd(ctx, ad, color: color.opacity(0.75))
-                    continue
-                }
-                switch phase {
-                case ..<0.40:   // drifting in
-                    drawAd(ctx, ad.offsetBy(dx: 0, dy: CGFloat((0.4 - phase) * 18)), color: color.opacity(min(1, phase * 4)))
-                case ..<0.52:   // the laser fires
-                    drawAd(ctx, ad, color: color)
-                    let progress = (phase - 0.40) / 0.12
-                    let head = CGPoint(x: muzzle.x + (x - muzzle.x) * progress, y: muzzle.y + (y - muzzle.y) * progress)
-                    var bolt = Path(); bolt.move(to: muzzle); bolt.addLine(to: head)
-                    ctx.stroke(bolt, with: .color(Self.laser.opacity(0.35)), style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                    ctx.stroke(bolt, with: .color(.white.opacity(0.95)), style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
-                    ctx.fill(Path(ellipseIn: CGRect(x: muzzle.x - 4, y: muzzle.y - 3, width: 8, height: 6)), with: .color(Self.laser.opacity(0.9)))
-                case ..<0.80:   // boom: a flash and flying fragments
-                    let k = (phase - 0.52) / 0.28
-                    let flash = 8 + 26 * k
-                    ctx.fill(Path(ellipseIn: CGRect(x: x - flash / 2, y: y - flash / 2, width: flash, height: flash)),
-                             with: .color(Self.laser.opacity(0.55 * (1 - k))))
-                    ctx.fill(Path(ellipseIn: CGRect(x: x - flash / 4, y: y - flash / 4, width: flash / 2, height: flash / 2)),
-                             with: .color(.white.opacity(0.8 * (1 - k))))
-                    for f in 0..<7 {
-                        let angle = Double(f) / 7 * 2 * .pi + Double(i)
-                        let reach = 6 + 22 * k
-                        let fx = x + CGFloat(cos(angle) * reach), fy = y + CGFloat(sin(angle) * reach) + CGFloat(k * k * 10)
-                        let side = 4 * (1 - k * 0.6)
-                        ctx.fill(Path(roundedRect: CGRect(x: fx - side / 2, y: fy - side / 2, width: side, height: side), cornerRadius: 1),
-                                 with: .color(color.opacity(1 - k)))
-                    }
-                default:        // gone; the next one is on its way
-                    break
-                }
-            }
-        }
-        .allowsHitTesting(false)
-    }
-
-    private func drawAd(_ ctx: GraphicsContext, _ rect: CGRect, color: Color) {
-        ctx.fill(Path(roundedRect: rect, cornerRadius: 4), with: .color(color))
-        ctx.stroke(Path(roundedRect: rect, cornerRadius: 4), with: .color(.white.opacity(0.35)), lineWidth: 0.8)
-        ctx.draw(Text("AD").font(.system(size: 8, weight: .heavy, design: .rounded)).foregroundStyle(.white),
-                 at: CGPoint(x: rect.midX, y: rect.midY))
-    }
-}
-
-/// A small glossy sphere.
-private struct TrackerBead: View {
-    let color: Color
-    let size: CGFloat
-
-    var body: some View {
-        Circle()
-            .fill(RadialGradient(colors: [.white.opacity(0.95), color, color.opacity(0.8)],
-                                 center: .init(x: 0.35, y: 0.3), startRadius: 0, endRadius: size * 0.7))
-            .frame(width: size, height: size)
-            .shadow(color: color.opacity(0.5), radius: 3)
     }
 }
 

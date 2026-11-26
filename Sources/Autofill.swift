@@ -310,6 +310,8 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
             guard let kind = body["kind"] as? String,
                   let rect = body["rect"] as? [Double], rect.count == 4 else { return }
             offer(kind: kind, rect: rect, host: host, secure: secure, tab: tab)
+        case "signInForm":
+            autoFill(step: body["step"] as? String ?? "password", host: host, secure: secure, tab: tab)
         case "submit":
             // Stealth windows promise not to remember what you type, so they don't offer to save,
             // except a strong password Ufolio made for you there (or it would be lost for good).
@@ -321,6 +323,27 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
             offerToSave(username: username, password: password, host: host, tab: tab)
         default:
             break
+        }
+    }
+
+    // MARK: Filling in by itself
+
+    /// A sign-in form appeared: your saved login for this site goes straight in, typed and
+    /// waiting (Settings › Passwords; the most recently used one if you have several). Only on
+    /// secure pages, from Ufolio's own vault (never a keychain prompt), and not when you've chosen
+    /// to be asked before filling: then clicking into the box offers it, as before.
+    private func autoFill(step: String, host: String, secure: Bool, tab: BrowserTab) {
+        guard secure, Prefs.bool(Prefs.autofillPasswords), UserAuth.FillLock.current == .never,
+              !host.isEmpty else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self, weak tab] in
+            let login = Vault.read().logins.filter { $0.host == host }.max { $0.modified < $1.modified }
+            guard let login else { return }
+            DispatchQueue.main.async {
+                guard let self, let tab, let current = tab.webView.url?.host, ContentBlocker.normalize(current) == host else { return }
+                var data: [String: String] = ["auto": "1", "username": login.account]
+                if step == "password" { data["password"] = login.password }
+                self.send(kind: "login", data: data, host: host, tab: tab)
+            }
         }
     }
 
@@ -556,6 +579,39 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
         return null;
       }
 
+      // A sign-in form on the page: Ufolio fills your saved login in straight away (once per
+      // field, only visible empty ones), so it's typed in and waiting for you. Forms that appear
+      // a moment later (web apps, two-step sign-ins) are noticed for the first fifteen seconds.
+      var asked = [];
+      function lookForSignIn() {
+        var pw = Array.prototype.filter.call(document.querySelectorAll('input[type=password]'), function (el) {
+          return visible(el) && !el.value && kindOf(el) === 'login';
+        })[0];
+        var user = null;
+        if (!pw) {
+          // The first step of a two-step sign-in: just a username or email box.
+          user = Array.prototype.filter.call(document.querySelectorAll('input'), function (el) {
+            return isTextInput(el) && visible(el) && !el.value && (ac(el) === 'username' || ac(el) === 'webauthn' || (el.type === 'email' && /user|login|sign|account|identifier/.test(words(el))));
+          })[0];
+        }
+        var target = pw || user;
+        if (!target || asked.indexOf(target) !== -1) return;
+        asked.push(target);
+        post({ type: 'signInForm', step: pw ? 'password' : 'username' });
+      }
+      var started = Date.now();
+      function watchForSignIn() {
+        lookForSignIn();
+        var timer = null;
+        var observer = new MutationObserver(function () {
+          if (Date.now() - started > 15000) { observer.disconnect(); return; }
+          if (!timer) timer = setTimeout(function () { timer = null; lookForSignIn(); }, 300);
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+        setTimeout(function () { observer.disconnect(); }, 15000);
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watchForSignIn); else watchForSignIn();
+
       document.addEventListener('focusin', function (e) {
         var k = kindOf(e.target);
         if (!k) return;
@@ -689,6 +745,19 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
         if (kind === 'login') {
           var pw = list.filter(function (el) { return el.type === 'password'; })[0];
           var user = list.filter(function (el) { return el.type !== 'password' && kindOf(el) === 'login'; })[0];
+          if (data.auto) {
+            // Filled by itself as the page loads: only boxes you can see that are still empty.
+            pw = Array.prototype.filter.call(document.querySelectorAll('input[type=password]'), function (el) {
+              return visible(el) && !el.value && kindOf(el) === 'login';
+            })[0] || null;
+            user = Array.prototype.filter.call(document.querySelectorAll('input'), function (el) {
+              return isTextInput(el) && visible(el) && !el.value &&
+                (pw ? (kindOf(el) === 'login' && (!pw.form || el.form === pw.form)) : (ac(el) === 'username' || ac(el) === 'webauthn' || el.type === 'email'));
+            })[0] || null;
+            if (pw && data.password) put(pw, data.password);
+            if (user && data.username) put(user, data.username);
+            return !!(pw || user);
+          }
           if (user) put(user, data.username);
           if (pw) put(pw, data.password);
           return !!(user || pw);
