@@ -93,6 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         BlockStats.shared.save()
         PrivacyReport.shared.save(waiting: true)
         HistoryStore.all.forEach { $0.save(waiting: true) }
+        RecentlyClosed.finishSaving()
     }
 
     /// Clicking Hush in the Dock with no window open brings one back.

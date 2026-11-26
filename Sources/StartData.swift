@@ -63,6 +63,8 @@ final class RecentlyClosed: ObservableObject {
     }
 
     private static let saveQueue = DispatchQueue(label: "hush.recently-closed.save", qos: .utility)
+    /// As Ufolio quits: waits for the last write (a tab closed just before quitting could be lost).
+    static func finishSaving() { saveQueue.sync {} }
 
     private func save() {
         let snapshot = tabs, file = self.file
