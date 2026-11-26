@@ -223,7 +223,11 @@ final class BrowserModel: NSObject, ObservableObject {
         for tab in tabs where tab !== selectedTab && !(visible?.contains(tab.id) ?? false) && !tab.isAsleep && !tab.isLoading
             && Date().timeIntervalSince(tab.lastActive) >= seconds
             && tab.webView.cameraCaptureState == .none && tab.webView.microphoneCaptureState == .none {
-            tab.webView.requestMediaPlaybackState { state in
+            tab.webView.requestMediaPlaybackState { [weak self, weak tab] state in
+                // The answer comes a moment later: by then you may have switched to this tab (or
+                // its Split View partner), which used to be put to sleep under you.
+                guard let self, let tab, tab !== self.selectedTab, !tab.isAsleep,
+                      !(self.splitPair.map { $0.contains(tab.id) && $0.contains(self.selectedID) } ?? false) else { return }
                 // "Suspended" is the silent video Ufolio pauses in background tabs itself: those tabs
                 // can sleep too (they never did). With background sound paused as well, a suspended
                 // tab might be your podcast, so it's left alone.

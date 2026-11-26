@@ -577,7 +577,15 @@ extension BrowserTab: WKNavigationDelegate {
         let disposition = (response.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Disposition")?
             .trimmingCharacters(in: .whitespaces).lowercased() ?? ""
         let attachment = response.isForMainFrame && disposition.hasPrefix("attachment")
-        decisionHandler(response.canShowMIMEType && !attachment ? .allow : .download)
+        let wantsDownload = !response.canShowMIMEType || attachment
+        // A frame inside the page (an ad, say) may only start a download just after you clicked or
+        // typed in the page: files used to arrive from frames with no click at all.
+        if wantsDownload, !response.isForMainFrame,
+           Date().timeIntervalSince((webView as? HushWebView)?.lastInteraction ?? .distantPast) > 10 {
+            decisionHandler(.cancel)
+            return
+        }
+        decisionHandler(wantsDownload ? .download : .allow)
     }
 
     /// A load that failed before anything arrived. If Ufolio guessed the address from what you
@@ -951,13 +959,44 @@ final class HushWebView: WKWebView {
         if let superview, covered(superview.convert(point, to: nil)) { return nil }
         return super.hitTest(point)
     }
-    override func mouseDown(with event: NSEvent) { if !covered(event) { super.mouseDown(with: event) } }
+    override func mouseDown(with event: NSEvent) {
+        if !covered(event) { lastInteraction = Date(); super.mouseDown(with: event) }
+    }
+    override func keyDown(with event: NSEvent) { lastInteraction = Date(); super.keyDown(with: event) }
+    /// When you last clicked or typed in this page (frames may only start a download just after).
+    var lastInteraction = Date.distantPast
     override func mouseUp(with event: NSEvent) { if !covered(event) { super.mouseUp(with: event) } }
     override func mouseDragged(with event: NSEvent) { if !covered(event) { super.mouseDragged(with: event) } }
     override func rightMouseDown(with event: NSEvent) { if !covered(event) { super.rightMouseDown(with: event) } }
     override func rightMouseUp(with event: NSEvent) { if !covered(event) { super.rightMouseUp(with: event) } }
     override func otherMouseDown(with event: NSEvent) { if !covered(event) { super.otherMouseDown(with: event) } }
-    override func otherMouseUp(with event: NSEvent) { if !covered(event) { super.otherMouseUp(with: event) } }
+    override func otherMouseUp(with event: NSEvent) {
+        guard !covered(event) else { return }
+        super.otherMouseUp(with: event)
+        // A mouse's side buttons: Back (button 4) and Forward (button 5), as in other browsers.
+        guard event.buttonNumber == 3 || event.buttonNumber == 4 else { return }
+        stepIfUnhandled(back: event.buttonNumber == 3)
+    }
+
+    /// A three-finger (or Magic Mouse) swipe between pages.
+    override func swipe(with event: NSEvent) {
+        guard !covered(event) else { return }
+        super.swipe(with: event)
+        guard event.deltaX != 0 else { return }
+        stepIfUnhandled(back: event.deltaX > 0)
+    }
+
+    /// Goes Back or Forward, unless the page or WebKit already did: checked a moment later, so
+    /// it never goes two steps.
+    private func stepIfUnhandled(back: Bool) {
+        let before = backForwardList.currentItem
+        let page = url, wasLoading = isLoading
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            guard let self, self.backForwardList.currentItem === before, self.url == page,
+                  wasLoading || !self.isLoading else { return }
+            if back { if self.canGoBack { self.goBack() } } else if self.canGoForward { self.goForward() }
+        }
+    }
     override func scrollWheel(with event: NSEvent) { if !covered(event) { super.scrollWheel(with: event) } }
     override func mouseMoved(with event: NSEvent) { if !covered(event) { super.mouseMoved(with: event) } }
     override func mouseEntered(with event: NSEvent) { if !covered(event) { super.mouseEntered(with: event) } }

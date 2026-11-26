@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.50.5: four fixes
+
+- Your mouse's side buttons go Back and Forward, and so does a three-finger (or Magic Mouse)
+  swipe, as in other browsers.
+- A frame inside a page (an ad, say) can only start a download just after you click or type in
+  that page: files used to arrive from frames with no click at all.
+- A background tab could be put to sleep just as you switched to it (or to its Split View
+  partner).
+- The Downloads list's buttons are named for VoiceOver, and "Show in Finder" no longer risks a
+  crash as the list closes.
+
 ## 0.50.4: ten fixes
 
 - Tabs with a silent video Ufolio had paused in the background now go to sleep after a while
