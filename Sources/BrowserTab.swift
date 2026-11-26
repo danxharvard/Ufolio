@@ -233,6 +233,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     /// Connects a web view to this tab: delegates, blocking, AutoFill and the state the UI shows.
     private func setUp(_ view: WKWebView) {
+        // A Stealth window is dark all over, but its pages follow your Mac (or Ufolio's Day and
+        // Night setting), as in normal windows: they used to switch to their dark themes there.
+        if isPrivate { StealthPageLook.apply(to: view) }
         view.allowsBackForwardNavigationGestures = true
         view.allowsMagnification = true
         view.navigationDelegate = self
