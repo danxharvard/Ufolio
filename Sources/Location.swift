@@ -27,6 +27,8 @@ final class SitePermissions: ObservableObject {
     @Published private(set) var decisions: [String: [String: Bool]]
     /// "Allow Once" answers, kept until Hush quits.
     private var sessionAllowed: Set<String> = []
+    /// The last Stealth window closed: its "allow once" answers go with it.
+    func stealthEnded() { sessionAllowed = sessionAllowed.filter { !$0.hasPrefix("stealth|") } }
     /// Stealth windows and normal windows keep separate "until Ufolio quits" answers: an Allow
     /// given in Stealth used to apply silently in normal windows too, and the other way round.
     private func sessionKey(_ site: String, _ kind: PermissionKind, privately: Bool) -> String {

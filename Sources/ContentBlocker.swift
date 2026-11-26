@@ -321,6 +321,13 @@ final class ContentBlocker: ObservableObject {
     /// never written down (the saved list would otherwise record a site visited in Stealth).
     private var sessionShieldsDown: Set<String> = []
 
+    /// The last Stealth window closed: what it changed goes with it.
+    func stealthEnded() {
+        guard !sessionShieldsDown.isEmpty else { return }
+        sessionShieldsDown = []
+        refresh()
+    }
+
     func setShields(_ up: Bool, for host: String, privately: Bool = false) {
         let h = Self.normalize(host)
         if up {

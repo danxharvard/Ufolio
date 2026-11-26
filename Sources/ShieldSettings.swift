@@ -95,6 +95,8 @@ final class ShieldSettings: ObservableObject {
 
     /// Changes made from a Stealth window: until Ufolio quits only, never written down.
     @Published private(set) var sessionSites: [String: SiteOverrides] = [:]
+    /// The last Stealth window closed: the site settings it changed go with it.
+    func stealthEnded() { if !sessionSites.isEmpty { sessionSites = [:]; ContentBlocker.shared.refresh() } }
 
     func effective(for host: String?) -> Shields {
         var result = Self.defaults

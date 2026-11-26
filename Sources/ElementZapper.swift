@@ -12,6 +12,13 @@ final class ElementZapper: NSObject, ObservableObject, WKScriptMessageHandler {
     /// Hidden from a Stealth window: until Ufolio quits only, never written down.
     private var sessionHidden: [String: [String]] = [:]
 
+    /// The last Stealth window closed: what it hid goes with it.
+    func stealthEnded() {
+        guard !sessionHidden.isEmpty else { return }
+        sessionHidden = [:]
+        ContentBlocker.shared.installZapperRules(rulesJSON)
+    }
+
     private let tabs = NSMapTable<WKWebView, BrowserTab>.weakToWeakObjects()
     private let registered = NSHashTable<WKUserContentController>.weakObjects()
 
