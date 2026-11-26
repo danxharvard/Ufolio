@@ -318,6 +318,9 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
     func pause(_ item: DownloadItem) {
         guard item.state == .downloading, let download = item.download else { return }
         item.state = .paused
+        // WebKit doesn't report a cancelled download back, so it's let go of here.
+        byDownload[ObjectIdentifier(download)] = nil
+        item.stopWatching()
         download.cancel { data in
             DispatchQueue.main.async { if let data { item.resumeData = data } }
         }
@@ -367,8 +370,23 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
         if items.count != before { save() }
     }
 
+    /// Stops a running or paused download for good. WebKit never reports a cancelled download
+    /// back (the row used to stay "downloading" forever), and it leaves the half-written file
+    /// behind under the real name, so both are dealt with here.
     func cancel(_ item: DownloadItem) {
-        item.download?.cancel { _ in }
+        guard item.state == .downloading || item.state == .paused else { return }
+        if let download = item.download {
+            byDownload[ObjectIdentifier(download)] = nil
+            download.cancel { _ in
+                DispatchQueue.main.async { if let url = item.destination { try? FileManager.default.removeItem(at: url) } }
+            }
+        } else if let url = item.destination {
+            try? FileManager.default.removeItem(at: url)
+        }
+        item.stopWatching()
+        item.resumeData = nil
+        item.state = .cancelled
+        save()
     }
 
     func reveal(_ item: DownloadItem) {
@@ -542,10 +560,7 @@ private struct DownloadRow: View {
                 RowButton(symbol: "xmark.circle.fill", help: "Stop") { Downloads.shared.cancel(item) }
             } else if item.state == .paused {
                 RowButton(symbol: "play.circle.fill", help: "Resume", tint: .accentColor) { Downloads.shared.resume(item) }
-                RowButton(symbol: "xmark.circle.fill", help: "Stop") {
-                    item.resumeData = nil
-                    item.state = .cancelled
-                }
+                RowButton(symbol: "xmark.circle.fill", help: "Stop") { Downloads.shared.cancel(item) }
             } else if item.state == .failed || item.state == .cancelled, Downloads.shared.canRetry(item) {
                 RowButton(symbol: "arrow.clockwise.circle.fill", help: "Try Again", tint: .accentColor) { Downloads.shared.resume(item) }
             } else if item.state == .finished {
