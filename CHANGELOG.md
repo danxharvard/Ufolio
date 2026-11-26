@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.51.7: safer passwords, steadier tabs
+
+- Your saved passwords are safer: if the password vault's key couldn't be read for a moment,
+  Ufolio could make a new key over it, leaving every saved password unreadable for good. It now
+  waits until the key reads again.
+- Restoring your tabs after a restart no longer drops everything past the 200th tab.
+- The cookie auto-cleaner no longer signs you out of YouTube, Gmail and "Sign in with Google /
+  Apple / Microsoft" sites. Their sign-ins live on google.com, apple.com and microsoft.com,
+  which you rarely open yourself, so they looked unused and were cleaned.
+- Putting lots of tabs to sleep at once no longer freezes the window for a moment, and switching
+  tabs does a little less work.
+- In Split View, the other half now pauses with its pair when you switch to another tab, and
+  plays again when you come back.
+- A tab closed just before quitting stays in Recently Closed.
+
 ## 0.51.6: a smoother Stealth Mode
 
 - Stealth windows no longer lag as you move the pointer over links, buttons and bookmarks. The
