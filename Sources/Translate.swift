@@ -81,6 +81,11 @@ final class PageTranslator: ObservableObject {
 
     func translate(_ tab: BrowserTab) {
         guard let source = tab.pageLanguage, tab.translation != .translating else { return }
+        // Only one page waits for the session at a time: one still waiting (its language download
+        // not yet agreed to, say) used to spin forever once another page took its place.
+        if let waiting = pendingTab, waiting !== tab, waiting.translation == .translating {
+            waiting.setTranslation(.available, language: waiting.pageLanguage)
+        }
         pendingTab = tab
         tab.setTranslation(.translating, language: source)
         if let configuration, configuration.source == source, configuration.target == Self.target {
