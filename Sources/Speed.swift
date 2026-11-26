@@ -643,10 +643,15 @@ enum ShieldSnapshot {
             guard let tab = model.selectedTab else { NSApp.terminate(nil); return }
             FileHandle.standardError.write("snapshot: \(tab.url?.absoluteString ?? "-") blocked \(tab.blockedOnPage) ads \(tab.adsOnPage) trackers \(tab.trackersOnPage) sites \(tab.blockedSites.count)\n".data(using: .utf8)!)
             let host = NSHostingView(rootView: ShieldsPanel(tab: tab, shieldsUp: env["UFOLIO_SHIELD_OFF"] == nil))
-            host.appearance = NSAppearance(named: .darkAqua)
+            let appearance = NSAppearance(named: env["UFOLIO_SHIELD_LIGHT"] != nil ? .aqua : .darkAqua)
+            host.appearance = appearance
             let size = host.fittingSize
             host.frame = NSRect(origin: .zero, size: size)
             let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            window.appearance = appearance
+            window.backgroundColor = .windowBackgroundColor
+            host.wantsLayer = true
+            host.layer?.backgroundColor = appearance?.name == .aqua ? NSColor(white: 0.96, alpha: 1).cgColor : NSColor(white: 0.16, alpha: 1).cgColor
             window.contentView = host
             window.orderFront(nil)
             try? await Task.sleep(nanoseconds: 1_500_000_000)

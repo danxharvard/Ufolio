@@ -775,84 +775,63 @@ struct ShieldsPanel: View {
     private var shields: Shields { siteShields.effective(for: tab.host) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // The animated saucer and stars (unchanged), with this page's count beneath.
-            GuardIllustration(on: shieldsUp, blocked: tab.blockedOnPage)
-                .frame(height: 168)
-            hero
-                .padding(.top, -10)
-                .padding(.bottom, 16)
-
-            VStack(spacing: 10) {
-                siteCard
-                if shieldsUp { instruments }
-                if shieldsUp, !tab.blockedSites.isEmpty { blockedList }
-                if shieldsUp, tab.host != nil { siteSettings }
-                if tab.url != nil { tabActions }
-            }
-            .padding(.horizontal, 14)
-
+        VStack(spacing: 12) {
+            // The animation in its own flat, dark tile, with the status and this page's count.
+            heroTile
+            siteRow
+            if shieldsUp { statsStrip }
+            if shieldsUp, !tab.blockedSites.isEmpty { blockedList }
+            if shieldsUp, tab.host != nil { siteSettings }
+            if tab.url != nil { tabActions }
             footer
-                .padding(.horizontal, 14)
-                .padding(.top, 12)
-                .padding(.bottom, 14)
         }
+        .padding(14)
         .frame(width: 352)
-        .background { ForceFieldBackdrop(on: shieldsUp) }
-        // Its own deep-space look in Day and Night alike: the Force Field is always a cockpit.
-        .environment(\.colorScheme, .dark)
-        .preferredColorScheme(.dark)
         .animation(.smooth(duration: 0.26), value: shieldsUp)
     }
 
-    // MARK: The count
+    // MARK: The animation and the count
 
-    private var hero: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(shieldsUp ? GuardPalette.beam : Color.orange)
-                    .frame(width: 6, height: 6)
-                    .shadow(color: (shieldsUp ? GuardPalette.beam : .orange).opacity(0.9), radius: 4)
-                Text(shieldsUp ? "Force Field Active" : (blockingMode == .off ? "Force Field Off Everywhere" : "Force Field Off for This Site"))
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.78))
+    private var heroTile: some View {
+        VStack(spacing: 0) {
+            GuardIllustration(on: shieldsUp, blocked: tab.blockedOnPage)
+                .frame(height: 160)
+            VStack(spacing: 3) {
+                HStack(spacing: 6) {
+                    Circle().fill(shieldsUp ? Color.green : Color.orange).frame(width: 6, height: 6)
+                    Text(shieldsUp ? "Force Field Active" : (blockingMode == .off ? "Force Field Off Everywhere" : "Force Field Off for This Site"))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                Text("\(tab.blockedOnPage)")
+                    .font(.system(size: 44, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(shieldsUp ? .white : .white.opacity(0.45))
+                    .contentTransitionIfAvailable()
+                Text(shieldsUp ? (tab.blockedOnPage == 1 ? "thing blocked on this page" : "things blocked on this page")
+                               : "Ads and trackers load on this site")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.55))
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(.white.opacity(0.07)))
-            .overlay(Capsule().strokeBorder(.white.opacity(0.10)))
-
-            Text("\(tab.blockedOnPage)")
-                .font(.system(size: 54, weight: .heavy, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(shieldsUp
-                    ? AnyShapeStyle(LinearGradient(colors: [.white, GuardPalette.lilac], startPoint: .top, endPoint: .bottom))
-                    : AnyShapeStyle(Color.white.opacity(0.45)))
-                .shadow(color: GuardPalette.violet.opacity(shieldsUp ? 0.55 : 0), radius: 18)
-                .contentTransitionIfAvailable()
-            Text(shieldsUp ? (tab.blockedOnPage == 1 ? "thing blocked on this page" : "things blocked on this page")
-                           : "Pages here load everything, ads and trackers too")
-                .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.6))
+            .padding(.bottom, 16)
+            .padding(.top, -6)
         }
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(GuardPalette.night))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     // MARK: Ads, trackers, fingerprint
 
-    /// One instrument strip: each reading with a gauge for its share of what was blocked.
-    private var instruments: some View {
-        let ads = tab.adsOnPage, trackers = tab.trackersOnPage, total = max(ads + trackers, 1)
+    /// One strip with three readings and hairline dividers, as on hushlist.online.
+    private var statsStrip: some View {
         let fingerprint = shields.fingerprinting == .off ? "Off" : (shields.fingerprinting == .strict ? "Strict" : "Masked")
         return HStack(spacing: 0) {
-            GuardReading(symbol: "rectangle.slash", label: "Ads", value: "\(ads)",
-                         share: Double(ads) / Double(total), tint: GuardPalette.coral)
+            GuardReading(label: "Ads", value: "\(tab.adsOnPage)")
             GuardDivider()
-            GuardReading(symbol: "eye.slash.fill", label: "Trackers", value: "\(trackers)",
-                         share: Double(trackers) / Double(total), tint: GuardPalette.sky)
+            GuardReading(label: "Trackers", value: "\(tab.trackersOnPage)")
             GuardDivider()
-            GuardReading(symbol: "touchid", label: "Fingerprint", value: fingerprint,
-                         share: shields.fingerprinting == .off ? 0 : 1, tint: GuardPalette.violet)
+            GuardReading(label: "Fingerprint", value: fingerprint)
         }
         .padding(.vertical, 12)
         .guardCard()
@@ -861,65 +840,40 @@ struct ShieldsPanel: View {
     // MARK: Footer
 
     private var footer: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "shield.lefthalf.filled")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(GuardPalette.lilac)
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
                 Text("\(stats.total.formatted()) blocked in total")
-                    .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .font(.system(size: 11.5, weight: .medium))
                 if !tab.isPrivate {
                     Text("\(report.summary.today.formatted()) today · \(report.summary.week.formatted()) this week")
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
                         .monospacedDigit()
                 }
             }
             Spacer()
-            Button { SettingsOpener.open(tab: .adBlocker) } label: {
-                HStack(spacing: 4) {
-                    Text("Settings")
-                    Image(systemName: "chevron.right").font(.system(size: 8.5, weight: .bold))
-                }
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.85))
-                .padding(.horizontal, 11)
-                .padding(.vertical, 5)
-                .background(Capsule().fill(.white.opacity(0.08)))
-                .overlay(Capsule().strokeBorder(.white.opacity(0.12)))
-                .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Force Field Settings")
+            Button("Settings…") { SettingsOpener.open(tab: .adBlocker) }
+                .buttonStyle(.link)
+                .font(.system(size: 11.5))
         }
+        .padding(.horizontal, 2)
     }
 
     /// This site, its status, and the on/off switch.
-    private var siteCard: some View {
-        HStack(spacing: 11) {
-            ZStack {
-                Circle()
-                    .fill(RadialGradient(colors: [(shieldsUp ? GuardPalette.beam : Color.orange).opacity(0.35), .clear],
-                                         center: .center, startRadius: 0, endRadius: 22))
-                    .frame(width: 42, height: 42)
-                Group {
-                    if tab.url == nil { HushLogoTile(size: 24) } else { Favicon(url: tab.url, size: 20) }
-                }
-                .frame(width: 30, height: 30)
-                .background(Circle().fill(.white.opacity(0.10)))
-                .overlay(Circle().strokeBorder(.white.opacity(0.16)))
-                .clipShape(Circle())
+    private var siteRow: some View {
+        HStack(spacing: 10) {
+            Group {
+                if tab.url == nil { HushLogoTile(size: 24) } else { Favicon(url: tab.url, size: 20) }
             }
-            .frame(width: 34, height: 34)
-            VStack(alignment: .leading, spacing: 2) {
+            .frame(width: 28, height: 28)
+            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(0.06)))
+            VStack(alignment: .leading, spacing: 1) {
                 Text(tab.host.map { AddressBar.readableHost($0).strippingWWW } ?? "New Tab")
-                    .font(.system(size: 13.5, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
-                Text(shieldsUp ? "Protected by Force Field" : (blockingMode == .off ? "Blocking is off everywhere" : "Off for this site"))
+                Text(shieldsUp ? "Protected" : (blockingMode == .off ? "Blocking is off everywhere" : "Off for this site"))
                     .font(.system(size: 11))
-                    .foregroundStyle(shieldsUp ? GuardPalette.beam.opacity(0.85) : Color.orange.opacity(0.9))
+                    .foregroundStyle(.secondary)
             }
             Spacer()
             if let host = tab.host, blockingMode != .off {
@@ -930,13 +884,12 @@ struct ShieldsPanel: View {
                         tab.webView.reload()
                     }))
                 .toggleStyle(.switch)
-                .tint(GuardPalette.beamDeep)
                 .labelsHidden()
                 .accessibilityLabel("Turn Force Field off if this site doesn’t work properly")
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.vertical, 9)
         .guardCard()
     }
 
@@ -948,8 +901,8 @@ struct ShieldsPanel: View {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.88)) { showBlocked.toggle() }
             } label: {
                 HStack(spacing: 8) {
-                    GuardIconTile(symbol: "building.2.fill", tint: GuardPalette.violet)
-                    Text("What was blocked").font(.system(size: 12.5, weight: .medium)).foregroundStyle(.white.opacity(0.9))
+                    GuardIconTile(symbol: "building.2.fill", tint: .indigo)
+                    Text("What was blocked").font(.system(size: 12.5))
                     Spacer()
                     Text(groups.count == 1 ? "1 company" : "\(groups.count) companies").font(.system(size: 11.5)).foregroundStyle(.secondary)
                     Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(.tertiary)
@@ -973,11 +926,8 @@ struct ShieldsPanel: View {
                                 }
                             }
                             Spacer(minLength: 6)
-                            Text("\(group.count)").font(.system(size: 11.5, weight: .semibold, design: .rounded)).monospacedDigit()
-                                .foregroundStyle(.white.opacity(0.9))
-                                .padding(.horizontal, 7).padding(.vertical, 2)
-                                .background(Capsule().fill(GuardPalette.violet.opacity(0.25)))
-                                .overlay(Capsule().strokeBorder(GuardPalette.violet.opacity(0.35)))
+                            Text("\(group.count)").font(.system(size: 11.5, weight: .medium)).monospacedDigit()
+                                .foregroundStyle(.secondary)
                         }
                     }
                     if groups.count > 10 {
@@ -998,7 +948,7 @@ struct ShieldsPanel: View {
     private var siteSettings: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("THIS SITE").font(.system(size: 10.5, weight: .bold)).tracking(0.8).foregroundStyle(.white.opacity(0.45))
+                Text("This Site").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
                 Spacer()
                 if let host = tab.host, !siteShields.overrides(for: host).isEmpty {
                     Button("Use Defaults") { siteShields.reset(host); tab.webView.reload() }
@@ -1009,15 +959,15 @@ struct ShieldsPanel: View {
                 SiteSettingRow(symbol: "shield.lefthalf.filled", title: "Ads & trackers", tab: tab, keyPath: \.blocking,
                                options: BlockingMode.allCases.map { ($0.rawValue, $0.label) },
                                current: shields.blocking.label, defaultLabel: ShieldSettings.defaults.blocking.label)
-                Rectangle().fill(.white.opacity(0.07)).frame(height: 1).padding(.leading, 36)
+                Divider().padding(.leading, 34)
                 SiteSettingRow(symbol: "curlybraces", title: "Scripts", tab: tab, keyPath: \.scripts,
                                options: ScriptPolicy.allCases.map { ($0.rawValue, $0.label) },
                                current: shields.scripts.label, defaultLabel: ShieldSettings.defaults.scripts.label)
-                Rectangle().fill(.white.opacity(0.07)).frame(height: 1).padding(.leading, 36)
+                Divider().padding(.leading, 34)
                 SiteSettingRow(symbol: "touchid", title: "Fingerprinting", tab: tab, keyPath: \.fingerprinting,
                                options: FingerprintLevel.allCases.map { ($0.rawValue, $0.label) },
                                current: shields.fingerprinting.label, defaultLabel: ShieldSettings.defaults.fingerprinting.label)
-                Rectangle().fill(.white.opacity(0.07)).frame(height: 1).padding(.leading, 36)
+                Divider().padding(.leading, 34)
                 SiteSettingRow(symbol: "birthday.cake", title: "Cookies", tab: tab, keyPath: \.cookies,
                                options: CookiePolicy.allCases.map { ($0.rawValue, $0.label) },
                                current: shields.cookies.label, defaultLabel: ShieldSettings.defaults.cookies.label)
@@ -1058,7 +1008,7 @@ private struct SiteSettingRow: View {
         let chosen = siteShields.overrides(for: host)[keyPath: keyPath]
         HStack(spacing: 10) {
             GuardIconTile(symbol: symbol, tint: GuardPalette.tint(for: symbol))
-            Text(title).font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.9))
+            Text(title).font(.system(size: 12.5))
             Spacer()
             Menu {
                 Button { set(nil) } label: {
@@ -1093,79 +1043,34 @@ private struct SiteSettingRow: View {
 /// The Force Field panel's colours.
 enum GuardPalette {
     static let violet = Color(red: 0.55, green: 0.42, blue: 1.0)
-    static let lilac = Color(red: 0.78, green: 0.70, blue: 1.0)
-    static let indigo = Color(red: 0.20, green: 0.16, blue: 0.48)
-    static let beam = Color(red: 0.55, green: 1.0, blue: 0.62)
-    static let beamDeep = Color(red: 0.22, green: 0.78, blue: 0.45)
-    static let coral = Color(red: 1.0, green: 0.48, blue: 0.45)
-    static let sky = Color(red: 0.40, green: 0.68, blue: 1.0)
-    static let amber = Color(red: 1.0, green: 0.74, blue: 0.32)
+    /// The animation's tile: a flat, deep night blue in Day and Night alike.
+    static let night = Color(red: 0.07, green: 0.07, blue: 0.13)
 
     static func tint(for symbol: String) -> Color {
         switch symbol {
-        case "shield.lefthalf.filled": return beamDeep
-        case "curlybraces": return sky
-        case "touchid": return violet
-        case "birthday.cake": return amber
-        default: return violet
+        case "shield.lefthalf.filled": return .green
+        case "curlybraces": return .blue
+        case "touchid": return .purple
+        case "birthday.cake": return .orange
+        default: return .indigo
         }
     }
 }
 
-/// Deep space behind the panel: violet light from above, a faint beam of green where the
-/// count sits, and night below. Quieter when the shield is down.
-private struct ForceFieldBackdrop: View {
-    let on: Bool
-
-    var body: some View {
-        ZStack(alignment: .top) {
-            LinearGradient(colors: [Color(red: 0.09, green: 0.07, blue: 0.20), Color(red: 0.05, green: 0.05, blue: 0.10)],
-                           startPoint: .top, endPoint: .bottom)
-            RadialGradient(colors: [GuardPalette.violet.opacity(on ? 0.38 : 0.12), .clear],
-                           center: .top, startRadius: 0, endRadius: 280)
-                .frame(height: 320)
-            RadialGradient(colors: [GuardPalette.beam.opacity(on ? 0.10 : 0), .clear],
-                           center: .center, startRadius: 0, endRadius: 150)
-                .frame(height: 300)
-                .offset(y: 110)
-            RadialGradient(colors: [GuardPalette.indigo.opacity(0.55), .clear],
-                           center: .bottomTrailing, startRadius: 0, endRadius: 320)
-        }
-    }
-}
-
-/// A reading in the instrument strip: icon, value, label and a slim gauge.
+/// A reading in the stats strip: a big number over a quiet label.
 private struct GuardReading: View {
-    let symbol: String
     let label: String
     let value: String
-    let share: Double
-    let tint: Color
 
     var body: some View {
-        VStack(spacing: 5) {
-            Image(systemName: symbol)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(tint)
+        VStack(spacing: 2) {
             Text(value)
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
+                .font(.system(size: 20, weight: .semibold))
                 .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
                 .contentTransitionIfAvailable()
-            Text(label.uppercased())
-                .font(.system(size: 9, weight: .bold)).tracking(0.7)
-                .foregroundStyle(.white.opacity(0.45))
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.white.opacity(0.08))
-                    Capsule()
-                        .fill(LinearGradient(colors: [tint.opacity(0.7), tint], startPoint: .leading, endPoint: .trailing))
-                        .frame(width: max(share > 0 ? 4 : 0, geo.size.width * min(max(share, 0), 1)))
-                        .shadow(color: tint.opacity(0.6), radius: 3)
-                }
-            }
-            .frame(width: 54, height: 3)
-            .padding(.top, 1)
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
@@ -1173,11 +1078,7 @@ private struct GuardReading: View {
 }
 
 private struct GuardDivider: View {
-    var body: some View {
-        Rectangle()
-            .fill(LinearGradient(colors: [.clear, .white.opacity(0.12), .clear], startPoint: .top, endPoint: .bottom))
-            .frame(width: 1, height: 58)
-    }
+    var body: some View { Divider().frame(height: 34) }
 }
 
 /// A small coloured icon tile, as in System Settings.
@@ -1190,9 +1091,7 @@ struct GuardIconTile: View {
             .font(.system(size: 10.5, weight: .semibold))
             .foregroundStyle(.white)
             .frame(width: 22, height: 22)
-            .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(LinearGradient(colors: [tint, tint.opacity(0.65)], startPoint: .top, endPoint: .bottom)))
-            .shadow(color: tint.opacity(0.35), radius: 3, y: 1)
+            .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(tint))
     }
 }
 
@@ -1205,16 +1104,15 @@ private struct GuardAction: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
-                Text(label).font(.system(size: 11.5, weight: .medium))
+            HStack(spacing: 5) {
+                Image(systemName: symbol).font(.system(size: 11.5, weight: .medium))
+                Text(label).font(.system(size: 11.5))
             }
-            .foregroundStyle(active ? GuardPalette.beam : Color.white.opacity(0.85))
+            .foregroundStyle(active ? Color.accentColor : Color.primary)
             .frame(maxWidth: .infinity)
-            .frame(height: 34)
-            .background(Capsule().fill(.white.opacity(hovering ? 0.12 : 0.06)))
-            .overlay(Capsule().strokeBorder(active ? GuardPalette.beam.opacity(0.45) : .white.opacity(0.10)))
-            .contentShape(Capsule())
+            .frame(height: 30)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(hovering ? 0.10 : 0.06)))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
@@ -1222,11 +1120,10 @@ private struct GuardAction: View {
 }
 
 private extension View {
-    /// The Force Field panel's cards: frosted glass with a light-catching top edge.
+    /// The Force Field panel's groups: a flat fill with a hairline edge, like System Settings.
     func guardCard() -> some View {
-        background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.white.opacity(0.055)))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(LinearGradient(colors: [.white.opacity(0.18), .white.opacity(0.04)], startPoint: .top, endPoint: .bottom)))
+        background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.04)))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
     }
 
     /// Rolling-number animation.
@@ -1235,9 +1132,8 @@ private extension View {
     }
 }
 
-/// The Hush Guard illustration: no background at all, just a lit, cut-out Hush moon with
-/// stars drifting past and tracker beads vanishing into its curve. When Hush Guard is off
-/// it turns silver-grey and the trackers roam free.
+/// The Force Field animation: the saucer and its pilot zapping ads, drawn 30 times a second while
+/// the panel is open (still with Reduce Motion).
 struct GuardIllustration: View {
     let on: Bool
     let blocked: Int
