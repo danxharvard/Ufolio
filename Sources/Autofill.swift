@@ -606,7 +606,7 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
         if (!pw) {
           // The first step of a two-step sign-in: just a username or email box.
           user = Array.prototype.filter.call(document.querySelectorAll('input'), function (el) {
-            return isTextInput(el) && visible(el) && !el.value && (ac(el) === 'username' || ac(el) === 'webauthn' || (el.type === 'email' && /user|login|sign|account|identifier/.test(words(el))));
+            return isTextInput(el) && visible(el) && !el.value && (/\b(username|webauthn)\b/.test(ac(el)) || (el.type === 'email' && /user|login|sign|account|identifier/.test(words(el))));
           })[0];
         }
         var target = pw || user;
@@ -786,7 +786,7 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
             })[0] || null;
             user = Array.prototype.filter.call(document.querySelectorAll('input'), function (el) {
               return isTextInput(el) && visible(el) && !el.value &&
-                (pw ? (kindOf(el) === 'login' && (!pw.form || el.form === pw.form)) : (ac(el) === 'username' || ac(el) === 'webauthn' || el.type === 'email'));
+                (pw ? (kindOf(el) === 'login' && (!pw.form || el.form === pw.form)) : (/\b(username|webauthn)\b/.test(ac(el)) || el.type === 'email'));
             })[0] || null;
             if (pw && data.password) put(pw, data.password);
             if (user && data.username) put(user, data.username);
