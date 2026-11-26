@@ -149,6 +149,7 @@ private struct SideTabList: View {
                         .opacity(dragging == id ? 0.4 : 1)
                         .onDrag {
                             dragging = id
+                            clearDraggingWhenReleased(id)
                             return NSItemProvider(object: id.uuidString as NSString)
                         }
                         .onDrop(of: [.text], delegate: SideTabDrop(target: id, model: model, dragging: $dragging))
@@ -166,6 +167,15 @@ private struct SideTabList: View {
             guard let id, others.contains(where: { $0.id == id }) else { return }
             withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id) }
         }
+        }
+    }
+
+    /// A drag let go outside the list (or cancelled with Esc) never reaches a drop, so the tab
+    /// used to stay faded until the next drag. Checked a few times a second, only while dragging.
+    private func clearDraggingWhenReleased(_ id: UUID) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            guard dragging == id else { return }
+            if NSEvent.pressedMouseButtons & 1 == 0 { dragging = nil } else { clearDraggingWhenReleased(id) }
         }
     }
 }

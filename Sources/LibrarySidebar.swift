@@ -184,6 +184,7 @@ private struct BookmarksList: View {
             .opacity(dragging == bookmark.id ? 0.4 : 1)
             .onDrag {
                 dragging = bookmark.id
+                clearDraggingWhenReleased(bookmark.id)
                 return NSItemProvider(object: bookmark.url.absoluteString as NSString)
             }
             .onDrop(of: [.text], delegate: BookmarkDrop(store: store, target: bookmark, dragging: $dragging, enabled: query.isEmpty))
@@ -205,6 +206,15 @@ private struct BookmarksList: View {
                 Divider()
                 Button("Remove", role: .destructive) { store.remove(bookmark) }
             }
+        }
+    }
+
+    /// A bookmark dragged out of the list (onto a page, say) never reaches a drop here, so it used
+    /// to stay faded until the next drag. Checked a few times a second, only while dragging.
+    private func clearDraggingWhenReleased(_ id: UUID) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            guard dragging == id else { return }
+            if NSEvent.pressedMouseButtons & 1 == 0 { dragging = nil } else { clearDraggingWhenReleased(id) }
         }
     }
 
