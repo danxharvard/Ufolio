@@ -648,3 +648,44 @@ enum ShieldSnapshot {
         }
     }
 }
+
+/// Testing only (UFOLIO_BG_TEST=<url>): opens the page in a background tab, waits ten seconds,
+/// notes whether its video is playing (and with sound), then switches to it and checks again.
+enum BackgroundPlayTest {
+    static func startIfAsked(in model: BrowserModel) {
+        guard let text = ProcessInfo.processInfo.environment["UFOLIO_BG_TEST"], let url = URL(string: text) else { return }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            let tab = model.newTab(url: url, select: false)
+            let check = "const v = Array.from(document.querySelectorAll('video')).find(v => v.offsetWidth > 0 || v.currentTime > 0); return v ? [v.currentTime, v.paused ? 1 : 0, v.muted ? 1 : 0] : null;"
+            func report(_ label: String) async {
+                let r = (try? await tab.webView.callAsyncJavaScript(check, contentWorld: .defaultClient)) as? [NSNumber]
+                FileHandle.standardError.write("bgtest \(label): \(r.map { "time \($0[0]) paused \($0[1]) muted \($0[2])" } ?? "no video")\n".data(using: .utf8)!)
+            }
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            await report("in background")
+            model.selectedID = tab.id
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            await report("after switching to it")
+            NSApp.terminate(nil)
+        }
+    }
+}
+
+/// Testing only (UFOLIO_EVAL_URL=<page>, UFOLIO_EVAL_JS=<script returning a value>): loads the
+/// page, waits, prints what the script returns, and quits.
+enum EvalTest {
+    static func startIfAsked(in model: BrowserModel) {
+        let env = ProcessInfo.processInfo.environment
+        guard let url = env["UFOLIO_EVAL_URL"].flatMap(URL.init(string:)), let js = env["UFOLIO_EVAL_JS"] else { return }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard let tab = model.selectedTab else { return }
+            tab.load(url)
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            let value = try? await tab.webView.callAsyncJavaScript(js, contentWorld: .page)
+            FileHandle.standardError.write("eval: \(value.map { "\($0)" } ?? "nil")\n".data(using: .utf8)!)
+            NSApp.terminate(nil)
+        }
+    }
+}

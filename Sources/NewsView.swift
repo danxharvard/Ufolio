@@ -31,7 +31,15 @@ struct NewsSection: View {
             header
             chips
             if stories.isEmpty {
-                if store.isLoading || store.articles.isEmpty { NewsSkeleton() } else {
+                if store.isLoading { NewsSkeleton() } else if store.articles.isEmpty {
+                    // Couldn't load (offline, say): a still note, not the shimmer, which used to run
+                    // 30 times a second for as long as the start page was open.
+                    VStack(spacing: 10) {
+                        Text("News couldn’t load just now.").font(.system(size: 13)).foregroundStyle(.secondary)
+                        Button("Try Again") { Task { await store.refresh() } }.buttonStyle(.link).font(.system(size: 12.5))
+                    }
+                    .frame(maxWidth: .infinity).padding(.vertical, 40)
+                } else {
                     Text("No stories in \(channel?.title ?? "your topics") right now.")
                         .font(.system(size: 13)).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity).padding(.vertical, 40)
@@ -480,8 +488,11 @@ private struct NewsPicture: View {
 
 /// Shimmering placeholders while the first stories arrive.
 private struct NewsSkeleton: View {
+    /// Still while the window isn't the one you're using.
+    @Environment(\.controlActiveState) private var activeState
+
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: activeState == .inactive)) { context in
             let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.6) / 1.6
             VStack(spacing: 16) {
                 block(height: 360, phase: phase)

@@ -991,7 +991,7 @@ private struct PrivacySettings: View {
                 Toggle("Block pop-up windows", isOn: $popups)
                 Toggle("Allow JavaScript", isOn: $javaScript)
             } header: { SectionTitle("Websites") } footer: {
-                Text("Auto-play, pop-up and fraud-warning changes apply to tabs you open afterwards.")
+                Text("Changes apply from the next page you open, in every tab. With “Stop media with sound”, a video on a page you open yourself still plays, as in Safari.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

@@ -143,7 +143,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     /// The tab you're looking at never stays with its sound and video held paused (Ufolio pauses
     /// them in tabs you can't see; if a way back ever missed releasing them, a video in front
-    /// wouldn't play until Ufolio restarted). Called with the audio check, for tabs on screen.
+    /// wouldn't play until Ufolio restarted). Checked when you click in the page (when you'd
+    /// press play) and when its window comes to the front: never on a timer, so it costs nothing
+    /// while you're not using Ufolio.
     func ensureMediaRunning() {
         guard !isAsleep, !isPagePaused else { return }
         webView.requestMediaPlaybackState { [weak self] state in
@@ -255,6 +257,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         (view as? HushWebView)?.onHistoryStep = { [weak self] back in
             if back { self?.goBack() } else { self?.goForward() }
         }
+        (view as? HushWebView)?.onClick = { [weak self] in self?.ensureMediaRunning() }
         (view as? HushWebView)?.onFocus = { [weak self] in
             guard let self, let model = self.model, model.isInSplit(self), model.selectedID != self.id else { return }
             model.selectedID = self.id
@@ -1338,8 +1341,9 @@ final class HushWebView: WKWebView {
         return super.hitTest(point)
     }
     override func mouseDown(with event: NSEvent) {
-        if !covered(event) { lastInteraction = Date(); super.mouseDown(with: event) }
+        if !covered(event) { lastInteraction = Date(); onClick?(); super.mouseDown(with: event) }
     }
+    var onClick: (() -> Void)?
     override func keyDown(with event: NSEvent) { lastInteraction = Date(); super.keyDown(with: event) }
     /// When you last clicked or typed in this page (frames may only start a download just after).
     var lastInteraction = Date.distantPast

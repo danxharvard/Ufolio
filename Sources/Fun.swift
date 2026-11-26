@@ -7,6 +7,14 @@ import AppKit
 /// Whether the playful animations should run.
 enum Effects {
     static var on: Bool { Prefs.bool(Prefs.funEffects) && !Prefs.bool(Prefs.reduceMotion) }
+
+    /// Whether someone has touched the mouse, trackpad or keyboard in the last minute. The
+    /// start page's little moves (the saucer pet, shooting stars) only play then: they used to
+    /// keep going with nobody there, costing about a second of processor time every minute.
+    static var someoneIsHere: Bool {
+        let anyInput = CGEventType(rawValue: ~0) ?? .null
+        return CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: anyInput) < 60
+    }
 }
 
 // MARK: - The Area 51 theme
@@ -92,7 +100,7 @@ struct LiveSky: View {
                     guard night > 0.5 else { return }
                     while !Task.isCancelled {
                         try? await Task.sleep(nanoseconds: UInt64.random(in: 18...45) * 1_000_000_000)
-                        guard Effects.on, !Task.isCancelled else { continue }
+                        guard Effects.on, Effects.someoneIsHere, !Task.isCancelled else { continue }
                         let start = CGPoint(x: geo.size.width * .random(in: 0.2...0.8), y: geo.size.height * .random(in: 0.05...0.3))
                         let end = CGPoint(x: start.x + .random(in: 160...300), y: start.y + .random(in: 60...120))
                         streak = Streak(from: start, to: end)

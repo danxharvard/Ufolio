@@ -41,6 +41,7 @@ final class BookmarkOffer: ObservableObject {
         let arrived = previousHost?.lowercased().strippingWWW != host
         if !arrived, let last = lastCounted[host], now.timeIntervalSince(last) < Self.revisitGap { return }
         lastCounted[host] = now
+        if lastCounted.count > 500 { lastCounted = lastCounted.filter { now.timeIntervalSince($0.value) < Self.revisitGap } }
 
         counts[host, default: [:]][Self.dayKey(now), default: 0] += 1
         prune()
