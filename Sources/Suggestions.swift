@@ -103,6 +103,10 @@ final class SuggestionsModel: ObservableObject {
                 let marked = (self.browser?.bookmarks ?? .shared).items.contains { $0.url.host?.lowercased().strippingWWW == site }
                 let visited = marked ? true : await (self.browser?.history ?? .shared).hasVisited(host: host)
                 guard visited, !Task.isCancelled, self.query == q, self.active else { return }
+            } else if !Prefs.bool(Prefs.searchSuggestions) {
+                // Search suggestions off means what you type stays here until you press Return:
+                // loading the search early sent half-typed searches to the search engine anyway.
+                return
             }
             Preloader.preload(url, for: self.browser?.selectedTab)
         }
