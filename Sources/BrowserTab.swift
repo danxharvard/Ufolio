@@ -607,6 +607,23 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         refreshNavigation()
     }
 
+    /// Forget This Site: that site's kept pages go from this tab's Back and Forward.
+    func forgetParkedPages(site: String) {
+        func keep(_ entry: Parked) -> Bool {
+            switch entry {
+            case .live(let view):
+                guard Domains.site(view.url?.host ?? "") == site else { return true }
+                close(parked: view)
+                return false
+            case .saved(_, let url):
+                return Domains.site(url?.host ?? "") != site
+            }
+        }
+        parkedBackStack = parkedBackStack.filter(keep)
+        parkedForwardStack = parkedForwardStack.filter(keep)
+        refreshNavigation()
+    }
+
     /// A kept page ready to show: the live one, or a fresh one restored from its record.
     private func unpark(_ entry: Parked) -> (view: WKWebView, restore: Parked?) {
         switch entry {
