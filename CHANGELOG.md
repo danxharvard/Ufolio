@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.51.4: lighter on memory, fewer false alarms
+
+- Instant pages keeps just one page ready each way for Back and Forward, instead of up to six
+  whole pages per tab (50 to 200 MB apiece). Pages further back come back from WebKit's own
+  record of them, where you left off, in a fraction of a second.
+- Back and Forward keep working after memory runs short, a tab sleeps or sits unused for a while
+  (they used to lose those pages).
+- The menu bar no longer rebuilds itself every time something changes in your window.
+- The privacy report saves once every few seconds, not on a timer for every blocked request.
+- Look-alike warnings no longer stop real sites one letter from a site you use (games.com is not
+  a fake names.co.uk); real typo-squats like amazom.com and gooogle.com are still caught.
+- Removing all website data, or Forget This Site, also lets go of pages kept in memory, so Back
+  can't show a page still signed in.
+- Closing your last Stealth window forgets everything decided in it (Force Field switched off for
+  a site, hidden elements, permissions, "visit anyway" answers).
+- ⌘-Return (or ⌥-Return) in the address bar opens what you typed in a new tab.
+
 ## 0.51.3: lighter when you're not using it
 
 - Ufolio left open with nobody at the Mac now uses next to no processor time: about 0.02
