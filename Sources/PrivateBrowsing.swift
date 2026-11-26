@@ -1,3 +1,4 @@
+import WebKit
 import SwiftUI
 
 /// The private window's colours: a deep night purple, so it's obvious at a glance.
@@ -178,6 +179,23 @@ struct CloakedSaucer: View {
                 try? await Task.sleep(nanoseconds: 1_300_000_000)
                 withAnimation(.easeInOut(duration: 1.3)) { cloaked = false }
                 try? await Task.sleep(nanoseconds: 1_300_000_000)
+            }
+        }
+    }
+}
+
+/// Keeps Stealth pages in the app's own appearance (the window around them is always dark).
+enum StealthPageLook {
+    private static var observation: NSKeyValueObservation?
+
+    static func apply(to view: WKWebView) {
+        view.appearance = NSApp.effectiveAppearance
+        guard observation == nil else { return }
+        observation = NSApp.observe(\.effectiveAppearance) { _, _ in
+            DispatchQueue.main.async {
+                for model in BrowserModel.all.allObjects where model.isPrivate {
+                    for tab in model.tabs where !tab.isAsleep { tab.webView.appearance = NSApp.effectiveAppearance }
+                }
             }
         }
     }

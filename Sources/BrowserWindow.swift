@@ -38,7 +38,9 @@ struct BrowserWindow: View {
         ZStack {
             if model.isPrivate {
                 // Stealth: the whole window is one dark frosted glass with a single purple tint.
-                VisualEffect(material: .titlebar, blending: .behindWindow, appearance: NSAppearance(named: .darkAqua))
+                // The window itself is dark (set below), so the glass follows it natively: forcing
+                // dark glass onto a light window made every hover redraw cost the Mac far more.
+                VisualEffect(material: .titlebar, blending: .behindWindow)
                 PrivateChrome.glassTint
             } else {
                 VisualEffect(material: .titlebar, blending: .behindWindow)
@@ -77,6 +79,9 @@ struct BrowserWindow: View {
                 WindowPlacement.keepOnScreen(window)
             }
             model.window = window
+            // Stealth windows are dark through and through: the window's own appearance, so the
+            // frosted glass, menus and scroll bars are drawn dark by macOS itself.
+            if model.isPrivate, let window, window.appearance?.name != .darkAqua { window.appearance = NSAppearance(named: .darkAqua) }
             if window != nil { ExtensionEvents.windowOpened(model) }
             TrafficLights.align(in: window)
         })
