@@ -270,5 +270,4 @@ enum AdultSites {
         return words.contains { host.contains($0) }
     }
 
-    static var showOnStartPage: Bool { Prefs.bool(Prefs.startShowAdult) }
 }

@@ -162,62 +162,8 @@ enum Vault {
 
     // MARK: Moving passwords out of the keychain
 
-    private static let movedKey = "vault.movedFromKeychain"
     private static let creator = NSNumber(value: 0x4855_5348) // 'HUSH', as the keychain items were tagged
     private static let cardService = "Hush Browser Card"
-
-    /// A little after launch: if the keychain still has Ufolio's passwords or cards, offers once
-    /// to move them in. (Only their names are looked at first, which macOS never asks about.)
-    static func offerToMoveIfNeeded() {
-        guard !UserDefaults.standard.bool(forKey: movedKey) else { return }
-        // "Later" means a week from now, not every launch (the button in Settings is always there).
-        if let later = UserDefaults.standard.object(forKey: "vault.moveLater") as? Date, later > Date() { return }
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 8) {
-            let count = keychainItemCount()
-            DispatchQueue.main.async {
-                guard count > 0 else { UserDefaults.standard.set(true, forKey: movedKey); return }
-                DialogHost.show(HushDialog(
-                    art: .symbol("key.fill"), badge: "arrow.down.circle.fill", theme: .save, motion: .rise,
-                    title: "Move your passwords into Ufolio?",
-                    message: "Ufolio now keeps saved passwords and cards in its own encrypted vault, so you won’t be asked for your Mac password every time you sign in to something. macOS will ask one last time to let Ufolio copy them across. The copies in your keychain stay as they are.",
-                    choices: [.init(title: "Later", role: .cancel), .init(title: "Move Now", role: .primary)],
-                    completion: { choice, _ in
-                        guard choice == 1 else {
-                            UserDefaults.standard.set(Date().addingTimeInterval(7 * 86_400), forKey: "vault.moveLater")
-                            return
-                        }
-                        DispatchQueue.global(qos: .userInitiated).async {
-                            let moved = moveFromKeychain()
-                            DispatchQueue.main.async {
-                                DialogHost.show(HushDialog(
-                                    art: .symbol("checkmark.shield.fill"), theme: .save, motion: .sparkle,
-                                    title: moved > 0 ? "Moved \(moved) item\(moved == 1 ? "" : "s") into Ufolio" : "Nothing was moved",
-                                    message: moved > 0 ? "Your passwords and cards now fill without asking for your Mac password each time."
-                                                       : "macOS didn’t let Ufolio read them. You can try again from Settings › Passwords.",
-                                    choices: [.init(title: "OK", role: .primary)]), in: nil)
-                            }
-                        }
-                    }), in: nil)
-            }
-        }
-    }
-
-    private static func keychainItemCount() -> Int {
-        var total = 0
-        for q: [String: Any] in [
-            [kSecClass as String: kSecClassInternetPassword, kSecAttrCreator as String: creator],
-            [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: cardService],
-        ] {
-            var query = q
-            query[kSecMatchLimit as String] = kSecMatchLimitAll
-            query[kSecReturnAttributes as String] = true
-            var result: CFTypeRef?
-            if SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess {
-                total += (result as? [[String: Any]])?.count ?? 0
-            }
-        }
-        return total
-    }
 
     /// Copies every Ufolio password and card from the keychain in. Returns how many came across.
     @discardableResult
@@ -268,7 +214,6 @@ enum Vault {
                 contents.cards.append(card)
             }
         }
-        UserDefaults.standard.set(true, forKey: movedKey)
         return logins.count + cards.count
     }
 }
