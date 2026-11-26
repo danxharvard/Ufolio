@@ -700,3 +700,21 @@ enum EvalTest {
         }
     }
 }
+
+/// Testing only (UFOLIO_LAUNCH_TIME set): prints how long after the process started its first
+/// window appeared, and when the next frame was drawn.
+enum LaunchTimer {
+    private static var done = false
+    static func windowAppeared() {
+        guard !done, ProcessInfo.processInfo.environment["UFOLIO_LAUNCH_TIME"] != nil else { return }
+        done = true
+        var info = kinfo_proc(), size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+        sysctl(&mib, 4, &info, &size, nil, 0)
+        let start = info.kp_proc.p_un.__p_starttime
+        let started = Double(start.tv_sec) + Double(start.tv_usec) / 1e6
+        let ms = { Int((Date().timeIntervalSince1970 - started) * 1000) }
+        FileHandle.standardError.write("launch: window \(ms()) ms\n".data(using: .utf8)!)
+        DispatchQueue.main.async { FileHandle.standardError.write("launch: first frame \(ms()) ms\n".data(using: .utf8)!) }
+    }
+}

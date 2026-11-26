@@ -159,6 +159,7 @@ struct BrowserWindow: View {
         }
         .onAppear {
             suggestions.browser = model   // so it suggests from this window's profile
+            LaunchTimer.windowAppeared()
             guard !model.isPrivate else { return }
             switch LaunchPrompts.next() {
             case .welcome:
