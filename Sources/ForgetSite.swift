@@ -36,6 +36,11 @@ enum SiteForgetter {
             CookieCleaner.forget(site: site)          // and the cleaner's note of when you last used it
             Task { await FaviconCache.shared.forget(site: site) }
         }
+        // Nothing of it stays in memory either: a page of it loading ahead, pages of it kept for
+        // Back in other tabs, and closed tabs' cached page processes.
+        Preloader.discard()
+        for browser in BrowserModel.all.allObjects { browser.tabs.forEach { $0.forgetParkedPages(site: site) } }
+        Speed.releaseCachedProcesses()
         // Close the site's tabs (a new tab replaces them if nothing else is left).
         let tabs = model.tabs.filter { Domains.site($0.url?.host ?? "") == site }
         if model.visibleTabs.allSatisfy({ open in tabs.contains { $0 === open } }) { model.newTab(focus: true) }
