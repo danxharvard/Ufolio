@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.51.2: YouTube videos start straight away
+
+- A video you open yourself (a YouTube link, from a bookmark or the address bar) now starts
+  playing by itself, as in Safari and other browsers. Ufolio made you click play again, so
+  videos seemed slow to start. With Auto-play set to "Stop media with sound" (the default),
+  pages that open by themselves still can't play sound. Measured on a YouTube video: it never
+  started by itself before; now it plays in about 3 seconds on a first visit, and under 2 with
+  Instant pages.
+- A video that sometimes wouldn't play at all until Ufolio restarted: a page paused from the
+  heavy page warning stayed frozen for the next page in that tab, and could even be reused
+  frozen for the next visit to that site. It's now unfrozen whenever you move on, close it or
+  it sleeps, and the tab you're looking at is never left with its video held paused.
+- A floating Picture in Picture video closes properly when its tab closes.
+- Settings › Keyboard warns if a shortcut you choose is already ⌘1–⌘9 (tabs) or ⌃1–⌃9 (Orbits).
+
 ## 0.51.1: twenty improvements
 
 **Tabs**
