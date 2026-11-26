@@ -9,6 +9,11 @@ import WebKit
 enum CookieCleaner {
     static var enabled: Bool { Prefs.bool(Prefs.cookieCleaner) }
     static let days = 30
+    /// Where sign-ins for many other sites live (YouTube and Gmail sign in through google.com,
+    /// "Sign in with Apple" through apple.com…). You rarely open these themselves, so they looked
+    /// unused for 30 days and were cleaned, signing you out everywhere they're used.
+    static let signInServices: Set<String> = ["google.com", "apple.com", "icloud.com", "live.com",
+                                              "microsoftonline.com", "microsoft.com"]
 
     private static let seenKey = "cookieCleaner.lastSeen"     // [site: last used], kept only while it's on
     private static let keepKey = "cookieCleaner.keep"
@@ -102,6 +107,7 @@ enum CookieCleaner {
                         let old = records.filter { record in
                             let site = Domains.site(record.displayName)
                             return !recent.contains(site) && !open.contains(site) && !keep.contains(site) && !signedIn.contains(site)
+                                && !signInServices.contains(site)
                         }
                         old.forEach { cleaned.insert(Domains.site($0.displayName)) }
                         store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), for: old) {
@@ -130,7 +136,7 @@ struct CookieCleanerSection: View {
     var body: some View {
         Section {
             DescribedToggle(title: "Clean up old cookies and website data",
-                            detail: "Deletes the data of sites you haven’t used for 30 days. Never sites open in a tab, ones you have a saved password for, or ones you keep below. Runs quietly once a day.",
+                            detail: "Deletes the data of sites you haven’t used for 30 days. Never sites open in a tab, ones you have a saved password for, the sign-in services other sites use (Google, Apple, Microsoft), or ones you keep below. Runs quietly once a day.",
                             isOn: $enabled)
                 .onChange(of: enabled) { _, on in if on { CookieCleaner.switchedOn() } else { CookieCleaner.switchedOff() } }
             if enabled {
