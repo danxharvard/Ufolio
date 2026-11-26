@@ -77,8 +77,12 @@ enum Lookalike {
             }
             // One letter added, removed, changed or swapped (paypa1.com, amazom.co.uk, gooogle.com).
             let realLabel = real.label
+            // Only the kinds of slip typo-squatters use: a neighbouring key, a look-alike letter, a
+            // doubled or dropped repeat, or two letters swapped. Any one-letter difference used
+            // to count, so real sites were stopped as fakes: games.com for names.co.uk,
+            // switch.com for uswitch.com, monza.com for monzo.com.
             if realLabel.count >= 5, visitedLabel.count >= 5, abs(realLabel.count - visitedLabel.count) <= 1,
-               distance(visitedLabel, realLabel) == 1 {
+               distance(visitedLabel, realLabel) == 1, isTypoSlip(visitedLabel, of: realLabel) {
                 return Match(visited: decoded, real: real.site)
             }
         }
@@ -112,6 +116,30 @@ enum Lookalike {
         return out.replacingOccurrences(of: "rn", with: "m").replacingOccurrences(of: "vv", with: "w")
             .replacingOccurrences(of: "i", with: "l") // i/l/1 all look alike in many fonts
             .replacingOccurrences(of: "-", with: "")
+    }
+
+    /// Keys next to each other on a keyboard, and letters easily read as each other.
+    private static let neighbours: [Character: String] = [
+        "q": "wa", "w": "qeas", "e": "wrsd", "r": "etdf", "t": "ryfg", "y": "tugh", "u": "yihj", "i": "uojkl", "o": "ipkl0",
+        "p": "ol", "a": "qwsz", "s": "awedxz", "d": "serfcx", "f": "drtgvc", "g": "ftyhbv", "h": "gyujnb", "j": "huikmn",
+        "k": "jiolm", "l": "kopi1", "z": "asx", "x": "zsdc", "c": "xdfv", "v": "cfgb", "b": "vghn", "n": "bhjmr", "m": "njkn",
+    ]
+
+    /// Whether `visited` is `real` with one typo-squatter's slip (the two already differ by one).
+    static func isTypoSlip(_ visited: String, of real: String) -> Bool {
+        let v = Array(visited), r = Array(real)
+        if v.count == r.count {
+            let diffs = v.indices.filter { v[$0] != r[$0] }
+            if diffs.count == 2, diffs[1] == diffs[0] + 1, v[diffs[0]] == r[diffs[1]], v[diffs[1]] == r[diffs[0]] { return true }   // swapped
+            guard diffs.count == 1 else { return false }
+            let a = v[diffs[0]], b = r[diffs[0]]
+            return (neighbours[b]?.contains(a) ?? false) || (neighbours[a]?.contains(b) ?? false) || confusables[a].map { $0 == String(b) } ?? false
+        }
+        // One letter more or fewer: only a doubled or dropped repeat (gooogle, gogle).
+        let (long, short) = v.count > r.count ? (v, r) : (r, v)
+        guard let i = long.indices.first(where: { $0 >= short.count || long[$0] != short[$0] }) else { return false }
+        guard Array(long[..<i] + long[(i + 1)...]) == short else { return false }
+        return (i > 0 && long[i - 1] == long[i]) || (i + 1 < long.count && long[i + 1] == long[i])
     }
 
     /// Edit distance (insert, delete, substitute, swap neighbours).
