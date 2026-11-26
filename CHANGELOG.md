@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.52.0-beta.5: everything frosted, less clutter (beta)
+
+**Frosted everywhere**
+- The Force Field animation no longer sits in a solid tile: it melts into the panel through a soft
+  night haze (a dusk-violet one in Day appearance). The animation itself is unchanged.
+- The start page, error pages and the history list's headers are frosted glass too. No solid
+  surfaces anywhere.
+
+**Less clutter**
+- Galaxy ranks, the saucer pet, the planet of the week, and the animated aliens and flying saucer
+  in Settings are gone, along with the code that ran them. Their old settings are tidied away.
+
+**Fixes**
+- Checking for updates no longer fails with "error 403" on busy or shared networks: when GitHub's
+  API limit is used up, Ufolio reads the latest version from github.com itself. Every update still
+  has to carry Ufolio's own signature before it installs.
+- Stopping a download now really stops it (the row used to stay on "downloading" for ever) and
+  removes the half-finished file instead of leaving it in Downloads under the real name.
+- After a password import that didn't work, Ufolio no longer offers to bin the exported file
+  (it could be your only copy). Files with old Mac line endings now import too.
+- With search suggestions turned off, a pause while typing a search no longer loads the results
+  early.
+- AutoFill no longer shows the previous site's logins if you move on while they're looked up.
+- The cookie auto-cleaner rechecks your open tabs as it cleans, so a site you just opened keeps
+  its cookies.
+- A page waiting to translate no longer spins for ever when you translate another.
+- Close Other Tabs in the Command Palette keeps pinned tabs.
+
+Everything in 0.51.5 is in this beta too.
+
 ## 0.52.0-beta.4: a flat, native Force Field (beta)
 
 **Force Field, redesigned** (the animation is unchanged)
