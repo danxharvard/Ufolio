@@ -245,7 +245,8 @@ final class PaletteModel: ObservableObject {
             .init(title: "Reopen Closed Tab", symbol: "arrow.uturn.backward", keywords: "undo restore", shortcut: .reopenTab) { m, _ in m.reopenClosedTab() },
             .init(title: "Close Tab", symbol: "xmark.square", shortcut: .closeTab) { m, _ in m.closeSelectedTab() },
             .init(title: "Close Other Tabs", symbol: "xmark.square.fill", available: { $0.visibleTabs.count > 1 }) { m, _ in
-                for tab in m.visibleTabs where tab !== m.selectedTab { m.close(tab) }
+                // Pinned tabs stay, as in the tab's own menu (this used to close them too).
+                for tab in m.visibleTabs where tab !== m.selectedTab && !tab.isPinned { m.close(tab) }
             },
             .init(title: "Duplicate Tab", symbol: "plus.square.on.square", available: { $0.selectedTab?.url != nil }) { m, _ in
                 if let url = m.selectedTab?.url { m.newTab(url: url) }
