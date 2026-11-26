@@ -39,7 +39,35 @@ final class Updater: ObservableObject {
     private var timer: Timer?
 
     var currentVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+        if let fake = Self.testEnv("UFOLIO_FAKE_VERSION") { return fake }
+        return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+    }
+
+    /// Testing switches, honoured only in test copies (another bundle ID), never in Ufolio itself.
+    private static func testEnv(_ name: String) -> String? {
+        guard Bundle.main.bundleIdentifier != "com.danxharvard.hushbrowser" else { return nil }
+        return ProcessInfo.processInfo.environment[name]
+    }
+
+    /// Testing only (test copies): what github.com's pages say for each channel, then a full check
+    /// through them as if the API were limiting this network.
+    @MainActor
+    func runTestsIfAsked() {
+        guard Self.testEnv("UFOLIO_UPDATE_PROBE") != nil else { return }
+        Task { @MainActor in
+            for beta in [false, true] {
+                let found = try? await Self.fromWebsite(beta: beta)
+                FileHandle.standardError.write("probe \(beta ? "beta" : "regular"): \(found.map { "\($0.version) zip=\($0.asset?.absoluteString ?? "not ready") sig=\($0.signature != nil)" } ?? "nothing")\n".data(using: .utf8)!)
+            }
+            apiPausedUntil = Date().addingTimeInterval(3600)   // as if the API had said no
+            await check(userInitiated: true)
+            for _ in 0..<120 {
+                if case .downloading = state { try? await Task.sleep(nanoseconds: 500_000_000); continue }
+                if case .checking = state { try? await Task.sleep(nanoseconds: 500_000_000); continue }
+                break
+            }
+            FileHandle.standardError.write("probe check: \(state)\n".data(using: .utf8)!)
+        }
     }
 
     private init() {
@@ -51,6 +79,7 @@ final class Updater: ObservableObject {
                                                object: nil, queue: .main) { [weak self] _ in
             self?.installOnQuit()
         }
+        Task { @MainActor in self.runTestsIfAsked() }
         if Prefs.bool(Prefs.autoCheckUpdates) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
                 Task { @MainActor in await Updater.shared.check(userInitiated: false) }
@@ -80,59 +109,58 @@ final class Updater: ObservableObject {
             // test builds included; otherwise only the latest finished release. Either way the
             // download has to pass exactly the same signature and fingerprint checks.
             let beta = Prefs.bool(Prefs.betaUpdates)
-            var request = URLRequest(url: URL(string: beta ? "\(api)/repos/\(Self.repo)/releases?per_page=15"
-                                                         : "\(api)/repos/\(Self.repo)/releases/latest")!)
-            request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-            request.timeoutInterval = 20
-            let (data, response) = try await URLSession.shared.data(for: request)
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-
-            lastChecked = Date()
-            UserDefaults.standard.set(lastChecked, forKey: "updates.lastChecked")
-
-            if status == 404 { state = .upToDate; return } // nothing published yet
-            let decoded = status == 200 ? try JSONSerialization.jsonObject(with: data) : nil
-            let candidates: [[String: Any]]
-            if beta {
-                candidates = ((decoded as? [[String: Any]]) ?? []).filter { ($0["draft"] as? Bool) != true }
-            } else {
-                candidates = (decoded as? [String: Any]).map { [$0] } ?? []
+            var found: Found?
+            // GitHub's API allows 60 questions an hour per network; when it's said no, it isn't
+            // asked again until it said it would answer (github.com itself answers meanwhile).
+            if Date() >= apiPausedUntil || api != "https://api.github.com" {
+                var request = URLRequest(url: URL(string: beta ? "\(api)/repos/\(Self.repo)/releases?per_page=15"
+                                                             : "\(api)/repos/\(Self.repo)/releases/latest")!)
+                request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+                request.cachePolicy = .reloadIgnoringLocalCacheData
+                request.timeoutInterval = 20
+                let (data, response) = try await URLSession.shared.data(for: request)
+                let http = response as? HTTPURLResponse
+                let status = http?.statusCode ?? 0
+                if status == 403 || status == 429 {
+                    let reset = http?.value(forHTTPHeaderField: "x-ratelimit-reset").flatMap(Double.init)
+                    apiPausedUntil = reset.map { Date(timeIntervalSince1970: $0) } ?? Date().addingTimeInterval(3600)
+                } else {
+                    lastChecked = Date()
+                    UserDefaults.standard.set(lastChecked, forKey: "updates.lastChecked")
+                    if status == 404 { state = .upToDate; return } // nothing published yet
+                    guard status == 200 else { throw UpdateError("GitHub didn’t answer properly (error \(status)).") }
+                    found = try Self.fromAPI(data, beta: beta)
+                    if found == nil { state = .upToDate; return }
+                }
             }
-            func versionOf(_ release: [String: Any]) -> String? {
-                (release["tag_name"] as? String)?.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+            if found == nil {
+                // Limited by the API: the same answer from github.com's own pages.
+                guard api == "https://api.github.com" else { throw UpdateError("GitHub didn’t answer properly.") }
+                guard let fallback = try await Self.fromWebsite(beta: beta) else {
+                    throw UpdateError("GitHub is limiting update checks from your network right now. Ufolio will try again later.")
+                }
+                lastChecked = Date()
+                UserDefaults.standard.set(lastChecked, forKey: "updates.lastChecked")
+                found = fallback
             }
-            guard status == 200, !candidates.isEmpty || beta else {
-                throw UpdateError("GitHub didn’t answer properly (error \(status)).")
-            }
-            // The newest of them.
-            guard let json = candidates.max(by: { a, b in
-                      guard let va = versionOf(a), let vb = versionOf(b) else { return versionOf(a) == nil }
-                      return Self.isNewer(vb, than: va)
-                  }),
-                  let version = versionOf(json) else { state = .upToDate; return }
+            guard let found else { state = .upToDate; return }
+            let version = found.version
             guard Self.isNewer(version, than: currentVersion) else { state = .upToDate; return }
             // A version that didn't start and was rolled back is skipped until a newer one is out.
             if UserDefaults.standard.string(forKey: Rollback.skipKey) == version {
                 state = .upToDate
                 return
             }
-
-            let assets = json["assets"] as? [[String: Any]] ?? []
-            guard let asset = assets.first(where: { ($0["name"] as? String) == "HushBrowser-\(version).zip" }),
-                  let link = (asset["browser_download_url"] as? String).flatMap(URL.init(string:)),
-                  Self.isTrustedDownload(link) else {
+            guard let link = found.asset, Self.isTrustedDownload(link) else {
                 throw UpdateError("Version \(version) is out, but its download isn’t ready yet.")
             }
-            guard let sigAsset = assets.first(where: { ($0["name"] as? String) == "HushBrowser-\(version).zip.sig" }),
-                  let sigLink = (sigAsset["browser_download_url"] as? String).flatMap(URL.init(string:)),
-                  Self.isTrustedDownload(sigLink) else {
+            guard let sigLink = found.signature, Self.isTrustedDownload(sigLink) else {
                 throw UpdateError("Version \(version) is out, but it isn’t signed, so Ufolio won’t install it.")
             }
-            latest = (version, link, asset["digest"] as? String)
+            latest = (version, link, found.digest)
             signatureURL = sigLink
-            releaseNotes = (json["body"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-            releasePage = (json["html_url"] as? String).flatMap(URL.init(string:))
+            releaseNotes = found.notes
+            releasePage = found.page
             state = .available(version: version)
 
             if Prefs.bool(Prefs.autoInstallUpdates) || userInitiated {
@@ -141,6 +169,99 @@ final class Updater: ObservableObject {
         } catch {
             state = userInitiated ? .failed(error.localizedDescription) : .idle
         }
+    }
+
+    // MARK: Where the latest release is
+
+    /// The newest release worth installing, however it was found.
+    private struct Found {
+        let version: String
+        let asset: URL?
+        let signature: URL?
+        let digest: String?
+        let notes: String?
+        let page: URL?
+    }
+
+    /// When GitHub's API said it would answer again, after limiting this network.
+    private var apiPausedUntil = Date.distantPast
+
+    /// From the API's answer: the newest release, with its files' addresses and fingerprint.
+    private static func fromAPI(_ data: Data, beta: Bool) throws -> Found? {
+        let decoded = try JSONSerialization.jsonObject(with: data)
+        let candidates: [[String: Any]] = beta
+            ? ((decoded as? [[String: Any]]) ?? []).filter { ($0["draft"] as? Bool) != true }
+            : (decoded as? [String: Any]).map { [$0] } ?? []
+        func versionOf(_ release: [String: Any]) -> String? {
+            (release["tag_name"] as? String)?.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+        }
+        guard let json = candidates.max(by: { a, b in
+                  guard let va = versionOf(a), let vb = versionOf(b) else { return versionOf(a) == nil }
+                  return isNewer(vb, than: va)
+              }),
+              let version = versionOf(json) else { return nil }
+        let assets = json["assets"] as? [[String: Any]] ?? []
+        func link(_ name: String) -> (URL?, String?) {
+            let asset = assets.first { ($0["name"] as? String) == name }
+            return ((asset?["browser_download_url"] as? String).flatMap(URL.init(string:)), asset?["digest"] as? String)
+        }
+        let (zip, digest) = link("HushBrowser-\(version).zip")
+        let (sig, _) = link("HushBrowser-\(version).zip.sig")
+        return Found(version: version, asset: zip, signature: sig, digest: digest,
+                     notes: (json["body"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                     page: (json["html_url"] as? String).flatMap(URL.init(string:)))
+    }
+
+    /// From github.com's own pages, which aren't limited like the API: the latest release from
+    /// where /releases/latest points (or, for betas, the newest tag in the releases feed). The
+    /// files' addresses follow GitHub's fixed pattern; the download still has to pass the same
+    /// signature check. (No fingerprint here: the signature is what proves it genuine.)
+    private static func fromWebsite(beta: Bool) async throws -> Found? {
+        let site = "https://github.com/\(repo)"
+        var version: String?
+        if beta {
+            var request = URLRequest(url: URL(string: "\(site)/releases.atom")!, timeoutInterval: 20)
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            guard let (data, response) = try? await URLSession.shared.data(for: request),
+                  (response as? HTTPURLResponse)?.statusCode == 200, data.count < 2_000_000,
+                  let feed = String(data: data, encoding: .utf8) else { return nil }
+            let pattern = try NSRegularExpression(pattern: #"Repository/\d+/v([0-9A-Za-z.\-]+)</id>"#)
+            let tags = pattern.matches(in: feed, range: NSRange(feed.startIndex..., in: feed)).compactMap {
+                Range($0.range(at: 1), in: feed).map { String(feed[$0]) }
+            }
+            version = tags.filter(isVersion).max { isNewer($1, than: $0) }
+        } else {
+            var request = URLRequest(url: URL(string: "\(site)/releases/latest")!, timeoutInterval: 20)
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            guard let (_, response) = try? await URLSession.shared.data(for: request, delegate: NoRedirects()),
+                  let http = response as? HTTPURLResponse, (300..<400).contains(http.statusCode),
+                  let location = http.value(forHTTPHeaderField: "Location"),
+                  let target = URL(string: location, relativeTo: URL(string: site)),
+                  target.host?.lowercased() == "github.com",
+                  target.path.hasPrefix("/\(repo)/releases/tag/v") else { return nil }
+            version = String(target.lastPathComponent.dropFirst())
+        }
+        // Only a plain version number goes into the download address.
+        guard let version, isVersion(version) else { return nil }
+        let asset = URL(string: "\(site)/releases/download/v\(version)/HushBrowser-\(version).zip")
+        let signature = URL(string: "\(site)/releases/download/v\(version)/HushBrowser-\(version).zip.sig")
+        // Its files might still be uploading: only announced once the signature is there.
+        var head = URLRequest(url: signature!, timeoutInterval: 20)
+        head.httpMethod = "HEAD"
+        let ready = ((try? await URLSession.shared.data(for: head))?.1 as? HTTPURLResponse)?.statusCode == 200
+        return Found(version: version, asset: ready ? asset : nil, signature: ready ? signature : nil, digest: nil,
+                     notes: nil, page: URL(string: "\(site)/releases/tag/v\(version)"))
+    }
+
+    /// "0.51.4" or "0.52.0-beta.4", and nothing else.
+    private static func isVersion(_ text: String) -> Bool {
+        text.count <= 32 && text.range(of: #"\A[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?\z"#, options: .regularExpression) != nil
+    }
+
+    /// Stops at the first answer, so /releases/latest says where it points instead of going there.
+    private final class NoRedirects: NSObject, URLSessionTaskDelegate {
+        func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                        newRequest request: URLRequest) async -> URLRequest? { nil }
     }
 
     // MARK: Downloading
