@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.52.0-beta.3: lighter, safer, fewer surprises (beta)
+
+**Lighter on memory**
+- Instant pages keeps just one page ready each way for Back and Forward, instead of up to six
+  whole pages per tab (50 to 200 MB apiece). Pages further back are restored from WebKit's own
+  record of them: still where you left off, in a fraction of a second.
+- When memory runs short, a tab sleeps, or a tab sits unused for five minutes, Back and Forward
+  now keep working afterwards (they used to lose those pages).
+
+**Smoother**
+- The menu bar no longer rebuilds itself every time something changes in your window (a tab
+  opening, closing or switching), work your Mac did while you browsed.
+- The privacy report saves once every few seconds, not on a timer for every blocked request.
+- Sign-in pages are only watched for a login form on sites you have a saved login for.
+
+**Safer and more private**
+- Look-alike warnings no longer stop real sites that are one letter from a site you use
+  (games.com is not a fake names.co.uk). Real typo-squats like amazom.com and gooogle.com are
+  still caught.
+- Removing all website data, or Forget This Site, also lets go of pages kept in memory, so Back
+  can't show a page still signed in.
+- Closing your last Stealth window now forgets everything decided in it (Force Field switched off
+  for a site, hidden elements, permissions, "visit anyway" answers) instead of keeping it until
+  Ufolio quits.
+
+**Handier**
+- ⌘-Return (or ⌥-Return) in the address bar opens what you typed in a new tab.
+- Saved logins also fill in on sign-in pages that mark their email box for passkeys.
+
+Under the hood: unused code removed.
+
 ## 0.52.0-beta.2: a premium Force Field, and logins waiting for you (beta)
 
 Everything in 0.51.3 (lighter when you're not using it), plus:

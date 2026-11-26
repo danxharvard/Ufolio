@@ -688,11 +688,12 @@ enum BackgroundPlayTest {
 enum EvalTest {
     static func startIfAsked(in model: BrowserModel) {
         let env = ProcessInfo.processInfo.environment
-        guard let url = env["UFOLIO_EVAL_URL"].flatMap(URL.init(string:)), let js = env["UFOLIO_EVAL_JS"] else { return }
+        guard let address = env["UFOLIO_EVAL_URL"], let js = env["UFOLIO_EVAL_JS"] else { return }
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard let tab = model.selectedTab else { return }
-            tab.load(url)
+            // "current": leave the tab as it is (a restored session, say).
+            if address != "current", let url = URL(string: address) { tab.load(url) }
             try? await Task.sleep(nanoseconds: 6_000_000_000)
             let value = try? await tab.webView.callAsyncJavaScript(js, contentWorld: .page)
             FileHandle.standardError.write("eval: \(value.map { "\($0)" } ?? "nil")\n".data(using: .utf8)!)
