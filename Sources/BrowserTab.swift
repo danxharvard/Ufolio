@@ -403,7 +403,12 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
                 self.snapshotData = nil
                 DispatchQueue.global(qos: .utility).async { [weak self] in
                     let data = NSBitmapImageRep(cgImage: cg).representation(using: .jpeg, properties: [.compressionFactor: 0.5])
-                    DispatchQueue.main.async { if let self, self.isAsleep, self.snapshotData == nil { self.snapshotData = data } }
+                    DispatchQueue.main.async {
+                        // Not for a tab closed meanwhile (it let go of its picture as it closed).
+                        if let self, self.isAsleep, self.snapshotData == nil, self.model?.tabs.contains(where: { $0 === self }) == true {
+                            self.snapshotData = data
+                        }
+                    }
                 }
             }
             self.sleepState = self.webView.interactionState
