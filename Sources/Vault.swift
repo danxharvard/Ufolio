@@ -31,7 +31,14 @@ enum Vault {
 
     /// The vault's key: made once (32 random bytes), readable only by you.
     private static func key() -> SymmetricKey? {
-        if let data = try? Data(contentsOf: keyFile), data.count == 32 { return SymmetricKey(data: data) }
+        if FileManager.default.fileExists(atPath: keyFile.path) {
+            // A key file that's there but can't be read right now is never replaced: a new key
+            // written over it would have made every saved password unreadable for good.
+            guard let data = try? Data(contentsOf: keyFile) else { return nil }
+            if data.count == 32 { return SymmetricKey(data: data) }
+            // Damaged for good: kept aside (never deleted) and a new key made below.
+            try? FileManager.default.moveItem(at: keyFile, to: keyFile.appendingPathExtension("damaged-\(Int(Date().timeIntervalSince1970))"))
+        }
         var bytes = [UInt8](repeating: 0, count: 32)
         guard SecRandomCopyBytes(kSecRandomDefault, 32, &bytes) == errSecSuccess else { return nil }
         let data = Data(bytes)
@@ -49,6 +56,9 @@ enum Vault {
     private static func loadLocked() -> Contents {
         if let cache { return cache }
         var contents = Contents()
+        // The key can't be read at the moment: leave the vault exactly as it is (and don't remember
+        // it as empty), so it opens normally next time. Saving is refused meanwhile.
+        if FileManager.default.fileExists(atPath: dataFile.path), key() == nil { return contents }
         if let sealed = try? Data(contentsOf: dataFile), let key = key(),
            let box = try? AES.GCM.SealedBox(combined: sealed),
            let plain = try? AES.GCM.open(box, using: key),
