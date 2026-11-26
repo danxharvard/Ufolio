@@ -249,7 +249,10 @@ private struct SideTabRow: View {
         )
         .contentShape(Rectangle())
         .onTapGesture { model.selectedID = tab.id }
-        .onHover { hovering = $0 }
+        .onHover { inside in
+            hovering = inside
+            model.pointerOverTab(tab, inside)   // a middle-click closes the tab under the pointer
+        }
         .contextMenu { TabMenuItems(model: model, tab: tab, vertical: true) }
         .tabPreview(tab, selected: selected, edge: .trailing)
         .animation(.snappy(duration: 0.16), value: hovering)

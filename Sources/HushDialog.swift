@@ -392,6 +392,7 @@ enum HushDialogs {
                 HistoryStore.everyProfile.forEach { $0.clear() }   // every profile's history
                 RecentlyClosed.shared.clear()
                 PrivacyReport.shared.reset()
+                CookieCleaner.historyCleared()
             }))
     }
 }

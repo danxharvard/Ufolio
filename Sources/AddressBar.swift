@@ -31,7 +31,20 @@ struct AddressBar: View {
     private func display(_ url: URL?, hovering: Bool = false) -> String {
         guard let url else { return "" }
         if showFullAddress || hovering { return url.absoluteString }
-        return url.host?.strippingWWW ?? url.absoluteString
+        return url.host.map { Self.readableHost($0).strippingWWW } ?? url.absoluteString
+    }
+
+    /// An international name shown as written ("münchen.de", not "xn--mnchen-3ya.de") when it
+    /// uses only Latin letters, accented or not. Anything else stays in its raw form, so a name
+    /// mixing alphabets to look like another site can't hide.
+    static func readableHost(_ host: String) -> String {
+        guard host.lowercased().contains("xn--"), Lookalike.check(host: host) == nil else { return host }
+        let decoded = Punycode.decodeHost(host)
+        let latin = decoded.unicodeScalars.allSatisfy { s in
+            s.isASCII ? (s.properties.isAlphabetic || ("0"..."9").contains(s) || s == "-" || s == ".")
+                      : (0x00C0...0x024F).contains(s.value) && s.value != 0x00D7 && s.value != 0x00F7
+        }
+        return latin ? decoded : host
     }
 
     private var isBookmarked: Bool {

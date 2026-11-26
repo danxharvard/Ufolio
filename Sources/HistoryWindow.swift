@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// History (⌘Y): everything you've visited, newest first, grouped by day, with search. Each
 /// profile has its own history: it opens on the profile of the window you're using, and you can
@@ -34,10 +35,16 @@ struct HistoryWindowView: View {
 private struct HistoryWindowContent: View {
     @ObservedObject var history: HistoryStore
     @State private var query = ""
+    /// The pages shown, grouped by day: worked out away from the main thread after a pause in
+    /// typing, and again (at most twice a second) when history changes. It used to sort all of
+    /// history on the main thread for every keystroke, and every page you visited meanwhile.
+    @State private var days: [(day: Date, entries: [HistoryEntry])] = []
+    @State private var ready = false
+    @State private var revision = 0
 
-    private var days: [(day: Date, entries: [HistoryEntry])] {
+    nonisolated private static func group(_ all: [HistoryEntry], query: String) -> [(day: Date, entries: [HistoryEntry])] {
         let q = query.lowercased()
-        let matching = history.entries(matching: q)
+        let matching = (q.isEmpty ? all : all.filter { $0.title.lowercased().contains(q) || $0.url.absoluteString.lowercased().contains(q) })
             .sorted { $0.lastVisit > $1.lastVisit }
             .prefix(2000)
         let calendar = Calendar.current
@@ -61,7 +68,9 @@ private struct HistoryWindowContent: View {
             .padding(14)
             Divider()
             let groups = days
-            if groups.isEmpty {
+            if !ready {
+                Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if groups.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "clock.arrow.circlepath").font(.system(size: 34, weight: .light)).foregroundStyle(.tertiary)
                     Text(query.isEmpty ? "No history yet" : "Nothing matches “\(query)”").foregroundStyle(.secondary)
@@ -84,6 +93,16 @@ private struct HistoryWindowContent: View {
         .background(VisualEffect(material: .underWindowBackground, blending: .behindWindow).ignoresSafeArea())
         .frame(minWidth: 520, minHeight: 420)
         .hushDialogs(DialogHost.history)
+        .task(id: "\(revision)|\(query)") {
+            if ready { try? await Task.sleep(nanoseconds: 150_000_000) }   // a pause in typing
+            guard !Task.isCancelled else { return }
+            let all = Array(history.entries.values), q = query
+            let result = await Task.detached(priority: .userInitiated) { Self.group(all, query: q) }.value
+            guard !Task.isCancelled else { return }
+            days = result
+            ready = true
+        }
+        .onReceive(history.$entries.dropFirst().throttle(for: .seconds(0.5), scheduler: RunLoop.main, latest: true)) { _ in revision += 1 }
     }
 
 }

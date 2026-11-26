@@ -65,7 +65,10 @@ enum Speed {
     /// profile's cookies, or a Stealth window's own). At most once every 30 seconds per site.
     static func preconnect(_ url: URL?, in webView: WKWebView?) {
         guard enabled, let url, let webView, let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
-              let host = url.host?.lowercased(), !host.isEmpty, !TorrentTools.isAdNetwork(host) else { return }
+              let host = url.host?.lowercased(), !host.isEmpty, !TorrentTools.isAdNetwork(host),
+              // Never to an ad or tracking server: pointing at an ad link used to open a connection to
+              // it (telling it your IP address) before you'd clicked anything.
+              !BuiltInRules.isBlocked(host) || !Prefs.bool(Prefs.adBlockEnabled) else { return }
         let origin = scheme + "://" + host + (url.port.map { ":\($0)" } ?? "")
         let now = Date()
         if let last = recent[origin], now.timeIntervalSince(last) < 30 { return }
@@ -406,7 +409,8 @@ enum Preloader {
         if hasSideEffects(url) { return }
         // Pages the tab would stop or change first (look-alikes, tracking redirects) aren't preloaded.
         if Lookalike.check(host: host) != nil || CleanLinks.skipRedirect(url) != nil
-            || (CleanLinks.isEnabled && CleanLinks.cleaned(url) != nil) || TorrentTools.isAdNetwork(host) { return }
+            || (CleanLinks.isEnabled && CleanLinks.cleaned(url) != nil) || TorrentTools.isAdNetwork(host)
+            || BuiltInRules.isBlocked(host) { return }   // an ad or tracker's own page: never loaded ahead
         discard()
         let config = BrowserTab.makeConfiguration(privately: false, store: tab.webView.configuration.websiteDataStore)
         // Laid out at the tab's own size, so swapping it in needs no second layout (it was always

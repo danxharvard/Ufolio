@@ -51,7 +51,7 @@ final class BrowserModel: NSObject, ObservableObject {
                 }
             }
             if let tab = selectedTab, tab !== old { ExtensionEvents.activated(tab, previous: old) }
-            if selectedTab !== old { PerformanceCenter.shared.tabSwitched() }
+            if selectedTab !== old { PerformanceCenter.shared.tabSwitched(); scheduleSessionSave() }
         }
     }
     private var sleepTimer: Timer?
@@ -344,6 +344,7 @@ final class BrowserModel: NSObject, ObservableObject {
         // would otherwise never rank up.
         else { GalaxyRank.recordToday() }
         // Which tabs are playing sound (for the speaker button on tabs).
+        Self.watchMiddleClicks()   // middle-click on tabs, and the mouse's Back/Forward buttons
         audioTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             self?.tabs.forEach { $0.checkAudio() }
         }
@@ -360,16 +361,21 @@ final class BrowserModel: NSObject, ObservableObject {
                SpaceStore.shared.space(last) != nil { spaceID = last }
             // Only web pages come back, and only the first loads now: the rest wait until you
             // click them, so launching with lots of tabs stays quick.
-            var first = true
+            // You come back to the tab you were on (it used to be the first tab every time).
+            let wanted = UserDefaults.standard.object(forKey: "lastSessionSelected") as? Int
+            var restored: [Int: BrowserTab] = [:]
             for (index, text) in saved.prefix(200).enumerated() {
                 guard let url = URL(string: text), ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { continue }
                 let space = savedSpaces.indices.contains(index)
                     ? UUID(uuidString: savedSpaces[index]).flatMap { SpaceStore.shared.space($0)?.id } : nil
-                let tab = addRestoredTab(url, space: space ?? SpaceStore.shared.defaultSpace.id)
-                // Only the first tab in the Space you were using loads now.
-                if first && tab.spaceID == spaceID { selectedID = tab.id; first = false }   // selecting wakes it
+                restored[index] = addRestoredTab(url, space: space ?? SpaceStore.shared.defaultSpace.id)
             }
-            if selectedID == nil { selectedID = visibleTabs.first?.id }
+            // Only that tab loads now (selecting wakes it); the rest wait until you click them.
+            if let wanted, let tab = restored[wanted], tab.spaceID == spaceID {
+                selectedID = tab.id
+            } else {
+                selectedID = restored.sorted { $0.key < $1.key }.map(\.value).first { $0.spaceID == spaceID }?.id ?? visibleTabs.first?.id
+            }
         }
         // Pinned tabs always come back, at the left, loading when you click them.
         // (Also when the window is closed and opened again: they used to be missing until Ufolio restarted.)
@@ -451,6 +457,8 @@ final class BrowserModel: NSObject, ObservableObject {
             guard !saved.isEmpty else { return }
             d.set(saved.compactMap { $0.url?.absoluteString }, forKey: "lastSession")
             d.set(saved.map { $0.spaceID?.uuidString ?? "" }, forKey: "lastSessionSpaces")
+            // The tab you were on, so it's the one you come back to.
+            if let index = saved.firstIndex(where: { $0 === self.selectedTab }) { d.set(index, forKey: "lastSessionSelected") }
         }
         sessionSave = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
@@ -549,8 +557,56 @@ final class BrowserModel: NSObject, ObservableObject {
         else if !visibleTabs.contains(where: { $0.id == selectedID }) { selectedID = visibleTabs.first?.id }
     }
 
+    // MARK: Middle-click to close
+
+    /// The tab the pointer is over in the tab bar, if any (not published: nothing redraws for it).
+    private(set) var tabUnderPointer: UUID?
+
+    func pointerOverTab(_ tab: BrowserTab, _ inside: Bool) {
+        if inside { tabUnderPointer = tab.id } else if tabUnderPointer == tab.id { tabUnderPointer = nil }
+        Self.watchMiddleClicks()
+    }
+
+    /// A middle-click (the scroll wheel pressed) on a tab closes it, as in other browsers. One
+    /// listener for the whole app; clicks anywhere but on a tab carry on as normal.
+    private static var middleClickMonitor: Any?
+    private static func watchMiddleClicks() {
+        guard middleClickMonitor == nil else { return }
+        middleClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.otherMouseDown, .otherMouseUp]) { event in
+            // A mouse's Back and Forward buttons anywhere in a browser window (the tab bar, sidebar,
+            // toolbar…), not just over the page, which handles them itself.
+            if event.buttonNumber == 3 || event.buttonNumber == 4,
+               let model = BrowserModel.all.allObjects.first(where: { $0.window === event.window }),
+               let content = event.window?.contentView {
+                let hit = content.hitTest(content.convert(event.locationInWindow, from: nil))
+                var node = hit
+                while let view = node, !(view is WKWebView) { node = view.superview }
+                guard node == nil else { return event }   // over the page
+                if event.type == .otherMouseUp {
+                    if event.buttonNumber == 3 { model.selectedTab?.goBack() } else { model.selectedTab?.goForward() }
+                }
+                return nil
+            }
+            guard event.buttonNumber == 2,
+                  let model = BrowserModel.all.allObjects.first(where: { $0.window === event.window }),
+                  let id = model.tabUnderPointer, let tab = model.tabs.first(where: { $0.id == id }) else { return event }
+            if event.type == .otherMouseUp {
+                model.tabUnderPointer = nil
+                if !tab.isPinned { model.close(tab) }
+            }
+            return nil
+        }
+    }
+
     func closeSelectedTab() {
-        if let tab = selectedTab { close(tab) }
+        guard let tab = selectedTab else { return }
+        // ⌘W on a pinned tab leaves it pinned and moves to a normal tab, as in Safari (a stray ⌘W
+        // used to lose it; its right-click menu still closes it).
+        if tab.isPinned {
+            if let other = visibleTabs.first(where: { !$0.isPinned }) { selectedID = other.id } else { newTab(focus: true) }
+            return
+        }
+        close(tab)
     }
 
     /// Moves a tab to a new position in the tab bar (drag to reorder).
@@ -575,6 +631,14 @@ final class BrowserModel: NSObject, ObservableObject {
         let pinnedCount = tabs.filter(\.isPinned).count
         tabs.insert(tab, at: tab.isPinned ? pinnedCount : pinnedCount)
         scheduleSessionSave()
+    }
+
+    /// ⌘1–⌘8: that tab in the tab bar (this Orbit's), ⌘9 (number 0): the last one.
+    func selectTab(number: Int) {
+        let mine = visibleTabs
+        guard !mine.isEmpty else { return }
+        let tab = number == 0 ? mine[mine.count - 1] : (number <= mine.count ? mine[number - 1] : nil)
+        if let tab, tab.id != selectedID { selectedID = tab.id }
     }
 
     func selectAdjacentTab(_ offset: Int) {

@@ -754,6 +754,21 @@ enum BuiltInRules: String, CaseIterable {
         ".OUTBRAIN", "[data-widget-id^='outbrain']", ".sponsored-content",
     ]
 
+    /// Every domain Force Field's built-in lists block, for a quick check before Ufolio itself
+    /// contacts a site (connecting ahead or preloading). Built once.
+    private static let blockedDomains: Set<String> = Set(adDomains + trackerDomains + strictDomains + annoyanceDomains + chatDomains)
+
+    /// Whether Force Field blocks this host (or a domain it belongs to): a few set lookups.
+    static func isBlocked(_ host: String?) -> Bool {
+        guard var h = host?.lowercased(), !h.isEmpty else { return false }
+        while true {
+            if blockedDomains.contains(h) { return true }
+            guard let dot = h.firstIndex(of: ".") else { return false }
+            h = String(h[h.index(after: dot)...])
+            if !h.contains(".") { return false }
+        }
+    }
+
     /// What a blocked request counts as in the statistics.
     enum Category { case ads, trackers, lists, other }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// The sidebar (⇧⌘L): your bookmarks and your history, searchable, beside the page.
 struct LibrarySidebar: View {
@@ -301,9 +302,15 @@ private struct HistoryList: View {
         _history = ObservedObject(wrappedValue: model.history)
     }
 
-    private var days: [(day: Date, entries: [HistoryEntry])] {
+    /// Worked out away from the main thread, and at most twice a second as history changes: with
+    /// the sidebar open on History, all of history used to be sorted on every page you visited.
+    @State private var days: [(day: Date, entries: [HistoryEntry])] = []
+    @State private var ready = false
+    @State private var revision = 0
+
+    nonisolated private static func group(_ all: [HistoryEntry], query: String) -> [(day: Date, entries: [HistoryEntry])] {
         let q = query.lowercased()
-        let matching = history.entries(matching: q)
+        let matching = (q.isEmpty ? all : all.filter { $0.title.lowercased().contains(q) || $0.url.absoluteString.lowercased().contains(q) })
             .sorted { $0.lastVisit > $1.lastVisit }
             .prefix(400)
         var groups: [Date: [HistoryEntry]] = [:]
@@ -312,6 +319,20 @@ private struct HistoryList: View {
     }
 
     var body: some View {
+        content
+            .task(id: "\(revision)|\(query)") {
+                if ready { try? await Task.sleep(nanoseconds: 150_000_000) }
+                guard !Task.isCancelled else { return }
+                let all = Array(history.entries.values), q = query
+                let result = await Task.detached(priority: .userInitiated) { Self.group(all, query: q) }.value
+                guard !Task.isCancelled else { return }
+                days = result
+                ready = true
+            }
+            .onReceive(history.$entries.dropFirst().throttle(for: .seconds(0.5), scheduler: RunLoop.main, latest: true)) { _ in revision += 1 }
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             let groups = days
             if model.isPrivate {
@@ -319,7 +340,9 @@ private struct HistoryList: View {
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .padding(.horizontal, 14).padding(.bottom, 6)
             }
-            if groups.isEmpty {
+            if !ready {
+                Color.clear.frame(maxHeight: .infinity)
+            } else if groups.isEmpty {
                 EmptyNote(symbol: "clock", text: query.isEmpty ? "No history yet." : "Nothing matches “\(query)”.")
             } else {
                 ScrollView {

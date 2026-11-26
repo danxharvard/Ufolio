@@ -56,6 +56,10 @@ struct WindowTabBar: View {
     @State private var draggingID: UUID?
     @State private var dragOffset: CGFloat = 0
     @State private var slotsMoved: CGFloat = 0
+    /// Closing tabs one after another: the widths stay put while the pointer is in the tab row, so
+    /// the next tab's close button is right under it (as in Safari), and settle once it leaves.
+    @State private var pointerInRow = false
+    @State private var heldSizes: (selected: CGFloat, other: CGFloat)?
 
     var body: some View {
         GeometryReader { geo in
@@ -68,7 +72,7 @@ struct WindowTabBar: View {
             // a "+N" menu for the rest (they used to run off the edge, out of reach).
             let layout = Self.fit(all, selectedID: selectedID, room: room)
             let tabs = layout.shown
-            let sizes = layout.sizes
+            let sizes = layout.hidden.isEmpty ? (heldSizes ?? layout.sizes) : layout.sizes
             let width = sizes.other
             // Bottom-aligned, so every tab sits right on the toolbar below it.
             HStack(alignment: .bottom, spacing: 0) {
@@ -107,8 +111,20 @@ struct WindowTabBar: View {
                 Spacer(minLength: 0)
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .bottomLeading)
+            .onChange(of: all.count) { old, new in
+                // A tab closed under the pointer: keep the sizes from before (they still fit).
+                if new < old, pointerInRow, heldSizes == nil, Self.fit(all, selectedID: selectedID, room: room).hidden.isEmpty {
+                    heldSizes = Self.widths(room: room, count: all.filter { !$0.isPinned }.count + (old - new))
+                } else if new > old {
+                    heldSizes = nil
+                }
+            }
         }
         .frame(height: Chrome.tabBarHeight)
+        .onHover { inside in
+            pointerInRow = inside
+            if !inside, heldSizes != nil { withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) { heldSizes = nil } }
+        }
         .background(
             // Empty space in the tab row moves the window, and a double-click zooms it.
             Color.clear
@@ -284,6 +300,7 @@ private struct ChromeTab: View {
         .onTapGesture { model.selectedID = tab.id }
         .onHover { inside in
             if inside { hoveredID = tab.id } else if hoveredID == tab.id { hoveredID = nil }
+            model.pointerOverTab(tab, inside)   // a middle-click closes the tab under the pointer
         }
         // No tooltips on tabs or their buttons: macOS's tooltip timer could reach a tab that had
         // just been closed under the pointer and crash Ufolio (a SwiftUI fault).

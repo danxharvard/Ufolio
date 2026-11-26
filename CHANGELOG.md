@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.51.1: twenty improvements
+
+**Tabs**
+- ⌘1 to ⌘8 go to that tab and ⌘9 to the last one; ⌃Tab and ⌃⇧Tab go to the next and previous
+  tab, as in other browsers.
+- Middle-click a tab (press the scroll wheel) to close it.
+- Closing tabs one after another with their close buttons: the tabs keep their widths while the
+  pointer stays in the tab bar, so the next close button is right under it.
+- After a restart, Ufolio reopens on the tab you were using, not the first one.
+- ⌘W on a pinned tab keeps it, and moves to a normal tab, as in Safari (its menu still closes it).
+- Tab previews appear in a small window that never takes the keyboard away from the address bar
+  or the page you're typing in.
+- Tab previews off in Settings now really costs nothing: no picture is taken as you switch tabs.
+
+**Links and the mouse**
+- Right-click a link for Open Link in New Tab and Open Link in Background Tab.
+- Your mouse's Back and Forward buttons work anywhere in the window, not only over the page.
+
+**Speed and memory**
+- The History window and the sidebar's History list search and sort away from the main thread:
+  with the sidebar open, all of history used to be sorted again on every page you visited.
+- When Ufolio is over its memory limit, the pages kept for an instant Back go before any tab is
+  put to sleep.
+- In Battery Saver and Eco, the Instant pages switch shows that it's off (it was already paused
+  there) and comes back as you set it when you leave.
+
+**Privacy and safety**
+- Ufolio never connects ahead to an ad or tracking server (pointing at an ad link used to, which
+  told it your IP address), and never loads one ahead as an instant page.
+- Clear History also clears the cookie auto-cleaner's record of when you last used each site.
+- A site can't stack up "Connect Hushlist?" questions by asking over and over.
+
+**Fixed**
+- "After 15 minutes away" (Settings › Passwords › Security) now means 15 minutes since you last
+  used it: it asked again every 15 minutes even while you were signing in to things.
+- Memory Saver no longer puts a tab with a floating Picture in Picture video to sleep.
+- International addresses written in Latin letters show as written (münchen.de, not
+  xn--mnchen-3ya.de) in the address bar and tab titles. Names mixing alphabets to look like
+  another site still show in their raw form.
+
 ## 0.51.0: Instant pages, no more password prompts, Send to iPhone
 
 Everything from the 0.51 betas, now for everyone.

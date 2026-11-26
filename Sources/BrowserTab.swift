@@ -322,7 +322,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     private(set) var previewTaken: Date?
 
     func capturePreview() {
-        guard !isAsleep, url != nil, webView.window != nil, webView.bounds.width > 50 else { return }
+        // Only with tab previews on (Settings › Appearance): it was taken on every tab switch anyway.
+        guard Prefs.bool(Prefs.tabPreviews), !isAsleep, url != nil, webView.window != nil, webView.bounds.width > 50 else { return }
         let config = WKSnapshotConfiguration()
         config.snapshotWidth = 340
         webView.takeSnapshot(with: config) { [weak self] image, _ in
@@ -455,7 +456,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     var displayTitle: String {
         if !title.isEmpty { return title }
-        if let host = url?.host, !host.isEmpty { return host.strippingWWW }
+        if let host = url?.host, !host.isEmpty { return AddressBar.readableHost(host).strippingWWW }   // "münchen.de", not "xn--…"
         // A local file (or other address with no host) shows its name, not "New Tab".
         if let url, url.isFileURL, !url.lastPathComponent.isEmpty, url.lastPathComponent != "/" { return url.lastPathComponent }
         return "New Tab"
@@ -1166,7 +1167,10 @@ extension BrowserTab: WKUIDelegate {
         // Its own set of blocking rules and scripts: sharing the opener's meant a pop-up on a
         // site with Force Field off switched blocking off for the original page too.
         configuration.userContentController = WKUserContentController()
-        return model.newTab(configuration: configuration).webView
+        // "Open Link in Background Tab" from the right-click menu.
+        let background = (webView as? HushWebView)?.openNextInBackground ?? false
+        (webView as? HushWebView)?.openNextInBackground = false
+        return model.newTab(configuration: configuration, select: !background).webView
     }
 
     func webViewDidClose(_ webView: WKWebView) {
@@ -1359,6 +1363,16 @@ final class HushWebView: WKWebView {
 
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
         super.willOpenMenu(menu, with: event)
+        // Right-click on a link: Open Link in New Tab (WebKit's "New Window" item, which in Ufolio
+        // has always opened a tab, now says so) and Open Link in Background Tab.
+        if let index = menu.items.firstIndex(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierOpenLinkInNewWindow" }) {
+            let original = menu.items[index]
+            original.title = "Open Link in New Tab"
+            let background = NSMenuItem(title: "Open Link in Background Tab", action: #selector(openLinkInBackground(_:)), keyEquivalent: "")
+            background.target = self
+            background.representedObject = original
+            menu.insertItem(background, at: index + 1)
+        }
         guard onHideElements != nil, url != nil else { return }
         menu.addItem(.separator())
         if WebKitExtras.canPictureInPicture(self) {
@@ -1371,6 +1385,17 @@ final class HushWebView: WKWebView {
         item.target = self
         item.image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: nil)
         menu.addItem(item)
+    }
+
+    /// The next tab this page opens stays in the background (set just before WebKit opens it).
+    var openNextInBackground = false
+
+    @objc private func openLinkInBackground(_ sender: NSMenuItem) {
+        guard let original = sender.representedObject as? NSMenuItem, let action = original.action else { return }
+        openNextInBackground = true
+        NSApp.sendAction(action, to: original.target, from: original)
+        // WebKit asks for the new tab straight away; never let the flag linger for a later one.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.openNextInBackground = false }
     }
 
     @objc private func hideElements() { onHideElements?() }

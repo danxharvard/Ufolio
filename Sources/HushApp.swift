@@ -310,6 +310,20 @@ struct HushCommands: Commands {
                 .keyboardShortcut(Shortcuts.get(.nextTab))
             Button("Show Previous Tab") { browser?.selectAdjacentTab(-1) }
                 .keyboardShortcut(Shortcuts.get(.previousTab))
+            // The keys every other browser uses too: ⌃Tab / ⌃⇧Tab to cycle, ⌘1–⌘8 for that
+            // tab and ⌘9 for the last.
+            Button("Next Tab") { browser?.selectAdjacentTab(1) }
+                .keyboardShortcut(.tab, modifiers: .control)
+            Button("Previous Tab") { browser?.selectAdjacentTab(-1) }
+                .keyboardShortcut(.tab, modifiers: [.control, .shift])
+            Menu("Go to Tab") {
+                ForEach(1..<9) { number in
+                    Button("Tab \(number)") { browser?.selectTab(number: number) }
+                        .keyboardShortcut(KeyEquivalent(Character("\(number)")), modifiers: .command)
+                }
+                Button("Last Tab") { browser?.selectTab(number: 0) }
+                    .keyboardShortcut("9", modifiers: .command)
+            }
         }
 
         CommandMenu("Bookmarks") {

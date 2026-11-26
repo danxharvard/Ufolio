@@ -36,7 +36,10 @@ enum UserAuth {
             switch FillLock.current {
             case .never: completion(true); return
             case .session: if unlockedThisSession { completion(true); return }
-            case .quarterHour: if let last = lastSuccess, Date().timeIntervalSince(last) < 15 * 60 { completion(true); return }
+            case .quarterHour:
+                // Fifteen minutes since you last used it, not since you last unlocked: it used to
+                // ask again every 15 minutes even while you were signing in to things.
+                if let last = lastSuccess, Date().timeIntervalSince(last) < 15 * 60 { lastSuccess = Date(); completion(true); return }
             case .always: if let last = lastSuccess, Date().timeIntervalSince(last) < 60 { completion(true); return }
             }
         } else if let last = lastSuccess, Date().timeIntervalSince(last) < 60 {

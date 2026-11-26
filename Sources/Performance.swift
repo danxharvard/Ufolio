@@ -359,12 +359,22 @@ final class PerformanceCenter: ObservableObject {
         guard Self.memorySaverOn else { return }
         var over = Int64(usage.total) - Int64(Self.memoryLimit)
         guard over > 0 else { return }
-        // Over the limit: first let go of closed pages' cached processes, then sleep tabs.
+        // Over the limit: first let go of what costs least to lose: closed pages' cached processes,
+        // the page being loaded ahead, and the pages background tabs keep for an instant Back.
+        // Only then do tabs go to sleep.
         Speed.releaseCachedProcesses()
+        Preloader.discard()
+        for model in BrowserModel.all.allObjects {
+            let visibleSplit = model.splitPair.flatMap { $0.contains(model.selectedID) ? $0 : nil }
+            for tab in model.tabs where tab !== model.selectedTab && tab.hasParkedPages && !(visibleSplit?.contains(tab.id) ?? false) {
+                tab.dropParkedPages()
+            }
+        }
         var candidates: [(tab: BrowserTab, bytes: UInt64)] = []
         for model in BrowserModel.all.allObjects {
             let visibleSplit = model.splitPair.flatMap { $0.contains(model.selectedID) ? $0 : nil }
             for tab in model.tabs where tab !== model.selectedTab && !tab.isAsleep && !tab.isLoading && !tab.isPlayingAudio
+                && !WebKitExtras.isPictureInPictureActive(tab.webView)   // its floating video is still on screen
                 && !(visibleSplit?.contains(tab.id) ?? false)
                 && tab.webView.cameraCaptureState == .none && tab.webView.microphoneCaptureState == .none
                 && !isProtectedHeavy(tab) {

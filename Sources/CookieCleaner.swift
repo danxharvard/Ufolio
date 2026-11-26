@@ -61,6 +61,15 @@ enum CookieCleaner {
         if all.removeValue(forKey: site) != nil { seen = all }
     }
 
+    /// Clear History: the dates you last used each site go too (they're a record of your visits).
+    /// Every site starts its 30 days again from now, so clearing history never gets anyone signed out.
+    static func historyCleared() {
+        let all = seen
+        guard !all.isEmpty else { return }
+        let now = Date()
+        seen = all.mapValues { _ in now }
+    }
+
     static func switchedOff() {
         UserDefaults.standard.removeObject(forKey: seenKey)   // nothing kept about your browsing
     }

@@ -112,11 +112,16 @@ struct PerformanceSettings: View {
             }
 
             Section {
+                // In Battery Saver and Eco it's off, and the switch shows that: it can't be turned on
+                // until you leave them. Your own choice is kept and comes back with the mode.
                 SettingsSwitch(title: "Instant pages",
-                               detail: "When you’ve as good as chosen a page (the top suggestion as you type is one you’ve visited, or you rest the pointer on a favourite or bookmark), Ufolio loads it in the background so it opens instantly. The site sees the visit as it loads. Never in Stealth windows or Power Saver.",
+                               detail: center.isPowerSaving
+                                   ? "Off in \(center.effectiveMode.label), to save energy and data. It comes back \(preloadPages ? "on" : "as you set it") when you leave \(center.effectiveMode.label)."
+                                   : "When you’ve as good as chosen a page (the top suggestion as you type is one you’ve visited, or you rest the pointer on a favourite or bookmark), Ufolio loads it in the background so it opens instantly. The site sees the visit as it loads. Never in Stealth windows, Battery Saver or Eco.",
                                symbol: "bolt.fill",
                                colors: [Color(red: 1.0, green: 0.78, blue: 0.25), Color(red: 0.95, green: 0.52, blue: 0.12)],
-                               isOn: $preloadPages)
+                               isOn: Binding(get: { preloadPages && !center.isPowerSaving }, set: { preloadPages = $0 }))
+                    .disabled(center.isPowerSaving)
             } header: { SectionTitle("Speed") }
 
             Section {

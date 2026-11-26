@@ -228,7 +228,8 @@ final class HushlistLink: NSObject, WKScriptMessageHandler {
         guard message.frameInfo.isMainFrame, origin.protocol == "https", Self.hosts.contains(origin.host),
               message.body as? String == "connect", let webView = message.webView else { return }
         let blocker = ContentBlocker.shared
-        guard blocker.hushlist == nil else { return }
+        // One question at a time: the page asking again and again could stack them up.
+        guard blocker.hushlist == nil, !blocker.isWorking, !DialogHost.isBusy(webView.window) else { return }
         DialogHost.show(HushDialog(
             art: .symbol("shield.lefthalf.filled.badge.checkmark"), theme: .hush, motion: .orbit,
             title: "Connect Hushlist to Force Field?",
