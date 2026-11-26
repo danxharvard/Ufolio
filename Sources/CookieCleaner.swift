@@ -69,11 +69,13 @@ enum CookieCleaner {
     static func runIfDue() {
         guard enabled, Date().timeIntervalSince(lastActivity) > 120,
               Date().timeIntervalSince(lastRun ?? .distantPast) > 86_400 else { return }
-        UserDefaults.standard.set(Date(), forKey: runKey)
         run()
     }
 
     static func run(completion: (() -> Void)? = nil) {
+        // Noted for Clean Now too: Settings said "Not run yet" (or an older date) beside what it
+        // had just cleaned, and the daily clean could follow straight after.
+        UserDefaults.standard.set(Date(), forKey: runKey)
         let cutoff = Date().addingTimeInterval(-Double(days) * 86_400)
         let recent = Set(seen.filter { $0.value > cutoff }.map(\.key))
         let open = Set(BrowserModel.all.allObjects.flatMap(\.tabs).compactMap { $0.url?.host }.map(Domains.site))

@@ -96,6 +96,14 @@ final class SuggestionsModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 350_000_000)
             guard !Task.isCancelled, let self, self.query == q, self.active,
                   let url = self.destination(of: q, kind: URLResolver.looksLikeAddress(q) ? .website : .search) else { return }
+            // A typed address only if it's a site you've been to or bookmarked: a pause partway
+            // through "google.com" used to load google.co, a different site you never chose.
+            if URLResolver.looksLikeAddress(q), let host = url.host {
+                let site = host.lowercased().strippingWWW
+                let marked = (self.browser?.bookmarks ?? .shared).items.contains { $0.url.host?.lowercased().strippingWWW == site }
+                let visited = marked ? true : await (self.browser?.history ?? .shared).hasVisited(host: host)
+                guard visited, !Task.isCancelled, self.query == q, self.active else { return }
+            }
             Preloader.preload(url, for: self.browser?.selectedTab)
         }
 

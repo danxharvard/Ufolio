@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.51.0-beta.9: twenty fixes, faster Instant pages (beta)
+
+Everything in 0.50.5 (four fixes), plus:
+- Instant pages:
+  - Back reaches every page after several instant pages in a row (after two, it lost the first);
+  - a page opened partway through loading now gets added to history, and offers Reader and
+    translation, which it used to skip;
+  - visits aren't counted twice;
+  - the Force Field counter shows what was blocked on the new page, not the old page's number;
+  - going Back to a kept page updates Reader and translation for that page, and clears a paused
+    heavy page, look-alike warning or floating video that belonged to the page you left;
+  - preloaded pages are laid out at your window's size, so they appear without reflowing;
+  - links that do something rather than show something (sign out, unsubscribe, delete) are
+    never loaded early;
+  - typing an address only preloads it if you've been to that site before (a pause partway
+    through "google.com" used to load google.co);
+  - pages kept for Back in a background tab are let go after five minutes, to save memory;
+  - a preload is thrown away when its tab closes, and never used if the tab's Orbit has moved
+    to another profile since;
+  - links that sites open with a script just after your click use the preloaded page too.
+- The cookie auto-cleaner: Clean Now updates "Last cleaned", and the Keep box only accepts real
+  site names.
+
 ## 0.51.0-beta.8: twenty more fixes (beta)
 
 Everything in 0.50.4 (ten fixes), plus:

@@ -119,6 +119,16 @@ final class HistoryStore: ObservableObject {
         }.value
     }
 
+    /// Whether you've been to this site before (checked on a copy, away from the main thread).
+    func hasVisited(host: String) async -> Bool {
+        let target = host.lowercased().strippingWWW
+        guard !target.isEmpty else { return false }
+        let snapshot = entries
+        return await Task.detached(priority: .userInitiated) {
+            snapshot.values.contains { $0.url.host?.lowercased().strippingWWW == target }
+        }.value
+    }
+
     private static func key(_ url: URL) -> URL? {
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
               var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }

@@ -225,6 +225,12 @@ final class BrowserModel: NSObject, ObservableObject {
     /// Tab Sleep: background tabs idle for longer than the chosen time are put to sleep,
     /// unless they're playing sound or video or using the camera or microphone.
     private func sleepIdleTabs() {
+        // Pages kept for an instant Back (each a page held in memory) go once a tab has sat in
+        // the background for five minutes, even with tab sleeping off: they were kept for good.
+        for tab in tabs where tab !== selectedTab && !(splitPair?.contains(tab.id) ?? false)
+            && tab.hasParkedPages && Date().timeIntervalSince(tab.lastActive) > 300 {
+            tab.dropParkedPages()
+        }
         let minutes = PerformanceCenter.shared.sleepMinutes   // shorter in Power Saver
         guard minutes > 0 else { return }
         sleepBackgroundTabs(idleFor: minutes * 60)
@@ -238,7 +244,11 @@ final class BrowserModel: NSObject, ObservableObject {
         for tab in tabs where tab !== selectedTab && !(visible?.contains(tab.id) ?? false) && !tab.isAsleep && !tab.isLoading
             && Date().timeIntervalSince(tab.lastActive) >= seconds
             && tab.webView.cameraCaptureState == .none && tab.webView.microphoneCaptureState == .none {
-            tab.webView.requestMediaPlaybackState { state in
+            tab.webView.requestMediaPlaybackState { [weak self, weak tab] state in
+                // The answer comes a moment later: by then you may have switched to this tab (or
+                // its Split View partner), which used to be put to sleep under you.
+                guard let self, let tab, tab !== self.selectedTab, !tab.isAsleep,
+                      !(self.splitPair.map { $0.contains(tab.id) && $0.contains(self.selectedID) } ?? false) else { return }
                 // "Suspended" is the silent video Ufolio pauses in background tabs itself: those tabs
                 // can sleep too (they never did). With background sound paused as well, a suspended
                 // tab might be your podcast, so it's left alone.

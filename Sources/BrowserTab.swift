@@ -22,6 +22,14 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     private var pendingSites: [String: Int] = [:]
     private var flushScheduled = false
 
+    private func resetBlockedCounts() {
+        pendingBlocked = 0; pendingAds = 0; pendingTrackers = 0; pendingSites = [:]
+        if blockedOnPage != 0 { blockedOnPage = 0 }
+        if adsOnPage != 0 { adsOnPage = 0 }
+        if trackersOnPage != 0 { trackersOnPage = 0 }
+        if !blockedSites.isEmpty { blockedSites = [:] }
+    }
+
     private func scheduleBlockedFlush() {
         guard !flushScheduled else { return }
         flushScheduled = true
@@ -226,6 +234,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         (view as? HushWebView)?.onSplitDrag = { [weak self] phase, info in
             self?.handleSplitDrag(phase, info) ?? false
         }
+        (view as? HushWebView)?.onHistoryStep = { [weak self] back in
+            if back { self?.goBack() } else { self?.goForward() }
+        }
         (view as? HushWebView)?.onFocus = { [weak self] in
             guard let self, let model = self.model, model.isInSplit(self), model.selectedID != self.id else { return }
             model.selectedID = self.id
@@ -260,7 +271,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
                 c.fragment = nil
                 return c.string
             }
-            if !tab.isLoading, !tab.isPrivate, let url, page(url) != page(previous),
+            // (Not while a page's follow-up is still to come, which records it: a page swapped in
+            // by Instant pages was counted twice.)
+            if !tab.isLoading, tab.finishedCommit != nil, !tab.isPrivate, let url, page(url) != page(previous),
                ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
                 HistoryStore.store(for: tab.profileID).record(url, title: tab.webView.title ?? "")
             }
@@ -464,7 +477,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         if isAsleep { sleepState = nil; wakeIfNeeded(loading: false) }
         lookalike = nil
         userLoadedURL = url
-        dropParked(&parkedForward)   // a new page: Forward no longer leads anywhere
+        dropParked(&parkedForwardStack)   // a new page: Forward no longer leads anywhere
         refreshNavigation()
         webView.load(URLRequest(url: url))
     }
@@ -513,24 +526,39 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     // MARK: Instant pages
 
-    /// A preloaded page has its own (empty) history, so the page you came from is kept to one
-    /// side: Back swaps it straight back in, and Forward the other way.
-    private var parkedBack: WKWebView?
-    private var parkedForward: WKWebView?
+    /// A preloaded page has its own (empty) history, so the pages you came from are kept to one
+    /// side: Back swaps them straight back in, and Forward the other way. A short stack (it used
+    /// to be one page, so after two instant pages in a row Back could no longer reach the first);
+    /// the oldest goes once there are more than three, as each holds a page in memory.
+    private var parkedBackStack: [WKWebView] = []
+    private var parkedForwardStack: [WKWebView] = []
+    private static let parkedLimit = 3
+    var parkedBack: WKWebView? { parkedBackStack.last }
+    var hasParkedPages: Bool { !parkedBackStack.isEmpty || !parkedForwardStack.isEmpty }
+    var parkedForward: WKWebView? { parkedForwardStack.last }
 
-    private func dropParked(_ slot: inout WKWebView?) {
-        guard let view = slot else { return }
-        slot = nil
+    private func close(parked view: WKWebView) {
         view.navigationDelegate = nil
         view.uiDelegate = nil
         view.stopLoading()
         WebKitExtras.close(view)
     }
 
+    private func dropParked(_ stack: inout [WKWebView]) {
+        let views = stack
+        stack.removeAll()
+        views.forEach { close(parked: $0) }
+    }
+
+    private func park(_ view: WKWebView, on stack: inout [WKWebView]) {
+        stack.append(view)
+        while stack.count > Self.parkedLimit { close(parked: stack.removeFirst()) }
+    }
+
     /// Lets the kept pages go (when the tab sleeps or closes, or memory runs short).
     func dropParkedPages() {
-        dropParked(&parkedBack)
-        dropParked(&parkedForward)
+        dropParked(&parkedBackStack)
+        dropParked(&parkedForwardStack)
         refreshNavigation()
     }
 
@@ -550,6 +578,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         old.uiDelegate = nil
         // The page set aside stops playing (its video or podcast used to carry on, out of sight);
         // the one coming in picks up again.
+        // Its floating video goes back in first (it used to stay up, frozen, after the page was set aside).
+        if WebKitExtras.isPictureInPictureActive(old) { WebKitExtras.togglePictureInPicture(old) }
+        if autoPictureInPicture { autoPictureInPicture = false }
         old.setAllMediaPlaybackSuspended(true)
         view.setAllMediaPlaybackSuspended(false)
         objectWillChange.send()
@@ -559,6 +590,14 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         if crashed { crashed = false; crashedWhileHidden = false }
         if loadError != nil { loadError = nil }
         if reader != nil { reader = nil }
+        // A heavy page you paused belongs to the old view: it's resumed as it's set aside (it
+        // used to stay frozen, with the Paused bar showing over the page swapped in instead).
+        if isPagePaused { WebKitExtras.setPageSuspended(false, old); isPagePaused = false }
+        if isHeavy { isHeavy = false }
+        if translation != .none { setTranslation(.none, language: nil) }
+        if readerAvailable { readerAvailable = false }
+        if lookalike != nil { lookalike = nil }
+        resetBlockedCounts()   // the counts were the old page's
         setUp(view)
         view.pageZoom = zoom
         if isMuted { WebKitExtras.setMuted(true, view) }
@@ -569,10 +608,17 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         lookalike = nil
         userLoadedURL = url
         let previous = show(view)
-        dropParked(&parkedBack)
-        dropParked(&parkedForward)
+        // A new page for this tab. Without this, one handed over partway through loading (after it
+        // had started showing, before it finished) counted as the page already finished, so it
+        // never got its follow-up: no history entry, Reader or translation.
+        commitCount &+= 1
+        finishedCommit = nil
+        // What Force Field blocked while it loaded in the background counts for this page (the
+        // counter used to keep showing the previous page's number).
+        for (identifier, blockedURL) in Preloader.takeBlocked() { noteBlocked(identifier, url: blockedURL, in: view) }
+        dropParked(&parkedForwardStack)   // a new page: Forward no longer leads anywhere
         // A new tab's empty start page isn't somewhere to go Back to (Back used to lead to it).
-        if previous.url != nil { parkedBack = previous } else { var blank: WKWebView? = previous; dropParked(&blank) }
+        if previous.url != nil { park(previous, on: &parkedBackStack) } else { close(parked: previous) }
         refreshNavigation()
         // It finished loading before it was handed over, so its follow-up (history, Reader) runs now.
         if !view.isLoading { DispatchQueue.main.async { [weak self] in self?.pageFinished() } }
@@ -580,22 +626,31 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     func goBack() {
         if webView.canGoBack { webView.goBack(); return }
-        guard let previous = parkedBack else { return }
-        parkedBack = nil
+        guard let previous = parkedBackStack.popLast() else { return }
         let current = show(previous)
-        dropParked(&parkedForward)
-        parkedForward = current
+        park(current, on: &parkedForwardStack)
         refreshNavigation()
+        redetectKeptPage()
     }
 
     func goForward() {
         if webView.canGoForward { webView.goForward(); return }
-        guard let next = parkedForward else { return }
-        parkedForward = nil
+        guard let next = parkedForwardStack.popLast() else { return }
         let current = show(next)
-        dropParked(&parkedBack)
-        parkedBack = current
+        park(current, on: &parkedBackStack)
         refreshNavigation()
+        redetectKeptPage()
+    }
+
+    /// A kept page swapped back in: whether it can be translated or read in Reader is its own
+    /// (the page you left's answers used to stay).
+    private func redetectKeptPage() {
+        guard !webView.isLoading, webView.url != nil else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            PageTranslator.shared.detect(in: self)
+            ReaderMode.detect(in: self)
+        }
     }
 
     func reload() {
@@ -649,6 +704,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     func tearDown() {
         dropParkedPages()
+        Preloader.discard(forTab: id)
         observers.removeAll()
         webView.stopLoading()
         webView.navigationDelegate = nil
@@ -684,8 +740,11 @@ extension BrowserTab: WKNavigationDelegate {
             return
         }
         // A link you clicked that was already loading in the background (pressed a moment ago):
-        // swap it in instead of starting again.
-        if action.navigationType == .linkActivated, action.targetFrame?.isMainFrame ?? false,
+        // swap it in instead of starting again. Also when the page itself goes there straight
+        // after your click (sites whose links are buttons that set the address in a script).
+        let justClicked = Date().timeIntervalSince((webView as? HushWebView)?.lastInteraction ?? .distantPast) < 2
+        if action.navigationType == .linkActivated || (action.navigationType == .other && justClicked),
+           action.targetFrame?.isMainFrame ?? false,
            (action.request.httpMethod ?? "GET") == "GET", let url = action.request.url,
            let ready = Preloader.take(url, for: self) {
             decisionHandler(.cancel, preferences)
@@ -905,11 +964,7 @@ extension BrowserTab: WKNavigationDelegate {
         if loadError != nil { loadError = nil }
         // Going back (or anywhere else) from a look-alike warning takes the warning away too.
         if lookalike != nil { lookalike = nil }
-        pendingBlocked = 0; pendingAds = 0; pendingTrackers = 0; pendingSites = [:]
-        if blockedOnPage != 0 { blockedOnPage = 0 }
-        if adsOnPage != 0 { adsOnPage = 0 }
-        if trackersOnPage != 0 { trackersOnPage = 0 }
-        if !blockedSites.isEmpty { blockedSites = [:] }
+        resetBlockedCounts()
         if translation != .none { setTranslation(.none, language: nil) }
         if reader != nil { reader = nil }
         if readerAvailable { readerAvailable = false }
@@ -1020,6 +1075,11 @@ extension BrowserTab: WKNavigationDelegate {
                       performedAction action: NSObject, forURL url: URL) {
         guard action.responds(to: NSSelectorFromString("blockedLoad")),
               (action.value(forKey: "blockedLoad") as? Bool) == true else { return }
+        noteBlocked(identifier, url: url, in: webView)
+    }
+
+    /// One blocked request on this tab's page (also those blocked while it was being preloaded).
+    func noteBlocked(_ identifier: String, url: URL, in webView: WKWebView) {
         let category = BuiltInRules.category(of: identifier)
         guard category != .other else { return }
         DispatchQueue.main.async {
@@ -1223,7 +1283,35 @@ final class HushWebView: WKWebView {
     override func rightMouseDown(with event: NSEvent) { if !covered(event) { super.rightMouseDown(with: event) } }
     override func rightMouseUp(with event: NSEvent) { if !covered(event) { super.rightMouseUp(with: event) } }
     override func otherMouseDown(with event: NSEvent) { if !covered(event) { super.otherMouseDown(with: event) } }
-    override func otherMouseUp(with event: NSEvent) { if !covered(event) { super.otherMouseUp(with: event) } }
+    override func otherMouseUp(with event: NSEvent) {
+        guard !covered(event) else { return }
+        super.otherMouseUp(with: event)
+        // A mouse's side buttons: Back (button 4) and Forward (button 5), as in other browsers.
+        guard event.buttonNumber == 3 || event.buttonNumber == 4 else { return }
+        stepIfUnhandled(back: event.buttonNumber == 3)
+    }
+
+    /// A three-finger (or Magic Mouse) swipe between pages.
+    override func swipe(with event: NSEvent) {
+        guard !covered(event) else { return }
+        super.swipe(with: event)
+        guard event.deltaX != 0 else { return }
+        stepIfUnhandled(back: event.deltaX > 0)
+    }
+
+    /// Goes Back or Forward (through the tab, which also knows pages opened instantly), unless
+    /// the page or WebKit already did: checked a moment later, so it never goes two steps.
+    private func stepIfUnhandled(back: Bool) {
+        let before = backForwardList.currentItem
+        let page = url, wasLoading = isLoading
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            guard let self, self.backForwardList.currentItem === before, self.url == page,
+                  wasLoading || !self.isLoading else { return }
+            self.onHistoryStep?(back)
+        }
+    }
+    /// Back (true) or Forward (false) asked for by a mouse button or swipe (the tab decides how).
+    var onHistoryStep: ((Bool) -> Void)?
     override func scrollWheel(with event: NSEvent) { if !covered(event) { super.scrollWheel(with: event) } }
     override func mouseMoved(with event: NSEvent) { if !covered(event) { super.mouseMoved(with: event) } }
     override func mouseEntered(with event: NSEvent) { if !covered(event) { super.mouseEntered(with: event) } }

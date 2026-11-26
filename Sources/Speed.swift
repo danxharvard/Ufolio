@@ -328,6 +328,8 @@ enum Preloader {
         let view: WKWebView
         let started = Date()
         var failed = false
+        /// Requests Force Field blocked while preloading (shown on the tab's counter once opened).
+        var blocked: [(String, URL)] = []
         init(url: URL, tabID: UUID, view: WKWebView) { self.url = url; self.tabID = tabID; self.view = view }
     }
     private static var current: Entry?
@@ -362,12 +364,19 @@ enum Preloader {
               let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https", let host = url.host else { return }
         if let here = tab.url, same(here, url) { return }
         if let entry = current, entry.tabID == tab.id, same(entry.url, url), !entry.failed { return }
+        // Links that do something rather than show something (sign out, unsubscribe, delete) are
+        // never loaded early: a press you drag away from, or a pause on one, used to sign you out.
+        if hasSideEffects(url) { return }
         // Pages the tab would stop or change first (look-alikes, tracking redirects) aren't preloaded.
         if Lookalike.check(host: host) != nil || CleanLinks.skipRedirect(url) != nil
             || (CleanLinks.isEnabled && CleanLinks.cleaned(url) != nil) || TorrentTools.isAdNetwork(host) { return }
         discard()
         let config = BrowserTab.makeConfiguration(privately: false, store: tab.webView.configuration.websiteDataStore)
-        let view = HushWebView(frame: NSRect(x: 0, y: 0, width: 1280, height: 800), configuration: config)
+        // Laid out at the tab's own size, so swapping it in needs no second layout (it was always
+        // 1280 × 800, so most pages reflowed, and some jumped, as they appeared).
+        let size = tab.webView.bounds.size
+        let frame = size.width > 100 && size.height > 100 ? NSRect(origin: .zero, size: size) : NSRect(x: 0, y: 0, width: 1280, height: 800)
+        let view = HushWebView(frame: frame, configuration: config)
         view.navigationDelegate = delegate
         view.uiDelegate = delegate
         ContentBlocker.shared.attach(config.userContentController)
@@ -403,13 +412,48 @@ enum Preloader {
     static func take(_ url: URL, for tab: BrowserTab) -> WKWebView? {
         guard let entry = current, entry.tabID == tab.id, !entry.failed,
               Date().timeIntervalSince(entry.started) < 30,
+              // Still the tab's own website data (its Orbit may have moved to another profile
+              // since, and the page would have shown the other profile's sign-ins).
+              sameStore(entry.view.configuration.websiteDataStore, tab.webView.configuration.websiteDataStore),
               same(entry.url, url) || (entry.view.url.map { same($0, url) } ?? false) else { return nil }
         current = nil
+        taken = entry.blocked
         entry.view.navigationDelegate = nil
         entry.view.uiDelegate = nil
         WebKitExtras.setMuted(false, entry.view)
         entry.view.setAllMediaPlaybackSuspended(false)
         return entry.view
+    }
+
+    /// The same website data (the default, or the same profile's), however WebKit hands it back.
+    private static func sameStore(_ a: WKWebsiteDataStore, _ b: WKWebsiteDataStore) -> Bool {
+        a === b || (a.isPersistent && b.isPersistent && a.identifier == b.identifier)
+    }
+
+    private static var taken: [(String, URL)] = []
+
+    /// What was blocked on the page just handed over (once).
+    static func takeBlocked() -> [(String, URL)] {
+        defer { taken = [] }
+        return taken
+    }
+
+    fileprivate static func noteBlocked(_ identifier: String, url: URL, in view: WKWebView) {
+        guard let entry = current, entry.view === view, entry.blocked.count < 1000 else { return }
+        entry.blocked.append((identifier, url))
+    }
+
+    /// Words in an address that mean opening it does something (signs you out, unsubscribes…).
+    static func hasSideEffects(_ url: URL) -> Bool {
+        let text = (url.path + "?" + (url.query ?? "")).lowercased()
+        let words = ["logout", "log-out", "log_out", "signout", "sign-out", "sign_out", "logoff", "log-off",
+                     "unsubscribe", "delete", "remove", "cancel", "confirm", "action=", "token=", "/api/"]
+        return words.contains { text.contains($0) }
+    }
+
+    /// Its tab closed: nothing to hand it to.
+    static func discard(forTab id: UUID) {
+        if current?.tabID == id { discard() }
     }
 
     static func discard() {
@@ -471,6 +515,14 @@ enum Preloader {
                      initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) { completionHandler(false) }
         func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?,
                      initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) { completionHandler(nil) }
+        /// Blocked requests, kept for the tab's counter (WebKit's private delegate call, as in tabs).
+        @objc(_webView:contentRuleListWithIdentifier:performedAction:forURL:)
+        func blocked(_ webView: WKWebView, contentRuleListWithIdentifier identifier: String,
+                     performedAction action: NSObject, forURL url: URL) {
+            guard action.responds(to: NSSelectorFromString("blockedLoad")),
+                  (action.value(forKey: "blockedLoad") as? Bool) == true else { return }
+            DispatchQueue.main.async { Preloader.noteBlocked(identifier, url: url, in: webView) }
+        }
         /// Never the keychain from a preload (it could ask permission while you're typing).
         @objc(_webCryptoMasterKeyForWebView:)
         func webCryptoKey(_ webView: WKWebView) -> Data? { WebCryptoKey.key(privately: false) }

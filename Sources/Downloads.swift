@@ -553,7 +553,9 @@ private struct DownloadRow: View {
                     Image(systemName: "magnifyingglass.circle.fill").foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .help("Show in Finder")
+                // (No hover tooltip: the downloads list closes as Finder opens, and a tooltip on a
+                // view that vanishes under the pointer is what crashes SwiftUI.)
+                .accessibilityLabel("Show in Finder")
             }
         }
         .padding(8)
@@ -603,5 +605,6 @@ private struct RowButton: View {
             Image(systemName: symbol).font(.system(size: 15)).foregroundStyle(tint)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(help)   // VoiceOver said nothing useful for these
     }
 }
