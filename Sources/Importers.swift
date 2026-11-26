@@ -73,7 +73,7 @@ extension BrowserImporter {
 // MARK: - Passwords from an exported file
 
 /// Imports passwords from the CSV file that Chrome, Safari, Firefox, Edge, Brave and most
-/// password managers can export. Each one goes into your Mac's keychain.
+/// password managers can export. They go into Ufolio's own encrypted vault.
 enum PasswordImporter {
     struct Result {
         var added = 0
@@ -102,6 +102,7 @@ enum PasswordImporter {
         }
         let userColumn = column(["username", "user name", "login", "login_username", "email"])
         var result = Result()
+        var incoming: [(host: String, account: String, password: String)] = []
         for row in rows.dropFirst() {
             guard row.count > max(urlColumn, passwordColumn) else { result.skipped += 1; continue }
             let password = row[passwordColumn]
@@ -109,17 +110,30 @@ enum PasswordImporter {
             let link = URL(string: address.contains("://") ? address : "https://" + address)
             guard !password.isEmpty, password.count <= 512, let host = link?.host, !host.isEmpty,
                   ["http", "https"].contains(link?.scheme?.lowercased() ?? "") else { result.skipped += 1; continue }
-            let site = ContentBlocker.normalize(host)
             let user = String((userColumn.flatMap { row.count > $0 ? row[$0] : nil } ?? "").prefix(256))
-            if let existing = PasswordVault.logins(for: site).first(where: { $0.account == user }) {
-                if PasswordVault.password(for: existing) == password { result.skipped += 1; continue }
-                if PasswordVault.save(host: site, account: user, password: password) { result.updated += 1 } else { result.skipped += 1 }
-            } else if PasswordVault.save(host: site, account: user, password: password) {
-                result.added += 1
-            } else {
-                result.skipped += 1
+            incoming.append((ContentBlocker.normalize(host), user, password))
+        }
+        // All in one go, compared with Ufolio's own vault only. It used to check each row against
+        // the keychain too (reading an older keychain password asks for your Mac password, once
+        // per row) and rewrote the encrypted vault file after every single row.
+        var counts = Result(added: 0, updated: 0, skipped: result.skipped)
+        let saved = Vault.update { contents in
+            for item in incoming {
+                if let i = contents.logins.firstIndex(where: { $0.host == item.host && $0.account == item.account }) {
+                    if contents.logins[i].password == item.password { counts.skipped += 1; continue }
+                    contents.logins[i].password = item.password
+                    contents.logins[i].modified = Date()
+                    counts.updated += 1
+                } else {
+                    contents.logins.append(Vault.Login(host: item.host, account: item.account, password: item.password, modified: Date()))
+                    counts.added += 1
+                }
             }
         }
+        guard saved else {
+            throw NSError(domain: "Ufolio", code: 3, userInfo: [NSLocalizedDescriptionKey: "The passwords couldn’t be saved. Please try again."])
+        }
+        result = counts
         return result
     }
 

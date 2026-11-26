@@ -37,7 +37,11 @@ No bloat. No probing. No nonsense. Just *Ufolio*.
 ## Ship's systems
 
 ### ⚡️ Warp speed
-- **WebKit engines**: Apple's own engine, tuned for the Mac.
+- **WebKit engines**: Apple's own engine, tuned for the Mac, with the speed settings Safari uses
+  switched on.
+- **Instant pages**: Ufolio starts loading the page you're about to open (the address you're
+  typing, the suggestion you arrow to, the favourite you rest on, the link you press), so it's
+  already there when you get to it. Back to a page you came from is instant too.
 - **Ads vaporised before they load.** Ads and trackers are stopped before they download, so busy
   pages land sooner and use less data. Even with the Force Field up, pages load as quickly as in
   plain WebKit.
@@ -78,7 +82,11 @@ No bloat. No probing. No nonsense. Just *Ufolio*.
 - **Impostor alerts**: Ufolio spots look-alike addresses like `paypa1.com` and warns you before you
   type anything.
 - **Ufolio never uses your Mac's location.** Websites can ask, and Ufolio checks with you first.
-- **Passwords & AutoFill** locked in your Mac's Keychain, filled only after Touch ID.
+- **Passwords & AutoFill** in Ufolio's own encrypted vault (AES-256, with its key readable only
+  by your Mac account): sign in once and it just fills, with no macOS password prompts. You can
+  choose to be asked first in Settings › Passwords.
+- **Cookie auto-cleaner** (off by default): clears sites you haven't used for 30 days, never
+  ones you're signed in to.
 - Your history and bookmarks stay **on your home planet: your Mac**. Always.
 
 ### 🌌 Out-of-this-world looks
@@ -93,7 +101,13 @@ No bloat. No probing. No nonsense. Just *Ufolio*.
 ### 🪐 A joy to pilot
 - **Command Palette (⌘K)**: one box for tabs, commands, bookmarks and history.
 - **Orbits**: keep Work, Personal and anything else in separate orbits, each with its own tabs.
-- **Split View**, **Reader**, **Picture in Picture** and **quick translation**.
+- **Split View**, with links dragged from one side opening on the other, plus **Reader** and
+  **quick translation**.
+- **Picture in Picture** that pops a playing video out when you switch tabs, and back in when you
+  return.
+- **Tab previews**: rest on a tab to see its page, without waking it.
+- **Send to iPhone**: pass the page you're on to your iPhone by AirDrop, the Share menu or a QR code.
+- **Downloads** you can pause, resume and sort into folders by type.
 - **Smart address bar** with live suggestions from Google, DuckDuckGo, Bing, Brave Search or Ecosia.
 - **Bookmarks with folders**, a Bookmarks & History sidebar, and bookmark import and export that
   works with every browser.
@@ -102,7 +116,10 @@ No bloat. No probing. No nonsense. Just *Ufolio*.
 - **Recently closed tabs** one click away, and your session restored when you return.
 - **Easy abduction**: beam your bookmarks and favourite sites over from Safari, Chrome, Brave,
   Edge, Arc, Vivaldi or Firefox, right from the setup guide.
-- **Updates itself** quietly, and shows you what's new after each update.
+- **Updates itself** quietly, and shows you what's new after each update. If an update ever
+  won't start, Ufolio offers to go back to the version before. Want new features first? Switch on
+  **Get beta versions** in Settings › Software Update.
+- **A heads-up for heavy pages** that keep your Mac busy, with one click to pause them.
 
 ---
 
@@ -140,8 +157,12 @@ All settings live in **Ufolio Browser › Settings…** (⌘,).
 - Photo of the Day, if you choose it, is fetched from Bing's public photo of the day without
   cookies. News, if you turn it on, is fetched straight from the publishers you pick.
 - Bookmarks and history are stored only in `~/Library/Application Support/Hush Browser/` (the folder keeps its old name, so nothing is lost in the rename).
-- Passwords and cards are stored in the macOS Keychain and filled only after Touch ID or your
-  password.
+- Passwords and cards are stored in Ufolio's own vault on your Mac, encrypted with AES-256. Its
+  key is a separate file only your Mac account can read, and FileVault protects both while your
+  Mac is locked or off. Passwords from older versions that are still in the Keychain move into
+  the vault the first time they're used.
+- If Ufolio crashes or stops responding, a note is kept in `~/Library/Logs/Ufolio Browser` on
+  your Mac only. It's never sent anywhere.
 - Updates come only from this repository's releases, and every update is signed with the
   project's own key. The app checks that signature (and the checksum) before installing anything,
   so even a release published by someone else couldn't be installed.
@@ -215,7 +236,9 @@ GitHub is too busy to start the build, run it again from **Actions › Release �
 | `Sources/CleanLinks.swift` | Removes tracking tags from links |
 | `Sources/Lookalike.swift` | Look-alike impostor site warnings |
 | `Sources/Location.swift` | Website permissions and start page weather |
-| `Sources/Autofill.swift` | Passwords, cards and contact AutoFill (Keychain + Touch ID) |
+| `Sources/Autofill.swift` | Passwords, cards and contact AutoFill |
+| `Sources/Vault.swift` | The encrypted password and card vault |
+| `Sources/Speed.swift` | Speed settings, preconnecting, Instant pages, benchmarks |
 | `Sources/History.swift` | History, suggestions and importing from other browsers |
 | `Sources/Downloads.swift` | Downloads and the downloads list |
 | `Sources/Extensions.swift` | Chrome and Safari extensions and their toolbar buttons |

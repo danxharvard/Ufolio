@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.51.0: Instant pages, no more password prompts, Send to iPhone
+
+Everything from the 0.51 betas, now for everyone.
+
+**Instant pages** (Settings › Performance › Speed, on by default)
+- Ufolio starts loading the page you're about to open, so it's already there when you get to it:
+  the address you're typing (after a short pause), the suggestion you arrow to, the favourite,
+  suggestion or bookmark you rest the pointer on, and the link you press. A page loaded this way
+  shows in 1 to 10 milliseconds instead of 80 to 550.
+- Back to the page you came from is instant, at the same scroll position, and so is Forward.
+- Safe by design: one page at a time, muted, with Force Field on; no pop-ups, downloads or
+  dialogs from a page loading in the background; never for look-alike sites, sign-out links or
+  sites you've never visited; never in Stealth windows or Power Saver.
+- Sites like YouTube and Twitch, which switch videos with their own code, aren't loaded twice.
+
+**Passwords without the prompts**
+- Save a password once and it simply fills in from then on. Passwords and cards now live in
+  Ufolio's own vault, encrypted with AES-256, instead of the macOS keychain (which asked for your
+  Mac password again after every update).
+- Passwords already in your keychain move into the vault one at a time, the first time each is
+  used: macOS asks once for that password, then never again.
+- Ufolio offers to save on many more sign-ins, including two-step ones.
+- Settings › Passwords › Security: choose whether filling asks first (never, by default).
+- Importing passwords from another browser no longer asks for your Mac password for each one.
+
+**New**
+- **Send to iPhone** (⋯ menu, or File › Send to iPhone…): AirDrop, the Share menu or a QR code.
+  No account, no server.
+- **Split View**: drag a link from one side to open it on the other (⌥ for a new tab), or switch
+  on "Open links in the other pane".
+- **Tab previews**: rest the pointer on a tab to see its page, without waking it.
+- **Picture in Picture on tab switch**: a playing video floats when you switch tabs and goes
+  back when you return. Turn it off per site from the tab's menu.
+- **Downloads**: sort into folders by type, and Open Folder.
+- **Cookie auto-cleaner** (Settings › Privacy & Security, off by default): clears sites you
+  haven't used for 30 days, never ones you're signed in to or have open.
+- **Heavy page warning**: a quiet bar when a page keeps your Mac busy, with Pause Page.
+- **Crash and hang log**, kept on your Mac only. After a crash, the next launch says so.
+- **Your mouse's side buttons** go Back and Forward, as do three-finger swipes.
+
+**Fixed**
+- Routers, printers and other devices on your network (192.168.1.1, http://router…) open again:
+  HTTPS upgrade forced them to https, which most don't have.
+- A site with no secure version at all (an old site, or a hotel or café Wi-Fi sign-in page) now
+  offers "Open Insecure Version" on its error page, instead of being impossible to open.
+- The address bar opens example.com?q=1 and example.com#section (it searched for them),
+  searches for email addresses instead of opening them, and opens IPv6 addresses like [::1].
+- A video you popped out into Picture in Picture keeps playing when you switch tabs (a silent
+  one froze), and its tab isn't put to sleep.
+- Element Zapper: zapping a plain wrapper on a page could hide every element of that kind on the
+  site, leaving it blank.
+- Plus every fix from 0.50.1 to 0.50.5, and dozens more from the betas: Back and Forward
+  through several instant pages, history, Reader and translation on instantly opened pages, the
+  Force Field counter, the hang log, tooltip crashes and more.
+
+Smoother animations throughout (how things move, not what they do), all still off with Reduce
+Motion.
+
 ## 0.51.0-beta.10: quicker on YouTube and other video sites (beta)
 
 - Clicking a video on YouTube or Twitch no longer loads a whole second copy of the site in the

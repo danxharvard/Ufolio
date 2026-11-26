@@ -104,7 +104,10 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     /// Why the last page couldn't load (no connection, no such server, a bad certificate…).
     /// Before, a failed load showed nothing at all.
-    @Published var loadError: (url: URL?, message: String)?
+    @Published var loadError: (url: URL?, message: String, insecure: URL?)?
+    /// The last http:// address this tab was sent to (which HTTPS upgrade turns into https://):
+    /// if the site turns out to have no https, the error page offers the insecure version.
+    private var requestedHTTP: URL?
 
     func recoverFromCrash() {
         crashedWhileHidden = false
@@ -832,6 +835,7 @@ extension BrowserTab: WKNavigationDelegate {
             }
         }
         if action.targetFrame?.isMainFrame ?? true {
+            if let url = action.request.url, url.scheme?.lowercased() == "http" { requestedHTTP = url }
             // Per-site shields must be in place before the page starts loading.
             ContentBlocker.shared.update(webView.configuration.userContentController,
                                          forHost: action.request.url?.host)
@@ -876,7 +880,33 @@ extension BrowserTab: WKNavigationDelegate {
         // Stopped on purpose (Stop, a new address, a download): nothing to explain.
         let ns = error as NSError
         if ns.code == NSURLErrorCancelled || (ns.domain == "WebKitErrorDomain" && [102, 204].contains(ns.code)) { return }
-        loadError = (failed, Self.explain(error))
+        loadError = (failed, Self.explain(error), insecureVersion(of: failed, error: error))
+    }
+
+    /// The plain http:// address to offer when a secure one failed because the site seems to
+    /// have no https: one you (or a link) asked for as http:// that HTTPS upgrade changed, or an
+    /// address you typed without http(s)://. Only ever opened if you click it.
+    private func insecureVersion(of failed: URL?, error: Error) -> URL? {
+        guard Prefs.bool(Prefs.httpsUpgrade) || URLResolver.lastGuess != nil,
+              let failed, failed.scheme?.lowercased() == "https", let host = failed.host?.lowercased() else { return nil }
+        let noHTTPS: [URLError.Code] = [.secureConnectionFailed, .cannotConnectToHost, .timedOut, .serverCertificateUntrusted,
+                                        .serverCertificateHasBadDate, .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid]
+        guard let code = (error as? URLError)?.code, noHTTPS.contains(code) else { return nil }
+        let askedHTTP = requestedHTTP?.host?.lowercased() == host
+        let typed = URLResolver.lastGuess.map { $0.url.host?.lowercased() == host && !$0.text.contains("://") } ?? false
+        guard askedHTTP || typed, var parts = URLComponents(url: failed, resolvingAgainstBaseURL: false) else { return nil }
+        parts.scheme = "http"
+        if parts.port == 443 { parts.port = nil }
+        return parts.url
+    }
+
+    /// Opens the insecure version of a site with no https, after you chose to (for this site,
+    /// until Ufolio quits).
+    func openInsecure(_ url: URL) {
+        guard let host = url.host else { return }
+        ContentBlocker.shared.allowInsecure(host)
+        loadError = nil
+        load(url)
     }
 
     private static func explain(_ error: Error) -> String {

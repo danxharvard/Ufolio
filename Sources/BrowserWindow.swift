@@ -577,7 +577,8 @@ private struct TabPage: View {
                     .clipShape(PageCorners.shape)
                     .transition(.opacity)
             } else if let failure = tab.loadError {
-                LoadErrorPage(url: failure.url, message: failure.message) {
+                LoadErrorPage(url: failure.url, message: failure.message, insecure: failure.insecure,
+                              onInsecure: { if let insecure = failure.insecure { tab.openInsecure(insecure) } }) {
                     if let url = failure.url ?? tab.url { tab.load(url) } else { tab.reload() }
                 }
                 .clipShape(PageCorners.shape)
@@ -1409,6 +1410,8 @@ private struct SidebarSlot: View {
 private struct LoadErrorPage: View {
     let url: URL?
     let message: String
+    var insecure: URL? = nil
+    var onInsecure: () -> Void = {}
     let onRetry: () -> Void
 
     var body: some View {
@@ -1434,6 +1437,19 @@ private struct LoadErrorPage: View {
                     .controlSize(.large)
                     .buttonStyle(.borderedProminent)
                     .padding(.top, 4)
+                // A site with no secure version (an old site, or a hotel or café Wi-Fi sign-in page).
+                if insecure != nil {
+                    VStack(spacing: 6) {
+                        Text("This site may not support secure connections.")
+                            .font(.system(size: 12)).foregroundStyle(.secondary)
+                        Button("Open Insecure Version", action: onInsecure)
+                            .buttonStyle(.link)
+                            .font(.system(size: 12.5, weight: .medium))
+                        Text("Anything you send to it could be seen by others on the network.")
+                            .font(.system(size: 11)).foregroundStyle(.tertiary)
+                    }
+                    .padding(.top, 10)
+                }
             }
             .padding(40)
         }

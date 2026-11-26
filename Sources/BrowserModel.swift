@@ -28,6 +28,9 @@ final class BrowserModel: NSObject, ObservableObject {
                     }
                 }
             } else if let old, old !== selectedTab, !old.isAsleep, !stillVisible,
+               // A video you've popped out into Picture in Picture is still on screen: it used to
+               // freeze in its floating window as you switched tabs (silent ones always).
+               !WebKitExtras.isPictureInPictureActive(old.webView),
                PerformanceCenter.shared.pausesBackgroundMedia || !old.isPlayingAudio {
                 old.webView.setAllMediaPlaybackSuspended(true)
             }
@@ -243,7 +246,8 @@ final class BrowserModel: NSObject, ObservableObject {
         let visible = splitPair.flatMap { $0.contains(selectedID) ? $0 : nil }
         for tab in tabs where tab !== selectedTab && !(visible?.contains(tab.id) ?? false) && !tab.isAsleep && !tab.isLoading
             && Date().timeIntervalSince(tab.lastActive) >= seconds
-            && tab.webView.cameraCaptureState == .none && tab.webView.microphoneCaptureState == .none {
+            && tab.webView.cameraCaptureState == .none && tab.webView.microphoneCaptureState == .none
+            && !WebKitExtras.isPictureInPictureActive(tab.webView) {   // its floating video is still on screen
             tab.webView.requestMediaPlaybackState { [weak self, weak tab] state in
                 // The answer comes a moment later: by then you may have switched to this tab (or
                 // its Split View partner), which used to be put to sleep under you.

@@ -376,8 +376,9 @@ enum URLResolver {
     /// The web address typed text stands for (no record of the guess is kept: see resolve()).
     static func addressURL(_ input: String) -> URL? {
         // Local servers usually don't do HTTPS.
-        let host = input.split(separator: "/").first.map { String($0.split(separator: ":").first ?? "") } ?? ""
-        let local = host.lowercased() == "localhost" || host.lowercased().hasSuffix(".local") || isIPv4(host)
+        let site = input.split(maxSplits: 1, whereSeparator: { "/?#".contains($0) }).first.map(String.init) ?? ""
+        let host = String(site.split(separator: ":").first ?? "")
+        let local = host.lowercased() == "localhost" || host.lowercased().hasSuffix(".local") || isIPv4(host) || site.hasPrefix("[")
         return URL(string: (local ? "http://" : "https://") + input)
     }
 
@@ -387,7 +388,14 @@ enum URLResolver {
 
     static func looksLikeAddress(_ s: String) -> Bool {
         if s.contains(" ") { return false }
-        let host = s.split(separator: "/", maxSplits: 1).first.map(String.init) ?? s
+        // The site part ends at the first / ? or # ("example.com?q=1" and "example.com#top" used
+        // to be searched for instead of opened).
+        let host = s.split(maxSplits: 1, whereSeparator: { "/?#".contains($0) }).first.map(String.init) ?? s
+        // An email address is searched for, as in other browsers (it used to open the site,
+        // signing in as the name before the @).
+        if host.contains("@") { return false }
+        // An IPv6 address in brackets, like [::1]:8080.
+        if host.hasPrefix("["), let close = host.firstIndex(of: "]"), host.distance(from: host.startIndex, to: close) > 2 { return true }
         let hostOnly = host.split(separator: ":").first.map(String.init) ?? host
         if hostOnly.lowercased() == "localhost" { return true }
         // Numbers only count as an address when they're a whole IP address: "3.14" or "10.50"

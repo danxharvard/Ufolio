@@ -128,6 +128,10 @@ final class ElementZapper: NSObject, ObservableObject, WKScriptMessageHandler {
         var candidate = parts.join(' > ');
         try { if (document.querySelectorAll(candidate).length === 1) return candidate; } catch (e) {}
       }
+      // Reached the top without anything unique: anchor it to the page, so a plain wrapper
+      // straight inside <body> is saved as "body > div", not "div" (which hid every div on
+      // the site, leaving it blank).
+      if (node === document.body) parts.unshift('body');
       return parts.join(' > ');
     }
     function over(e) {

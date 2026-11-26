@@ -180,7 +180,8 @@ final class ContentBlocker: ObservableObject {
         let old = hostOf.object(forKey: controller) as String?
         if let host { hostOf.setObject(host as NSString, forKey: controller) } else { hostOf.removeObject(forKey: controller) }
         let shields = ShieldSettings.shared
-        if old.map(isShieldsDown) != host.map(isShieldsDown) || old == nil || shields.effective(for: old) != shields.effective(for: host) {
+        if old.map(isShieldsDown) != host.map(isShieldsDown) || old == nil || shields.effective(for: old) != shields.effective(for: host)
+            || old.map(isInsecureAllowed) != host.map(isInsecureAllowed) {
             configure(controller)
         }
     }
@@ -281,12 +282,27 @@ final class ContentBlocker: ObservableObject {
             }
         }
         // Secure connections are a privacy setting of their own, kept even when Hush Guard is off.
-        if Prefs.bool(Prefs.httpsUpgrade), let list = compiled[BuiltInRules.httpsUpgrade.identifier] { controller.add(list) }
+        if Prefs.bool(Prefs.httpsUpgrade), !(host.map(isInsecureAllowed) ?? false),
+           let list = compiled[BuiltInRules.httpsUpgrade.identifier] { controller.add(list) }
         if Prefs.bool(Prefs.globalPrivacyControl) { controller.addUserScript(UserScripts.globalPrivacyControl) }
         if CleanLinks.deAMPEnabled { controller.addUserScript(CleanLinks.deAMPScript) }
         if AutofillCenter.isEnabled { controller.addUserScript(AutofillCenter.script) }
         controller.addUserScript(HushlistLink.script)   // only does anything on hushlist.online
         controller.addUserScript(Speed.hoverScript)     // connects to a link's site as you point at it
+    }
+
+    // MARK: Sites without https
+
+    /// Sites you chose to open without https (a site that has none), until Ufolio quits.
+    private var insecureAllowed: Set<String> = []
+    func isInsecureAllowed(_ host: String) -> Bool { insecureAllowed.contains(Domains.site(host)) }
+    func allowInsecure(_ host: String) {
+        let site = Domains.site(host)
+        guard insecureAllowed.insert(site).inserted else { return }
+        // Pages already on that site get their rules without the upgrade straight away.
+        for controller in controllers.allObjects {
+            if let current = hostOf.object(forKey: controller) as String?, Domains.site(current) == site { configure(controller) }
+        }
     }
 
     // MARK: Per-site shields
@@ -636,9 +652,22 @@ enum BuiltInRules: String, CaseIterable {
                 "action": ["type": "block"],
             ]]
         case .httpsUpgrade:
+            // Never for devices on your own network: IP addresses (192.168.1.1), IPv6 addresses,
+            // one-word names (http://router, http://nas:5000) and home-network names. Routers,
+            // printers and NAS boxes rarely have https, and used to fail to open at all.
             rules = [[
-                "trigger": ["url-filter": "^http://", "unless-domain": ["localhost", "*.local", "*.localhost", "*.test"]] as [String: Any],
+                "trigger": ["url-filter": "^http://", "unless-domain": ["localhost", "*.local", "*.localhost", "*.test",
+                                                                       "*.lan", "*.home", "*.home.arpa", "*.internal"]] as [String: Any],
                 "action": ["type": "make-https"],
+            ], [
+                "trigger": ["url-filter": #"^http://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+[:/]"#],
+                "action": ["type": "ignore-previous-rules"],
+            ], [
+                "trigger": ["url-filter": #"^http://\["#],
+                "action": ["type": "ignore-previous-rules"],
+            ], [
+                "trigger": ["url-filter": "^http://[^./:]+[:/]"],
+                "action": ["type": "ignore-previous-rules"],
             ]]
         }
         let data = try! JSONSerialization.data(withJSONObject: rules)
