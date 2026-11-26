@@ -87,7 +87,6 @@ enum CookieCleaner {
         UserDefaults.standard.set(Date(), forKey: runKey)
         let cutoff = Date().addingTimeInterval(-Double(days) * 86_400)
         let recent = Set(seen.filter { $0.value > cutoff }.map(\.key))
-        let open = Set(BrowserModel.all.allObjects.flatMap(\.tabs).compactMap { $0.url?.host }.map(Domains.site))
         let keep = Set(kept)
         let stores = SpaceStore.shared.allDataStores
         // Saved passwords mean you're likely signed in there: read in the background (never the keychain's secrets).
@@ -98,6 +97,8 @@ enum CookieCleaner {
                 var remaining = stores.count
                 for store in stores {
                     store.fetchDataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes()) { records in
+                        // A site opened while the vault or WebKit lookup ran must keep its cookies.
+                        let open = Set(BrowserModel.all.allObjects.flatMap(\.tabs).compactMap { $0.url?.host }.map(Domains.site))
                         let old = records.filter { record in
                             let site = Domains.site(record.displayName)
                             return !recent.contains(site) && !open.contains(site) && !keep.contains(site) && !signedIn.contains(site)
