@@ -309,11 +309,11 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             if value == 0 || value >= 1 || abs(value - tab.progress) >= 0.08 { tab.progress = value }
         }
         bind(\.canGoBack) { tab, value in
-            let back = value || tab.parkedBack != nil
+            let back = value || tab.hasParkedBack
             if !tab.waking && tab.canGoBack != back { tab.canGoBack = back }
         }
         bind(\.canGoForward) { tab, value in
-            let forward = value || tab.parkedForward != nil
+            let forward = value || tab.hasParkedForward
             if !tab.waking && tab.canGoForward != forward { tab.canGoForward = forward }
         }
         // A published value announces a change even when set to the same thing, so each one is
@@ -551,15 +551,21 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     // MARK: Instant pages
 
     /// A preloaded page has its own (empty) history, so the pages you came from are kept to one
-    /// side: Back swaps them straight back in, and Forward the other way. A short stack (it used
-    /// to be one page, so after two instant pages in a row Back could no longer reach the first);
-    /// the oldest goes once there are more than three, as each holds a page in memory.
-    private var parkedBackStack: [WKWebView] = []
-    private var parkedForwardStack: [WKWebView] = []
-    private static let parkedLimit = 3
-    var parkedBack: WKWebView? { parkedBackStack.last }
-    var hasParkedPages: Bool { !parkedBackStack.isEmpty || !parkedForwardStack.isEmpty }
-    var parkedForward: WKWebView? { parkedForwardStack.last }
+    /// side: Back swaps them back in, and Forward the other way. Only the latest each way stays
+    /// live (a whole page in memory, so Back to it is instant); older ones are kept as WebKit's
+    /// own record of the page (its address, history and scroll position, a few kilobytes) and
+    /// restored from that. Each tab used to keep up to six live pages, 50 to 200 MB apiece.
+    private enum Parked {
+        case live(WKWebView)
+        case saved(state: Any?, url: URL?)
+    }
+    private var parkedBackStack: [Parked] = []
+    private var parkedForwardStack: [Parked] = []
+    private static let savedLimit = 20
+    var hasParkedBack: Bool { !parkedBackStack.isEmpty }
+    var hasParkedForward: Bool { !parkedForwardStack.isEmpty }
+    /// Whether this tab keeps a whole page in memory for Back or Forward.
+    var hasParkedPages: Bool { (parkedBackStack + parkedForwardStack).contains { if case .live = $0 { return true } else { return false } } }
 
     private func close(parked view: WKWebView) {
         view.navigationDelegate = nil
@@ -568,27 +574,60 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         WebKitExtras.close(view)
     }
 
-    private func dropParked(_ stack: inout [WKWebView]) {
-        let views = stack
+    /// A live kept page becomes a saved one: its memory goes, Back to it still works.
+    private func demote(_ entry: Parked) -> Parked {
+        guard case .live(let view) = entry else { return entry }
+        let saved = Parked.saved(state: view.interactionState, url: view.url)
+        close(parked: view)
+        return saved
+    }
+
+    private func dropParked(_ stack: inout [Parked]) {
+        let entries = stack
         stack.removeAll()
-        views.forEach { close(parked: $0) }
+        for case .live(let view) in entries { close(parked: view) }
     }
 
-    private func park(_ view: WKWebView, on stack: inout [WKWebView]) {
-        stack.append(view)
-        while stack.count > Self.parkedLimit { close(parked: stack.removeFirst()) }
+    private func park(_ view: WKWebView, on stack: inout [Parked]) {
+        stack = stack.map(demote) + [.live(view)]
+        if stack.count > Self.savedLimit { stack.removeFirst(stack.count - Self.savedLimit) }
     }
 
-    /// Lets the kept pages go (when the tab sleeps or closes, or memory runs short).
-    func dropParkedPages() {
-        dropParked(&parkedBackStack)
-        dropParked(&parkedForwardStack)
+    /// Lets the kept pages' memory go (memory running short, a tab idle in the background, or
+    /// going to sleep), keeping Back and Forward working. `forget` drops them altogether (the
+    /// tab is closing).
+    func dropParkedPages(forget: Bool = false) {
+        if forget {
+            dropParked(&parkedBackStack)
+            dropParked(&parkedForwardStack)
+        } else {
+            parkedBackStack = parkedBackStack.map(demote)
+            parkedForwardStack = parkedForwardStack.map(demote)
+        }
         refreshNavigation()
     }
 
+    /// A kept page ready to show: the live one, or a fresh one restored from its record.
+    private func unpark(_ entry: Parked) -> (view: WKWebView, restore: Parked?) {
+        switch entry {
+        case .live(let view):
+            return (view, nil)
+        case .saved:
+            let view = HushWebView(frame: .zero, configuration: BrowserTab.makeConfiguration(
+                privately: isPrivate, store: webView.configuration.websiteDataStore))
+            return (view, entry)
+        }
+    }
+
+    /// Loads a restored page once it's connected to this tab (so blocking and the rest are on).
+    private func restore(_ entry: Parked?, into view: WKWebView) {
+        guard case .saved(let state, let url) = entry else { return }
+        if let state { view.interactionState = state } else if let url { view.load(URLRequest(url: url)) }
+    }
+
     private func refreshNavigation() {
-        let back = webView.canGoBack || parkedBack != nil
-        let forward = webView.canGoForward || parkedForward != nil
+        let back = webView.canGoBack || hasParkedBack
+        let forward = webView.canGoForward || hasParkedForward
         if canGoBack != back { canGoBack = back }
         if canGoForward != forward { canGoForward = forward }
     }
@@ -650,8 +689,10 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     func goBack() {
         if webView.canGoBack { webView.goBack(); return }
-        guard let previous = parkedBackStack.popLast() else { return }
+        guard let entry = parkedBackStack.popLast() else { return }
+        let (previous, restoring) = unpark(entry)
         let current = show(previous)
+        restore(restoring, into: previous)
         park(current, on: &parkedForwardStack)
         refreshNavigation()
         redetectKeptPage()
@@ -659,8 +700,10 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     func goForward() {
         if webView.canGoForward { webView.goForward(); return }
-        guard let next = parkedForwardStack.popLast() else { return }
+        guard let entry = parkedForwardStack.popLast() else { return }
+        let (next, restoring) = unpark(entry)
         let current = show(next)
+        restore(restoring, into: next)
         park(current, on: &parkedBackStack)
         refreshNavigation()
         redetectKeptPage()
@@ -733,7 +776,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         // reused for the next visit to that site, which then loaded frozen (a YouTube video that
         // wouldn't play until Ufolio restarted).
         if isPagePaused { WebKitExtras.setPageSuspended(false, webView); isPagePaused = false }
-        dropParkedPages()
+        dropParkedPages(forget: true)
         Preloader.discard(forTab: id)
         observers.removeAll()
         webView.stopLoading()

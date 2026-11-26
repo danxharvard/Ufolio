@@ -203,6 +203,17 @@ enum SpeedBenchmark {
                     _ = await measure(in: tab) { tab.goForward() }
                 }
             }
+            // UFOLIO_BENCH_BACKALL: Back through every page, noting where each step lands.
+            if ProcessInfo.processInfo.environment["UFOLIO_BENCH_BACKALL"] != nil, let tab = model.selectedTab {
+                for step in 1..<max(urls.count, 1) {
+                    let begin = Date()
+                    tab.goBack()
+                    var waited = 0
+                    while tab.webView.url == nil || (tab.webView.isLoading && waited < 1500) { try? await Task.sleep(nanoseconds: 10_000_000); waited += 1 }
+                    rows.append("backall\(step),\(tab.webView.url?.absoluteString ?? "-"),\(Int(Date().timeIntervalSince(begin) * 1000)),live=\(tab.hasParkedPages)")
+                    try? rows.joined(separator: "\n").write(toFile: out, atomically: true, encoding: .utf8)
+                }
+            }
             rows.append(LagMonitor.summary)
             try? rows.joined(separator: "\n").write(toFile: out, atomically: true, encoding: .utf8)
             NSApp.terminate(nil)
