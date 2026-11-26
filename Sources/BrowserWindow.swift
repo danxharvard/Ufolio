@@ -343,6 +343,14 @@ struct BrowserWindow: View {
             return
         }
         guard let url = URLResolver.resolve(text) else { return }
+        // ⌘-Return or ⌥-Return opens it in a new tab, as in Safari and Chrome (it used to replace
+        // the page you were on whatever you held).
+        let flags = NSApp.currentEvent?.modifierFlags ?? []
+        if flags.contains(.command) || flags.contains(.option), model.selectedTab?.isBlank == false {
+            let tab = model.newTab(url: url, select: true)
+            DispatchQueue.main.async { tab.webView.window?.makeFirstResponder(tab.webView) }
+            return
+        }
         model.selectedTab?.load(url)
         if let tab = model.selectedTab {
             DispatchQueue.main.async { tab.webView.window?.makeFirstResponder(tab.webView) }
