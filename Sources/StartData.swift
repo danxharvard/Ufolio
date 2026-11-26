@@ -179,8 +179,10 @@ final class PrivacyReport: ObservableObject {
                 self?.recompute()
             }
         }
-        saveWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.save() }
+        // Saved once a few seconds after the first change, not rescheduled for every blocked
+        // request (a busy page made hundreds of timers, and kept putting the save off).
+        guard saveWork == nil else { return }
+        let work = DispatchWorkItem { [weak self] in self?.saveWork = nil; self?.save() }
         saveWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: work)
     }
@@ -218,6 +220,7 @@ final class PrivacyReport: ObservableObject {
 
     func save(waiting: Bool = false) {
         saveWork?.cancel()
+        saveWork = nil
         prune()
         let snapshot = days, file = self.file
         let write = {
