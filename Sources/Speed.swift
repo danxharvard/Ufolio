@@ -1,4 +1,5 @@
 import WebKit
+import SwiftUI
 
 /// Speed: the engine settings Safari uses to make pages appear near instantly, which WebKit
 /// switches off for every other app, plus getting connections ready before you need them.
@@ -535,6 +536,12 @@ enum Preloader {
             let siteOn = !(host.map(ContentBlocker.shared.isShieldsDown) ?? false)
             let blocked = siteOn && ShieldSettings.shared.effective(for: host).scripts == .blockAll
             preferences.allowsContentJavaScript = Prefs.bool(Prefs.javaScript) && !blocked
+            // The same auto-play rules as a tab: its video buffers while held paused here, and
+            // starts the moment you open the page.
+            if action.targetFrame?.isMainFrame ?? true {
+                let rules = PerformanceCenter.shared.isEco ? (policy: 3, quirks: 0) : AutoplayPolicy.current.webKitPolicy
+                WebKitExtras.setAutoplay(policy: rules.policy, quirks: rules.quirks, preferences)
+            }
             decisionHandler(ok ? .allow : .cancel, preferences)
         }
         func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse,
@@ -606,6 +613,38 @@ enum AutofillTest {
             """
             _ = try? await tab.webView.callAsyncJavaScript(fill, contentWorld: .page)
             AutofillCenter.note("test: filled and clicked")
+        }
+    }
+}
+
+// MARK: - Force Field panel picture
+
+/// Testing only (UFOLIO_SHIELD_SNAPSHOT=<png>, UFOLIO_SHIELD_URL=<page>): loads the page, then
+/// draws the Force Field panel for it into a picture, and quits.
+enum ShieldSnapshot {
+    static func startIfAsked(in model: BrowserModel) {
+        let env = ProcessInfo.processInfo.environment
+        guard let out = env["UFOLIO_SHIELD_SNAPSHOT"] else { return }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if let page = env["UFOLIO_SHIELD_URL"].flatMap(URL.init(string:)), let tab = model.selectedTab { tab.load(page) }
+            try? await Task.sleep(nanoseconds: 9_000_000_000)
+            guard let tab = model.selectedTab else { NSApp.terminate(nil); return }
+            FileHandle.standardError.write("snapshot: \(tab.url?.absoluteString ?? "-") blocked \(tab.blockedOnPage) ads \(tab.adsOnPage) trackers \(tab.trackersOnPage) sites \(tab.blockedSites.count)\n".data(using: .utf8)!)
+            let host = NSHostingView(rootView: ShieldsPanel(tab: tab, shieldsUp: env["UFOLIO_SHIELD_OFF"] == nil))
+            host.appearance = NSAppearance(named: .darkAqua)
+            let size = host.fittingSize
+            host.frame = NSRect(origin: .zero, size: size)
+            let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            window.contentView = host
+            window.orderFront(nil)
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            host.layoutSubtreeIfNeeded()
+            if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+                host.cacheDisplay(in: host.bounds, to: rep)
+                try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: out))
+            }
+            NSApp.terminate(nil)
         }
     }
 }

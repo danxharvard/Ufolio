@@ -295,6 +295,8 @@ final class BrowserModel: NSObject, ObservableObject {
     /// clicked on one side opens on the other, for a list on one side and reading on the other.
     @Published var splitLinksAcross = false
 
+    private var otherPaneOfSelected: BrowserTab? { selectedTab.flatMap(otherPane(of:)) }
+
     /// The tab on the other side of Split View.
     func otherPane(of tab: BrowserTab) -> BrowserTab? {
         guard let pair = splitPair, pair.contains(tab.id) else { return nil }
@@ -346,7 +348,12 @@ final class BrowserModel: NSObject, ObservableObject {
         // Which tabs are playing sound (for the speaker button on tabs).
         Self.watchMiddleClicks()   // middle-click on tabs, and the mouse's Back/Forward buttons
         audioTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
-            self?.tabs.forEach { $0.checkAudio() }
+            guard let self else { return }
+            self.tabs.forEach { $0.checkAudio() }
+            // The tab in front (and its Split View partner) never stays with media held paused.
+            guard self.window?.isVisible == true else { return }
+            self.selectedTab?.ensureMediaRunning()
+            if let pair = self.splitPair, pair.contains(self.selectedID) { self.otherPaneOfSelected?.ensureMediaRunning() }
         }
         audioTimer?.tolerance = 0.5
         sleepTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.sleepIdleTabs() }
@@ -399,7 +406,7 @@ final class BrowserModel: NSObject, ObservableObject {
             }
             if !placed.isEmpty { tabs = placed + tabs.filter { !$0.isPinned } }
         }
-        if !isPrivate, !Self.didRestoreSession { SpeedBenchmark.startIfAsked(in: self); LeakTest.startIfAsked(in: self); AutofillTest.startIfAsked(in: self) }
+        if !isPrivate, !Self.didRestoreSession { SpeedBenchmark.startIfAsked(in: self); LeakTest.startIfAsked(in: self); AutofillTest.startIfAsked(in: self); ShieldSnapshot.startIfAsked(in: self) }
         if !isPrivate { Self.didRestoreSession = true }
         if visibleTabs.allSatisfy(\.isPinned) {
             // A new window opens the homepage if Settings › General says so.

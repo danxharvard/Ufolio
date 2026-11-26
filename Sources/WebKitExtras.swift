@@ -35,6 +35,22 @@ enum WebKitExtras {
     /// process are given back even if something still holds on to the web view.
     static func close(_ webView: WKWebView) { call(webView, "_close") }
 
+    /// The auto-play rules for a page about to load, as Safari sets them (WebKit's per-page
+    /// website policies). With only the web view's own "needs a click for sound" switch, a video
+    /// you'd opened yourself (a YouTube link, say) sat waiting for a second click in Ufolio, where
+    /// Safari and other browsers start it straight away. Policy: 1 allow, 2 allow without sound,
+    /// 3 deny. Quirks: a page you opened yourself inherits your click, so its video may play.
+    static func setAutoplay(policy: Int, quirks: Int, _ preferences: WKWebpagePreferences) {
+        typealias SetInt = @convention(c) (AnyObject, Selector, Int) -> Void
+        let setPolicy = NSSelectorFromString("_setAutoplayPolicy:")
+        let setQuirks = NSSelectorFromString("_setAllowedAutoplayQuirks:")
+        guard preferences.responds(to: setPolicy) else { return }
+        unsafeBitCast(preferences.method(for: setPolicy), to: SetInt.self)(preferences, setPolicy, policy)
+        if preferences.responds(to: setQuirks) {
+            unsafeBitCast(preferences.method(for: setQuirks), to: SetInt.self)(preferences, setQuirks, quirks)
+        }
+    }
+
     /// Freezes a page completely (its scripts, timers and drawing), or lets it carry on.
     static func setPageSuspended(_ suspended: Bool, _ webView: WKWebView) {
         let selector = NSSelectorFromString(suspended ? "_suspendPage:" : "_resumePage:")

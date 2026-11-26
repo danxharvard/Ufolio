@@ -200,6 +200,9 @@ enum Shortcuts {
         let reserved: [(KeyCombo, String)] = [(KeyCombo("q"), "Quit"), (KeyCombo(","), "Settings"), (KeyCombo("h"), "Hide Ufolio"),
                                               (KeyCombo("m"), "Minimise"), (KeyCombo("c"), "Copy"), (KeyCombo("v"), "Paste"),
                                               (KeyCombo("x"), "Cut"), (KeyCombo("a"), "Select All"), (KeyCombo("z"), "Undo")]
+            // Tab switching (⌘1–⌘9) and Orbits (⌃1–⌃9), which have no setting of their own.
+            + (1...9).map { (KeyCombo("\($0)"), $0 == 9 ? "Go to Last Tab" : "Go to Tab \($0)") }
+            + (1...9).map { (KeyCombo("\($0)", .control), "Show Orbit \($0)") }
         return reserved.first { $0.0 == combo }?.1
     }
 }
