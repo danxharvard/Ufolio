@@ -410,6 +410,9 @@ private struct BookmarkDrop: DropDelegate {
         guard let from = store.items.firstIndex(where: { $0.id == moving }),
               let to = store.items.firstIndex(where: { $0.id == target.id }) else { return }
         withAnimation(.easeOut(duration: 0.15)) {
+            // Onto a bookmark in another folder: it joins that folder (the list is shown by
+            // folder, so moving it in the list alone did nothing you could see).
+            if store.items[from].folder != target.folder { store.setFolder(store.items[from], target.folder) }
             store.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
         }
     }
