@@ -193,7 +193,6 @@ enum DailyPhoto {
 struct StartBackdrop: View {
     @ObservedObject private var store = BackgroundStore.shared
     @AppStorage(Prefs.startBackground) private var choice = StartBackground.frosted.rawValue
-    @AppStorage(Prefs.startTranslucent) private var translucent = true
     @Environment(\.colorScheme) private var scheme
 
     @AppStorage(Prefs.theme) private var theme = "classic"
@@ -203,15 +202,11 @@ struct StartBackdrop: View {
             if choice == StartBackground.sky.rawValue {
                 LiveSky()
             } else {
-            if translucent || store.image == nil {
-                VisualEffect(material: .underWindowBackground, blending: .behindWindow)
-            }
+            // Always frosted: your desktop shows softly through (there's no solid version).
+            VisualEffect(material: .underWindowBackground, blending: .behindWindow)
             // The Area 51 theme: a faint green aurora over the frosted glass.
             if store.image == nil, AlienTheme.isActive(theme) {
                 AlienTheme.aurora
-            }
-            if !translucent && store.image == nil {
-                Color(nsColor: .windowBackgroundColor)
             }
             if let image = store.image, StartBackground.current != .frosted {
                 // Fills whatever space the page has, and never asks for more: a large picture

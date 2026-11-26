@@ -25,7 +25,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var keywords: String {
         switch self {
         case .general: return "default browser homepage startup new tab window search engine suggestions history import downloads safe files favourites"
-        case .appearance: return "tabs vertical side sidebar layout theme dark light night day accent colour color start page background wallpaper photo picture daily desktop translucent motion animation zoom bookmarks bar tab bar address magic theme colours site colour"
+        case .appearance: return "tabs vertical side sidebar layout theme dark light night day accent colour color start page background wallpaper photo picture daily desktop motion animation zoom bookmarks bar tab bar address magic theme colours site colour"
         case .spaces: return "spaces profiles workspaces work personal accounts sign in cookies separate containers"
         case .performance: return "performance speed fast power battery saver eco carbon energy green memory ram tab sleep graphics 120hz smooth frame rate video pause"
         case .adBlocker: return "blocking mode strict standard off ads ad blocker trackers block filter list easylist cookie banners collapse zapper hidden elements counter statistics"
@@ -685,7 +685,6 @@ struct AppearanceSettings: View {
     @AppStorage(Prefs.startRecentlyClosed) private var startClosed = true
     @AppStorage(Prefs.startPrivacyReport) private var startPrivacy = true
     @AppStorage(Prefs.startShowAdult) private var startAdult = false
-    @AppStorage(Prefs.startTranslucent) private var startTranslucent = true
     @AppStorage(Prefs.showBookmarkBar) private var bookmarkBar = true
     @AppStorage(Prefs.tabPreviews) private var tabPreviews = true
     @AppStorage(Prefs.autoPictureInPicture) private var autoPiP = true
@@ -751,11 +750,6 @@ struct AppearanceSettings: View {
 
             Section {
                 BackgroundPicker()
-                if background == StartBackground.frosted.rawValue {
-                    DescribedToggle(title: "Translucent background",
-                                    detail: "Lets your desktop show softly through the start page, like frosted glass.",
-                                    isOn: $startTranslucent)
-                }
                 Toggle("Show greeting", isOn: $greeting)
                 Toggle("Show Recently Closed Tabs", isOn: $startClosed)
                 Toggle("Show Favourites", isOn: $startBookmarks)

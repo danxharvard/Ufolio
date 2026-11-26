@@ -367,7 +367,7 @@ private struct HistoryList: View {
                                 .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 8).padding(.top, 8).padding(.bottom, 3)
-                                .background(Color(nsColor: .windowBackgroundColor).opacity(0.92))
+                                .background(.bar)   // frosted, as the list scrolls under it
                         }
                     }
                     }

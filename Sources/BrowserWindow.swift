@@ -764,6 +764,7 @@ struct ShieldsButton: View {
 
 struct ShieldsPanel: View {
     @ObservedObject var tab: BrowserTab
+    @Environment(\.colorScheme) private var scheme
     let shieldsUp: Bool
     @ObservedObject private var stats = BlockStats.shared
     @ObservedObject private var report = PrivacyReport.shared
@@ -794,31 +795,47 @@ struct ShieldsPanel: View {
 
     private var heroTile: some View {
         VStack(spacing: 0) {
+            // No box: the animation floats on the frosted panel, over a soft night glow that's
+            // deepest behind the saucer and fades to nothing well before the edges.
             GuardIllustration(on: shieldsUp, blocked: tab.blockedOnPage)
                 .frame(height: 160)
+                .background {
+                    ZStack {
+                        // Night: a deep haze. Day: a soft dusk violet, so the panel stays light.
+                        let haze = scheme == .dark ? GuardPalette.night : Color(red: 0.42, green: 0.38, blue: 0.70)
+                        let depth = scheme == .dark ? (0.92, 0.6) : (0.62, 0.30)
+                        EllipticalGradient(stops: [.init(color: haze.opacity(depth.0), location: 0),
+                                                   .init(color: haze.opacity(depth.1), location: 0.45),
+                                                   .init(color: haze.opacity(0), location: 1)],
+                                           center: .center, startRadiusFraction: 0, endRadiusFraction: 0.5)
+                        EllipticalGradient(colors: [GuardPalette.violet.opacity(shieldsUp ? 0.22 : 0.06), .clear],
+                                           center: .init(x: 0.5, y: 0.38), startRadiusFraction: 0, endRadiusFraction: 0.42)
+                    }
+                    .padding(.horizontal, -20)
+                    .padding(.vertical, -26)
+                    .allowsHitTesting(false)
+                }
             VStack(spacing: 3) {
                 HStack(spacing: 6) {
                     Circle().fill(shieldsUp ? Color.green : Color.orange).frame(width: 6, height: 6)
                     Text(shieldsUp ? "Force Field Active" : (blockingMode == .off ? "Force Field Off Everywhere" : "Force Field Off for This Site"))
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(.secondary)
                 }
                 Text("\(tab.blockedOnPage)")
                     .font(.system(size: 44, weight: .bold))
                     .monospacedDigit()
-                    .foregroundStyle(shieldsUp ? .white : .white.opacity(0.45))
+                    .foregroundStyle(shieldsUp ? Color.primary : Color.secondary)
                     .contentTransitionIfAvailable()
                 Text(shieldsUp ? (tab.blockedOnPage == 1 ? "thing blocked on this page" : "things blocked on this page")
                                : "Ads and trackers load on this site")
                     .font(.system(size: 12))
-                    .foregroundStyle(.white.opacity(0.55))
+                    .foregroundStyle(.secondary)
             }
-            .padding(.bottom, 16)
-            .padding(.top, -6)
+            .padding(.top, 10)
+            .padding(.bottom, 4)
         }
         .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(GuardPalette.night))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     // MARK: Ads, trackers, fingerprint
@@ -1651,7 +1668,7 @@ private struct LoadErrorPage: View {
     var body: some View {
         ZStack {
             ClickBlocker()
-            Color(nsColor: .windowBackgroundColor)
+            Rectangle().fill(.regularMaterial)   // frosted, like the rest of the window
             VStack(spacing: 14) {
                 ZStack {
                     Circle().fill(Color.primary.opacity(0.05)).frame(width: 110, height: 110)
@@ -1695,7 +1712,7 @@ private struct CrashedPage: View {
 
     var body: some View {
         ZStack {
-            Color(nsColor: .windowBackgroundColor)
+            Rectangle().fill(.regularMaterial)   // frosted, like the rest of the window
             VStack(spacing: 14) {
                 ZStack {
                     Circle().fill(Color.primary.opacity(0.05)).frame(width: 110, height: 110)

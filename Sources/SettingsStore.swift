@@ -46,7 +46,6 @@ enum Prefs {
     static let startFrequent = "startShowFrequent"
     static let startRecentlyClosed = "startShowRecentlyClosed"
     static let startPrivacyReport = "startShowPrivacyReport"
-    static let startTranslucent = "startTranslucent"
     static let startWallpaper = "startWallpaper"
     static let startPhoto = "startPhoto"
     static let startShowAdult = "startShowAdult"
@@ -144,7 +143,6 @@ enum Prefs {
         startFrequent: true,
         startRecentlyClosed: true,
         startPrivacyReport: true,
-        startTranslucent: true,
         defaultZoom: 1.0,
         searchEngine: SearchEngine.google.rawValue,
         searchSuggestions: true,
@@ -515,7 +513,8 @@ enum RemovedFeatures {
         let d = UserDefaults.standard
         // Galaxy ranks, the saucer pet and the planet of the week (removed in 0.52): their
         // settings, and the count of the days you browsed.
-        for key in ["galaxyDayCount", "galaxySeeded", "galaxyLastDay", "saucerPet", "planetOfWeek"] where d.object(forKey: key) != nil {
+        // And the start page's solid-colour option: it's always frosted now.
+        for key in ["galaxyDayCount", "galaxySeeded", "galaxyLastDay", "saucerPet", "planetOfWeek", "startTranslucent"] where d.object(forKey: key) != nil {
             d.removeObject(forKey: key)
         }
         // Ask Hush (0.25.0): its model list, and any API keys it kept in the keychain.
