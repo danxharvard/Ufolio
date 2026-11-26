@@ -18,6 +18,9 @@ struct SetupGuide: View {
     /// Found when the guide appears. (As starting values these were worked out again, scanning
     /// for other browsers, every time the window redrew behind the guide.)
     @State private var sources: [BrowserImporter.Source] = []
+    /// Each browser's app icon, looked up once with the scan (asking macOS for them on every
+    /// redraw, each hover and click on that step, made it stutter).
+    @State private var icons: [String: NSImage] = [:]
     @State private var importChoice: String? = nil          // nil = start fresh
     @State private var importing = false
     @State private var importResult: String?
@@ -26,7 +29,9 @@ struct SetupGuide: View {
     @AppStorage(Prefs.tabLayout) private var tabLayout = TabLayout.top.rawValue
     @AppStorage(Prefs.appearance) private var appearance = AppearanceMode.system.rawValue
     @AppStorage(Prefs.accent) private var accent = AccentChoice.system.rawValue
-    @State private var makeDefault = !DefaultBrowser.isDefault
+    /// Set when the guide appears (as a starting value, macOS was asked again every time the
+    /// window behind the guide redrew).
+    @State private var makeDefault = true
     @State private var isDefault = false
 
     var body: some View {
@@ -48,8 +53,17 @@ struct SetupGuide: View {
             .opacity(appeared ? 1 : 0)
         }
         .onAppear {
-            sources = BrowserImporter.available()
             isDefault = DefaultBrowser.isDefault
+            makeDefault = !isDefault
+            // Looking for other browsers and their icons touches the disk: done off the main
+            // thread, well before you reach that step.
+            Task.detached(priority: .userInitiated) {
+                let found = BrowserImporter.available()
+                var art: [String: NSImage] = [:]
+                for source in found.prefix(5) { art[source.name] = NSWorkspace.shared.icon(forFile: source.appPath) }
+                let ready = art
+                await MainActor.run { sources = found; icons = ready }
+            }
             withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true }
         }
     }
@@ -150,7 +164,7 @@ struct SetupGuide: View {
             ForEach(sources.prefix(5)) { source in
                 ChoiceCard(title: source.name, subtitle: "Bookmarks and the sites you visit most",
                            selected: importChoice == source.name,
-                           art: AnyView(Image(nsImage: NSWorkspace.shared.icon(forFile: source.appPath)).resizable().frame(width: 34, height: 34))) {
+                           art: icons[source.name].map { AnyView(Image(nsImage: $0).resizable().frame(width: 34, height: 34)) }) {
                     importChoice = source.name
                 }
             }
