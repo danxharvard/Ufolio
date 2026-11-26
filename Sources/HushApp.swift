@@ -128,8 +128,8 @@ struct HushCommands: Commands {
     @Environment(\.openWindow) private var openWindow
     /// Redraws the menus when you change a shortcut in Settings › Keyboard.
     @AppStorage(Shortcuts.storageKey) private var shortcutOverrides = ""
-    @FocusedObject private var focusedBrowser: BrowserModel?
-    private var browser: BrowserModel? { focusedBrowser ?? BrowserModel.frontmost }
+    @FocusedValue(\.browserWindow) private var focusedWindow: BrowserWindowRef?
+    private var browser: BrowserModel? { focusedWindow?.model ?? BrowserModel.frontmost }
     @ObservedObject private var bookmarks = BookmarkStore.shared
     @ObservedObject private var otherProfileBookmarks = BookmarkMenuSignal.shared
     @ObservedObject private var spaces = SpaceStore.shared

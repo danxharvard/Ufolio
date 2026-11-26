@@ -174,7 +174,10 @@ struct BrowserWindow: View {
             }
         }
         .environment(\.isPrivateWindow, model.isPrivate)
-        .focusedSceneObject(model)
+        // The menu bar follows this window through a light reference that changes only with what
+        // the menus show (Split View, and the profile whose bookmarks they list): with the whole
+        // model, every change in the window (tabs, dialogs…) rebuilt the entire menu bar.
+        .focusedSceneValue(\.browserWindow, BrowserWindowRef(model: model, splitOpen: model.splitPair != nil, profile: model.profileID))
         .navigationTitle(model.selectedTab?.displayTitle ?? "Ufolio")
         .frame(minWidth: 640, minHeight: 420)
     }
@@ -1663,5 +1666,31 @@ struct LookalikeWarning: View {
             .foregroundStyle(.white)
             .padding(40)
         }
+    }
+}
+
+/// The window the menu bar acts on, and the two things about it the menus show.
+struct BrowserWindowRef: Equatable {
+    weak var model: BrowserModel?
+    let splitOpen: Bool
+    let profile: UUID?
+    private let id: ObjectIdentifier
+
+    init(model: BrowserModel, splitOpen: Bool, profile: UUID?) {
+        self.model = model
+        self.splitOpen = splitOpen
+        self.profile = profile
+        id = ObjectIdentifier(model)
+    }
+
+    static func == (a: Self, b: Self) -> Bool { a.id == b.id && a.splitOpen == b.splitOpen && a.profile == b.profile }
+}
+
+private struct BrowserWindowKey: FocusedValueKey { typealias Value = BrowserWindowRef }
+
+extension FocusedValues {
+    var browserWindow: BrowserWindowRef? {
+        get { self[BrowserWindowKey.self] }
+        set { self[BrowserWindowKey.self] = newValue }
     }
 }
