@@ -138,7 +138,12 @@ enum Speed {
             if let body = message.body as? [String: Any], let text = body["preload"] as? String, text.count < 2000,
                let url = URL(string: text), let webView = message.webView {
                 let tab = BrowserModel.all.allObjects.lazy.flatMap(\.tabs).first { $0.webView === webView }
-                Preloader.preload(url, for: tab, lifetime: 2)
+                // Sites that switch pages with their own code (YouTube, Twitch…) never navigate on
+                // a click: loading the link ahead there only loaded a whole second copy of the site
+                // alongside the video you'd just clicked.
+                if let here = webView.url?.host, let there = url.host, Domains.site(here) == Domains.site(there),
+                   Preloader.handlesOwnLinks(here) { return }
+                Preloader.preload(url, for: tab, lifetime: 2, pressed: true)
                 return
             }
             guard let text = message.body as? String, text.count < 300, let url = URL(string: text) else { return }
@@ -162,7 +167,7 @@ enum SpeedBenchmark {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 4_000_000_000)   // let launch settle
             LagMonitor.start()
-            var rows: [String] = ["round,url,commit_ms,finish_ms,fcp_ms"]
+            var rows: [String] = ["round,url,commit_ms,finish_ms,fcp_ms,video_ready_ms,video_play_ms"]
             for round in ["first", "return"] {
                 for url in urls {
                     guard let tab = model.selectedTab else { break }
@@ -171,8 +176,17 @@ enum SpeedBenchmark {
                         Preloader.preload(url, for: tab)
                         try? await Task.sleep(nanoseconds: 3_000_000_000)
                     }
+                    // In front, as when you browse (a window behind others is slowed by macOS).
+                    NSApp.activate(ignoringOtherApps: true)
+                    model.window?.makeKeyAndOrderFront(nil)
+                    benchTarget = url.host
+                    // UFOLIO_BENCH_SIMCLICK: as when you click a video on YouTube: Ufolio also
+                    // loads that link ahead in the background (what it did on every press).
+                    if let other = ProcessInfo.processInfo.environment["UFOLIO_BENCH_SIMCLICK"].flatMap(URL.init(string:)) {
+                        Preloader.preload(other, for: tab, lifetime: 2)
+                    }
                     let (commit, finish, fcp) = await measure(in: tab) { tab.load(url) }
-                    rows.append("\(round),\(url.host ?? ""),\(commit),\(finish),\(fcp)")
+                    rows.append("\(round),\(url.host ?? ""),\(commit),\(finish),\(fcp),\(lastVideo.ready),\(lastVideo.play)")
                     try? rows.joined(separator: "\n").write(toFile: out, atomically: true, encoding: .utf8)
                 }
             }
@@ -191,6 +205,8 @@ enum SpeedBenchmark {
         }
     }
 
+    @MainActor static var benchTarget: String?
+    @MainActor static var lastVideo: (ready: Int, play: Int) = (-1, -1)
     /// Whether the last measured load reported "finished" itself.
     @MainActor static var gotFinish = true
     static let active = ProcessInfo.processInfo.environment["UFOLIO_BENCH"] != nil
@@ -207,6 +223,24 @@ enum SpeedBenchmark {
         defer { NotificationCenter.default.removeObserver(a); NotificationCenter.default.removeObserver(b) }
         let begin = Date()
         let before = tab.webView
+        // Video pages: when the first sizeable video had data to show, and when it started playing
+        // (polled every 50 ms alongside the load, for up to 20 seconds).
+        lastVideo = (-1, -1)
+        let wanted = benchTarget ?? ""
+        let videoWatch = Task { @MainActor in
+            let check = "if (location.host !== target) return null; const v = Array.from(document.querySelectorAll('video')).find(v => v.offsetWidth > 150); return v ? [v.readyState, v.currentTime] : null;"
+            var ready = -1, play = -1
+            while !Task.isCancelled, Date().timeIntervalSince(begin) < 20, play < 0 {
+                if let r = (try? await tab.webView.callAsyncJavaScript(check, arguments: ["target": wanted], in: nil, contentWorld: .defaultClient)) as? [NSNumber], r.count == 2 {
+                    let now = Int(Date().timeIntervalSince(begin) * 1000)
+                    if ready < 0, r[0].intValue >= 2 { ready = now }
+                    if play < 0, r[1].doubleValue > 0.05 { play = now }
+                }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+            lastVideo = (ready, play)
+        }
+        defer { videoWatch.cancel() }
         start()
         // A page swapped in ready-made (Instant pages, or a kept page on Back) shows at once.
         if tab.webView !== before, !tab.webView.isLoading {
@@ -223,6 +257,7 @@ enum SpeedBenchmark {
         let commit = commitAt.map { Int($0.timeIntervalSince(begin) * 1000) } ?? -1
         let script = "const p = performance.getEntriesByName('first-contentful-paint')[0]; return p ? Math.round(p.startTime) : -1;"
         let fcp = ((try? await tab.webView.callAsyncJavaScript(script, contentWorld: .defaultClient)) as? NSNumber)?.intValue ?? -1
+        if ProcessInfo.processInfo.environment["UFOLIO_BENCH_VIDEO"] != nil { _ = await videoWatch.value }
         try? await Task.sleep(nanoseconds: 500_000_000)
         return (commit, finish, fcp)
     }
@@ -328,6 +363,8 @@ enum Preloader {
         let view: WKWebView
         let started = Date()
         var failed = false
+        /// Pressed on a link on this site (a press-ahead preload), if it was.
+        var pressedOn: String?
         /// Requests Force Field blocked while preloading (shown on the tab's counter once opened).
         var blocked: [(String, URL)] = []
         init(url: URL, tabID: UUID, view: WKWebView) { self.url = url; self.tabID = tabID; self.view = view }
@@ -359,7 +396,7 @@ enum Preloader {
     /// Starts loading `url` for `tab`, replacing any earlier preload. `lifetime`: how long it's
     /// kept if not opened (a press on a link that never became a click, say on a web app that
     /// handles its own links, is let go after 2 seconds rather than 30).
-    static func preload(_ url: URL, for tab: BrowserTab?, lifetime: TimeInterval = 30) {
+    static func preload(_ url: URL, for tab: BrowserTab?, lifetime: TimeInterval = 30, pressed: Bool = false) {
         guard enabled, let tab, !tab.isPrivate, !tab.isAsleep, !tab.javaScriptOff,
               let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https", let host = url.host else { return }
         if let here = tab.url, same(here, url) { return }
@@ -388,9 +425,17 @@ enum Preloader {
         view.pageZoom = tab.webView.pageZoom
         view.load(URLRequest(url: url))
         let entry = Entry(url: url, tabID: tab.id, view: view)
+        if pressed, let here = tab.url?.host, Domains.site(here) == Domains.site(host) { entry.pressedOn = Domains.site(here) }
         current = entry
-        DispatchQueue.main.asyncAfter(deadline: .now() + lifetime) { [weak entry] in
-            if let entry, current === entry { discard() }
+        let pageBefore = tab.url, commitsBefore = tab.pageCommits, viewBefore = tab.webView
+        DispatchQueue.main.asyncAfter(deadline: .now() + lifetime) { [weak entry, weak tab] in
+            guard let entry, current === entry else { return }
+            // Pressed, never opened, and the tab moved to another address without loading a new
+            // page: the site switches pages with its own code. Its own links aren't loaded ahead
+            // from now on (this run only).
+            if let site = entry.pressedOn, let tab, tab.webView === viewBefore, tab.pageCommits == commitsBefore,
+               tab.url != pageBefore { ownLinkSites.insert(site) }
+            discard()
         }
     }
 
@@ -442,6 +487,10 @@ enum Preloader {
         guard let entry = current, entry.view === view, entry.blocked.count < 1000 else { return }
         entry.blocked.append((identifier, url))
     }
+
+    /// Sites seen switching pages with their own code (for this run of Ufolio only).
+    private static var ownLinkSites: Set<String> = ["youtube.com", "twitch.tv"]   // known; others are learned
+    static func handlesOwnLinks(_ host: String) -> Bool { ownLinkSites.contains(Domains.site(host)) }
 
     /// Words in an address that mean opening it does something (signs you out, unsubscribes…).
     static func hasSideEffects(_ url: URL) -> Bool {

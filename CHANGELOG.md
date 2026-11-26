@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.51.0-beta.10: quicker on YouTube and other video sites (beta)
+
+- Clicking a video on YouTube or Twitch no longer loads a whole second copy of the site in the
+  background. Instant pages starts loading a link the moment you press it, but these sites
+  switch videos with their own code, so that copy was never used: it only competed with the
+  video you'd clicked (about 80–90 ms slower on every click, plus its memory and data). Ufolio
+  now learns which sites work this way and stops loading their own links ahead.
+- Video pages no longer bring up the "this page is slowing down your Mac" warning just for
+  playing a silent or muted video (Twitch's autoplay, for example).
+
+Measured on this Mac against plain WebKit (the engine on its own, as Safari uses it), Ufolio
+loads YouTube and Twitch as fast or faster: a YouTube video is ready in about 2.9 s on a first
+visit against WebKit's 4.6 s, because the ads never download.
+
 ## 0.51.0-beta.9: twenty fixes, faster Instant pages (beta)
 
 Everything in 0.50.5 (four fixes), plus:

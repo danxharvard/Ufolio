@@ -210,6 +210,11 @@ final class ContentBlocker: ObservableObject {
         }
         if shields.scripts == .blockThirdParty { ids.append(BuiltInRules.thirdPartyScripts.identifier) }
         ids.append(ElementZapper.ruleIdentifier)
+        // For measuring only: leave out named built-in lists (UFOLIO_SKIP_LISTS=ads,trackers…).
+        if let skip = ProcessInfo.processInfo.environment["UFOLIO_SKIP_LISTS"] {
+            let names = skip.split(separator: ",").map { "hush-" + $0 + "-" }
+            ids.removeAll { id in names.contains { id.hasPrefix($0) } }
+        }
         return ids
     }
 
@@ -238,6 +243,20 @@ final class ContentBlocker: ObservableObject {
         defer {
             if Self.measureNoRules { controller.removeAllContentRuleLists() }
             if Self.measureNoScripts { controller.removeAllUserScripts() }
+            // For measuring only: leave out named page scripts (UFOLIO_SKIP_SCRIPTS=hover,autofill…).
+            if let skip = ProcessInfo.processInfo.environment["UFOLIO_SKIP_SCRIPTS"] {
+                let named: [String: WKUserScript] = [
+                    "fpstandard": Fingerprinting.standard, "fpstrict": Fingerprinting.strict,
+                    "rejectcookies": UserScripts.rejectCookieBanners, "hidecookies": UserScripts.hideCookieBanners,
+                    "collapse": UserScripts.collapseAdSpace, "gpc": UserScripts.globalPrivacyControl,
+                    "deamp": CleanLinks.deAMPScript, "autofill": AutofillCenter.script,
+                    "hushlist": HushlistLink.script, "hover": Speed.hoverScript,
+                ]
+                let drop = Set(skip.split(separator: ",").compactMap { named[String($0)] }.map(ObjectIdentifier.init))
+                let keep = controller.userScripts.filter { !drop.contains(ObjectIdentifier($0)) }
+                controller.removeAllUserScripts()
+                keep.forEach(controller.addUserScript)
+            }
         }
         let host = hostOf.object(forKey: controller) as String?
         // The site's switch in the Hush Guard panel turns everything off for it; otherwise
@@ -580,12 +599,12 @@ enum BuiltInRules: String, CaseIterable {
         let rules: [[String: Any]]
         switch self {
         case .ads:
-            rules = Self.adDomains.map(Self.blockThirdParty) + [[
+            rules = Self.adDomains.filter { !Self.measureDropped.contains($0) }.map(Self.blockThirdParty) + (Self.measureDropped.contains("cosmetic") ? [] : [[
                 "trigger": ["url-filter": ".*"],
                 "action": ["type": "css-display-none", "selector": Self.adSelectors.joined(separator: ", ")],
-            ]]
+            ]])
         case .trackers:
-            rules = Self.trackerDomains.map(Self.blockThirdParty)
+            rules = Self.trackerDomains.filter { !Self.measureDropped.contains($0) }.map(Self.blockThirdParty)
         case .thirdPartyCookies:
             rules = [[
                 "trigger": ["url-filter": ".*", "load-type": ["third-party"]] as [String: Any],
@@ -625,6 +644,9 @@ enum BuiltInRules: String, CaseIterable {
         let data = try! JSONSerialization.data(withJSONObject: rules)
         return String(data: data, encoding: .utf8)!
     }
+
+    /// For measuring only: domains left out of the built-in lists (UFOLIO_DROP_DOMAINS=a.com,b.com).
+    static let measureDropped = Set((ProcessInfo.processInfo.environment["UFOLIO_DROP_DOMAINS"] ?? "").split(separator: ",").map(String.init))
 
     static func blockThirdParty(_ domain: String) -> [String: Any] {
         [

@@ -343,7 +343,9 @@ final class PerformanceCenter: ObservableObject {
             let count = busy > 0.6 ? (busyChecks[pid] ?? 0) + 1 : 0
             busyChecks[pid] = count
             for tab in tabs {
-                let heavy = count >= 3 && !tab.heavyDismissed && !tab.isPlayingAudio   // music and calls are expected work
+                // Music, calls and video are expected work (a muted or silent video, like Twitch's
+                // autoplay, used to bring up the warning on video sites).
+                let heavy = count >= 3 && !tab.heavyDismissed && !tab.isPlayingAudio && !tab.canPictureInPicture
                 if tab.isHeavy != heavy { tab.isHeavy = heavy }
             }
         }

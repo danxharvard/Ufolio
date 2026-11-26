@@ -73,6 +73,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     @Published private(set) var torrentTrapsMarked = 0
     /// Pages committed in this tab, and the one whose follow-up has run.
     private var commitCount = 0
+    /// Pages committed so far (a page that changes address with its own code commits none).
+    var pageCommits: Int { commitCount }
     private var finishedCommit: Int?
     /// When you last clicked a link to another site on a torrent site (its redirects may follow).
     private var torrentOutboundClick = Date.distantPast
