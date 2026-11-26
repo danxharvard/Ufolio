@@ -341,9 +341,6 @@ final class BrowserModel: NSObject, ObservableObject {
         super.init()
         BrowserModel.all.add(self)
         if isPrivate { FeatureUsage.mark(.stealth); StealthDays.recordToday() }
-        // Counted here too, not only on the start page: someone whose new tabs open a website
-        // would otherwise never rank up.
-        else { GalaxyRank.recordToday() }
         // Which tabs are playing sound (for the speaker button on tabs).
         Self.watchMiddleClicks()   // middle-click on tabs, and the mouse's Back/Forward buttons
         // Coming back to the window: the tab in front (and its Split View partner) never stays with

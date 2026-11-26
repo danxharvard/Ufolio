@@ -254,10 +254,6 @@ private struct PowerModeCard: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .accessibilityAddTraits(selected ? .isSelected : [])
-        // Someone's peeking over the Eco card.
-        .background(alignment: .topTrailing) {
-            if mode == .eco { PeekingAlien(size: 24).offset(x: -34, y: -20) }
-        }
     }
 }
 

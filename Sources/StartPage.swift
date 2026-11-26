@@ -54,9 +54,6 @@ struct StartPage: View {
                     .padding(.horizontal, 48)
                     .padding(.vertical, 26)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                // The saucer pet and the planet of the week, only where there's room for them.
-                StartCorners(size: geo.size, used: usedHeight(shown) + 52,
-                             liftForCredit: background.credit != nil && background.image != nil)
             }
             .clipped()
             // Over a picture, light text reads best.
@@ -92,7 +89,7 @@ struct StartPage: View {
         .animation(.smooth(duration: 0.26), value: customisingNews)
         .animation(.smooth(duration: 0.26), value: closed.tabs.count)
         .animation(.smooth(duration: 0.26), value: personalising)
-        .onAppear { weather.refreshIfNeeded(); GalaxyRank.recordToday() }
+        .onAppear { weather.refreshIfNeeded() }
         .onReceive(NotificationCenter.default.publisher(for: QuitHelper.closeSheets)) { _ in personalising = false }
     }
 
@@ -127,11 +124,6 @@ struct StartPage: View {
             if total <= available { return layout }
         }
         return []
-    }
-
-    /// How tall the shown sections are, as measured.
-    private func usedHeight(_ parts: [Part]) -> CGFloat {
-        headerHeight + parts.reduce(0) { $0 + (partHeights[$1] ?? 0) + 30 }
     }
 
     private func page(_ parts: [Part], closedTabs: [ClosedTab], suggestions: [FrequentSite]) -> some View {
@@ -226,33 +218,6 @@ struct StartPage: View {
 }
 
 // MARK: - Sections
-
-/// The start page's corners: the saucer pet bottom left, the planet of the week bottom right.
-/// Shown only when the window has a clear margin beside or below the page, so they never sit
-/// on top of anything.
-private struct StartCorners: View {
-    let size: CGSize
-    let used: CGFloat
-    let liftForCredit: Bool
-
-    var body: some View {
-        let side = (size.width - min(940, size.width - 96)) / 2
-        let fits = side >= 100 || size.height - used >= 100
-        ZStack {
-            if fits {
-                SaucerPet()
-                    .padding(.leading, 18)
-                    .padding(.bottom, liftForCredit ? 42 : 14)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                PlanetOfTheWeek()
-                    .padding(.trailing, 16)
-                    .padding(.bottom, 14)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            }
-        }
-        .frame(width: size.width, height: size.height)
-    }
-}
 
 private struct StartSection<Content: View, Accessory: View>: View {
     let title: String

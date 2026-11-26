@@ -642,7 +642,15 @@ enum ShieldSnapshot {
             try? await Task.sleep(nanoseconds: 9_000_000_000)
             guard let tab = model.selectedTab else { NSApp.terminate(nil); return }
             FileHandle.standardError.write("snapshot: \(tab.url?.absoluteString ?? "-") blocked \(tab.blockedOnPage) ads \(tab.adsOnPage) trackers \(tab.trackersOnPage) sites \(tab.blockedSites.count)\n".data(using: .utf8)!)
-            let host = NSHostingView(rootView: ShieldsPanel(tab: tab, shieldsUp: env["UFOLIO_SHIELD_OFF"] == nil))
+            // UFOLIO_SNAPSHOT_VIEW: another view instead (start, appearance, spaces), for checking layouts.
+            let root: AnyView
+            switch env["UFOLIO_SNAPSHOT_VIEW"] {
+            case "start": root = AnyView(StartPage(model: model).frame(width: 1280, height: 800))
+            case "appearance": root = AnyView(AppearanceSettings().frame(width: 700, height: 2400))
+            case "spaces": root = AnyView(SpacesSettings().frame(width: 700, height: 900))
+            default: root = AnyView(ShieldsPanel(tab: tab, shieldsUp: env["UFOLIO_SHIELD_OFF"] == nil))
+            }
+            let host = NSHostingView(rootView: root)
             let appearance = NSAppearance(named: env["UFOLIO_SHIELD_LIGHT"] != nil ? .aqua : .darkAqua)
             host.appearance = appearance
             let size = host.fittingSize

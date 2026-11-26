@@ -20,8 +20,6 @@ enum Prefs {
     /// Opt-in badges on the weekly report card.
     static let achievements = "achievements"
     /// The saucer pet and the planet of the week on the start page.
-    static let saucerPet = "saucerPet"
-    static let planetOfWeek = "planetOfWeek"
     /// Torrent tools (off by default) and their options.
     /// Clears the page cache as Ufolio quits, so it takes almost no disk space between sessions.
     static let clearCacheOnQuit = "clearCacheOnQuit"
@@ -128,8 +126,6 @@ enum Prefs {
         theme: "classic",
         funEffects: true,
         achievements: false,
-        saucerPet: true,
-        planetOfWeek: true,
         clearCacheOnQuit: true,
         preloadPages: true,
         tabPreviews: true,
@@ -517,6 +513,11 @@ enum RemovedFeatures {
     static func cleanUp() {
         DispatchQueue.global(qos: .utility).async { tidyLeftovers() }
         let d = UserDefaults.standard
+        // Galaxy ranks, the saucer pet and the planet of the week (removed in 0.52): their
+        // settings, and the count of the days you browsed.
+        for key in ["galaxyDayCount", "galaxySeeded", "galaxyLastDay", "saucerPet", "planetOfWeek"] where d.object(forKey: key) != nil {
+            d.removeObject(forKey: key)
+        }
         // Ask Hush (0.25.0): its model list, and any API keys it kept in the keychain.
         guard d.object(forKey: "ai.models") != nil || d.object(forKey: "ai.selected") != nil else { return }
         d.removeObject(forKey: "ai.models")
