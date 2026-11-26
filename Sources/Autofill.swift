@@ -310,6 +310,8 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
             guard let kind = body["kind"] as? String,
                   let rect = body["rect"] as? [Double], rect.count == 4 else { return }
             offer(kind: kind, rect: rect, host: host, secure: secure, tab: tab)
+        case "signInCheck":
+            autoFillCheck(host: host, secure: secure, tab: tab)
         case "signInForm":
             autoFill(step: body["step"] as? String ?? "password", host: host, secure: secure, tab: tab)
         case "submit":
@@ -332,6 +334,19 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
     /// waiting (Settings › Passwords; the most recently used one if you have several). Only on
     /// secure pages, from Ufolio's own vault (never a keychain prompt), and not when you've chosen
     /// to be asked before filling: then clicking into the box offers it, as before.
+    /// The page has (or now shows) a form: if there's a saved login for this site, it's told to
+    /// watch for the sign-in box, which then fills in by itself.
+    private func autoFillCheck(host: String, secure: Bool, tab: BrowserTab) {
+        guard secure, Prefs.bool(Prefs.autofillPasswords), UserAuth.FillLock.current == .never, !host.isEmpty else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [weak tab] in
+            guard Vault.read().logins.contains(where: { $0.host == host }) else { return }
+            DispatchQueue.main.async {
+                guard let tab, let current = tab.webView.url?.host, ContentBlocker.normalize(current) == host else { return }
+                tab.webView.evaluateJavaScript("window.__hushWatchSignIn && window.__hushWatchSignIn()", in: nil, in: .defaultClient) { _ in }
+            }
+        }
+    }
+
     private func autoFill(step: String, host: String, secure: Bool, tab: BrowserTab) {
         guard secure, Prefs.bool(Prefs.autofillPasswords), UserAuth.FillLock.current == .never,
               !host.isEmpty else { return }
@@ -599,7 +614,14 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
         asked.push(target);
         post({ type: 'signInForm', step: pw ? 'password' : 'username' });
       }
-      var started = Date.now();
+      var started = 0;
+      // Only for a site you have a saved login for: Ufolio says so (see autoFillCheck). Busy
+      // pages elsewhere used to be watched for their first fifteen seconds for nothing.
+      window.__hushWatchSignIn = function () {
+        if (started) return;
+        started = Date.now();
+        watchForSignIn();
+      };
       function watchForSignIn() {
         lookForSignIn();
         var timer = null;
@@ -610,7 +632,19 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
         observer.observe(document.documentElement, { childList: true, subtree: true });
         setTimeout(function () { observer.disconnect(); }, 15000);
       }
-      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watchForSignIn); else watchForSignIn();
+      // Asks once whether this site has a saved login (cheap), and only then starts watching.
+      if (document.querySelector('input[type=password], input[type=email], input[autocomplete~=username]') || document.forms.length) {
+        post({ type: 'signInCheck' });
+      } else {
+        // No form yet: a sign-in box can still appear (web apps); ask the first time one does,
+        // with a light check a few times early on rather than watching every change.
+        var tries = 0;
+        var poll = setInterval(function () {
+          tries++;
+          if (document.querySelector('input[type=password], input[type=email], input[autocomplete~=username]')) { clearInterval(poll); post({ type: 'signInCheck' }); }
+          else if (tries >= 6) clearInterval(poll);
+        }, 1000);
+      }
 
       document.addEventListener('focusin', function (e) {
         var k = kindOf(e.target);
