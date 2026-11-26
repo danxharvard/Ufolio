@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.51.5: update checks that always get through, and download fixes
+
+- Checking for updates no longer fails with "error 403" on busy or shared networks. GitHub
+  answers only 60 update questions an hour per network; when that's used up, Ufolio now reads
+  the latest version from github.com itself. Every update still has to carry Ufolio's own
+  signature before it installs.
+- AutoFill no longer shows the previous site's saved logins if you move to another page while
+  they're being looked up.
+- The cookie auto-cleaner rechecks your open tabs at the moment it cleans, so a site you open
+  while it's running keeps its cookies.
+- Stopping a download now really stops it: the row no longer stays on "downloading" for ever,
+  and the half-finished file is removed from your Downloads folder instead of being left there
+  under the real name.
+- After a password import that didn't work, Ufolio no longer offers to move the exported file
+  to the Trash (it could be your only copy of those passwords). Files with old Mac line endings
+  now import too.
+- Asking a second page to translate while the first was still waiting no longer leaves the first
+  one spinning for ever.
+- Close Other Tabs in the Command Palette keeps your pinned tabs, as the tab's own menu does.
+- With search suggestions turned off, a pause while typing a search no longer loads the results
+  early: what you type stays on your Mac until you press Return.
+
 ## 0.51.4: lighter on memory, fewer false alarms
 
 - Instant pages keeps just one page ready each way for Back and Forward, instead of up to six
