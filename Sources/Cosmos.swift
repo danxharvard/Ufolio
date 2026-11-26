@@ -348,6 +348,7 @@ struct SaucerPet: View {
         while !Task.isCancelled {
             try? await Task.sleep(nanoseconds: UInt64((8 + random.next() * 7) * 1_000_000_000))
             guard !Task.isCancelled, Effects.on else { return }
+            guard Effects.someoneIsHere else { continue }   // nobody there to see it: rest
             switch Int(random.next() * 4) {
             case 0: await bob()
             case 1: await blink()

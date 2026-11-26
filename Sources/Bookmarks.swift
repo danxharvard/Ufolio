@@ -612,7 +612,11 @@ actor FaviconCache {
         inFlight[host] = nil
         if let result {
             cache.setObject(IconBox(result), forKey: host as NSString, cost: max(1, result.pixels * result.pixels * 4))
-        } else { misses[host] = Date() }
+        } else {
+            misses[host] = Date()
+            // Expired entries go, so a long session doesn't keep every icon-less site it ever saw.
+            if misses.count > 500 { let now = Date(); misses = misses.filter { now.timeIntervalSince($0.value) < 600 } }
+        }
         return result
     }
 
