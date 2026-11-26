@@ -38,6 +38,19 @@ final class BrowserModel: NSObject, ObservableObject {
                 tab.webView.setAllMediaPlaybackSuspended(false)
                 AutoPictureInPicture.bringBack(tab)   // back to its tab when you return
             }
+            // Split View: the other half goes out of sight with the tab you leave, and comes back
+            // with the one you pick. Its silent video used to keep running behind another tab, and
+            // stay paused once the pair was back on screen.
+            if let pair = splitPair, let old, pair.contains(old.id), !pair.contains(selectedID),
+               let partner = otherPane(of: old), partner !== selectedTab, !partner.isAsleep,
+               !WebKitExtras.isPictureInPictureActive(partner.webView),
+               PerformanceCenter.shared.pausesBackgroundMedia || !partner.isPlayingAudio {
+                partner.webView.setAllMediaPlaybackSuspended(true)
+            }
+            if let pair = splitPair, let tab = selectedTab, pair.contains(tab.id), !(old.map { pair.contains($0.id) } ?? false),
+               let partner = otherPane(of: tab), !partner.isAsleep {
+                partner.webView.setAllMediaPlaybackSuspended(false)
+            }
             if let tab = selectedTab, tab.crashed, tab.crashedWhileHidden { tab.recoverFromCrash() }
             // Keyboard focus follows to the new tab's page (Space and the arrow keys scrolled the old
             // page, or nothing), unless you're typing somewhere such as the address bar.
