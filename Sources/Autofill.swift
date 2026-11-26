@@ -420,7 +420,9 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
         let webView = tab.webView
         // Only for a page that's on screen: a pop-up attached to a page that isn't in a window
         // (a background tab, or one you've switched away from) makes macOS raise an exception.
-        guard webView.window != nil, !tab.isAsleep else { return }
+        // Keychain results can arrive after the tab navigates; don't show another site's options.
+        guard webView.window != nil, !tab.isAsleep,
+              webView.url?.host.map(ContentBlocker.normalize) == host else { return }
         let scale = webView.pageZoom * webView.magnification
         let h = rect[3] * scale
         let top = rect[1] * scale
