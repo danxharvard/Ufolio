@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.52.0-beta.4: a flat, native Force Field (beta)
+
+**Force Field, redesigned** (the animation is unchanged)
+- A flat, native look in the style of hushlist.online, following your Mac's Day or Night
+  appearance with macOS's own colours, instead of the glass look.
+- The animation sits in a flat, night-blue tile with "Force Field Active" and this page's count.
+- Underneath: a plain site row with the standard switch, the Ads, Trackers and Fingerprint
+  readings in one strip with hairline dividers, this site's settings as a System Settings-style
+  group with flat icon tiles, simple buttons and a footer with today's and this week's totals.
+
+Everything in 0.51.4 is in this beta too.
+
 ## 0.52.0-beta.3: lighter, safer, fewer surprises (beta)
 
 **Lighter on memory**
