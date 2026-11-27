@@ -120,6 +120,7 @@ struct BrowserWindow: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { note in
             if (note.object as? NSWindow) === model.window {
+                model.windowClosed = true
                 ExtensionEvents.windowClosed(model)
                 // Questions still waiting (a site asking for the camera, say) are answered "no" as the
                 // window goes: nothing would ever answer them, and the page was left waiting.
