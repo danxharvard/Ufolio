@@ -923,6 +923,12 @@ enum UserScripts {
     static let rejectCookieBanners = WKUserScript(source: #"""
     (function () {
       if (window.__hushReject) return; window.__hushReject = true;
+      // In a frame inside the page, only a consent tool's own frame (Sourcepoint, TrustArc…):
+      // pages are full of ad, video and widget frames, and each one used to search itself for
+      // a pop-up a dozen times.
+      if (window !== window.top &&
+          !/consent|cmp|privacy|cookie|gdpr|sp_message|sourcepoint|trustarc|truste|didomi|onetrust|usercentrics|quantcast|fundingchoices/i
+            .test(location.href + ' ' + window.name)) return;
       // Direct "reject" buttons of the big consent tools.
       var DIRECT = [
         '#onetrust-reject-all-handler', '.ot-pc-refuse-all-handler',
@@ -987,7 +993,17 @@ enum UserScripts {
       var tries = 0;
       var idle = window.requestIdleCallback || function (f) { return setTimeout(f, 150); };
       function loop() {
-        if (done || document.hidden) return;
+        if (done) return;
+        // A tab opened in the background waits until you look at it (it used to give up there
+        // and then, so those tabs never had their pop-up refused).
+        if (document.hidden) {
+          document.addEventListener('visibilitychange', function seen() {
+            if (document.hidden) return;
+            document.removeEventListener('visibilitychange', seen);
+            loop();
+          });
+          return;
+        }
         idle(function () {
           attempt();
           if (!done && ++tries < 12) setTimeout(loop, tries < 4 ? 400 : 1000);
