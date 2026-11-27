@@ -753,7 +753,7 @@ struct ToolbarBadge: View {
     var pressed = false
     @State private var hovering = false
 
-    static let size = CGSize(width: 50, height: 24)
+    static let size = CGSize(width: 56, height: 24)
 
     var body: some View {
         VStack(spacing: -1) {
@@ -764,8 +764,10 @@ struct ToolbarBadge: View {
                     Text(top).font(.system(size: 10, weight: .heavy))
                 }
             }
+            // Room either side of the small word (DOWNLOADS ran right up to the outline).
             Text(bottom).font(.system(size: 6.5, weight: .heavy)).tracking(0.2)
-                .lineLimit(1).minimumScaleFactor(0.8)
+                .lineLimit(1).minimumScaleFactor(0.85)
+                .padding(.horizontal, 5)
         }
         .foregroundStyle(color)
         .frame(width: Self.size.width, height: Self.size.height)
