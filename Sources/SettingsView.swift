@@ -631,7 +631,7 @@ private struct GeneralSettings: View {
                 Toggle("Ask where to save each download", isOn: $askWhereToSave)
                 Toggle("Sort downloads into folders by type (Images, Documents, Videos…)", isOn: $sortDownloads)
                 DescribedToggle(title: "Open “safe” files after downloading",
-                                detail: "“Safe” files include movies, pictures, sounds, PDFs, text documents and archives.",
+                                detail: "“Safe” files are movies, pictures, sounds, PDFs and text documents. Archives and installers never open by themselves.",
                                 isOn: $openSafeFiles)
             } header: { SectionTitle("Downloads") }
 
