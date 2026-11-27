@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.52.0-beta.12: pages before you click (beta)
+
+- **Pages before you click:** point at a link and Ufolio fetches the page, so it opens almost instantly.
+- **Wide-awake tabs:** sleeping tabs start waking as soon as you point at them.
+- **Lighter tabs:** tabs you're not using give back more memory.
+- Bug fixes and stability improvements.
+
 ## 0.52.0-beta.11: name your bookmarks (beta)
 
 - **Name your bookmarks:** when you save a bookmark, you can give it any name first.
