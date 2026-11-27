@@ -420,7 +420,7 @@ final class ExtensionManager: NSObject, ObservableObject, WKWebExtensionControll
             contexts[record.id] = context
             // Open tabs were made before this extension; rebuild their pages so it runs in them now.
             for model in BrowserModel.all.allObjects where !model.isPrivate {
-                for tab in model.tabs where tab.webView.configuration.webExtensionController == nil { tab.adoptExtensions() }
+                for tab in model.tabs where tab.hasPageView && tab.webView.configuration.webExtensionController == nil { tab.adoptExtensions() }
             }
             if let model = BrowserModel.frontmostNormal {
                 if announcedWindows.contains(ObjectIdentifier(model)) {

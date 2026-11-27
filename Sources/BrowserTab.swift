@@ -5,7 +5,25 @@ import Combine
 /// One tab: a WKWebView plus the bits of its state the UI shows.
 final class BrowserTab: NSObject, ObservableObject, Identifiable {
     let id = UUID()
-    private(set) var webView: WKWebView
+    /// The page view. A tab restored from last time makes its page view only when something
+    /// first needs it (usually as you switch to it): with hundreds of tabs restored, making them
+    /// all at launch was most of the window's start-up time.
+    private(set) var webView: WKWebView {
+        get {
+            if let made = madeWebView { return made }
+            let made = HushWebView(frame: .zero, configuration: BrowserTab.makeConfiguration(
+                privately: isPrivate, store: waitingStore ?? model?.dataStore))
+            madeWebView = made
+            waitingStore = nil
+            return made
+        }
+        set { madeWebView = newValue }
+    }
+    private var madeWebView: WKWebView?
+    /// Where a waiting tab's cookies live, until its page view is made.
+    private var waitingStore: WKWebsiteDataStore?
+    /// False for a restored tab that hasn't made its page view yet.
+    var hasPageView: Bool { madeWebView != nil }
     weak var model: BrowserModel?
 
     @Published private(set) var title = ""
@@ -221,14 +239,21 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     deinit { LiveCount.change(\.tabs, by: -1) }
 
-    init(model: BrowserModel, configuration: WKWebViewConfiguration? = nil, store: WKWebsiteDataStore? = nil) {
+    /// `waiting`: a tab restored from last time that loads when you switch to it. Its page view
+    /// is made and connected as it wakes (every one used to be made, and connected twice, at
+    /// launch: with hundreds of tabs that was most of the window's start-up time).
+    init(model: BrowserModel, configuration: WKWebViewConfiguration? = nil, store: WKWebsiteDataStore? = nil, waiting: Bool = false) {
         LiveCount.change(\.tabs, by: 1)
         self.model = model
         isPrivate = model.isPrivate
-        webView = HushWebView(frame: .zero, configuration: configuration
-            ?? BrowserTab.makeConfiguration(privately: model.isPrivate, store: store ?? model.dataStore))
         super.init()
-        setUp(webView)
+        if waiting {
+            waitingStore = store ?? model.dataStore
+        } else {
+            webView = HushWebView(frame: .zero, configuration: configuration
+                ?? BrowserTab.makeConfiguration(privately: model.isPrivate, store: store ?? model.dataStore))
+            setUp(webView)
+        }
     }
 
     /// Connects a web view to this tab: delegates, blocking, AutoFill and the state the UI shows.
@@ -447,7 +472,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     /// when they wake.
     func adoptExtensions() {
         guard !isAsleep, !isPrivate else {
-            if isAsleep { webView = HushWebView(frame: .zero, configuration: BrowserTab.makeConfiguration(
+            // (A waiting tab's page view, made later, gets the extensions as it's made.)
+            if isAsleep, hasPageView { webView = HushWebView(frame: .zero, configuration: BrowserTab.makeConfiguration(
                 privately: isPrivate, store: webView.configuration.websiteDataStore)) }
             return
         }
@@ -821,6 +847,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         dropParkedPages(forget: true)
         Preloader.discard(forTab: id)
         observers.removeAll()
+        // A tab restored from last time that never made its page view has none to close.
+        guard hasPageView else { snapshotData = nil; sleepState = nil; return }
         webView.stopLoading()
         webView.navigationDelegate = nil
         webView.uiDelegate = nil

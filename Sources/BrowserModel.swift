@@ -150,7 +150,7 @@ final class BrowserModel: NSObject, ObservableObject {
     func spaceChangedProfile(_ id: UUID) {
         guard !isPrivate else { return }
         let target = SpaceStore.shared.dataStore(forSpace: id)
-        for tab in tabs where tab.spaceID == id && tab.webView.configuration.websiteDataStore !== target {
+        for tab in tabs where tab.spaceID == id && (!tab.hasPageView || tab.webView.configuration.websiteDataStore !== target) {
             guard let index = tabs.firstIndex(where: { $0 === tab }) else { continue }
             let copy = BrowserTab(model: self, store: target)
             copy.spaceID = id
@@ -376,6 +376,8 @@ final class BrowserModel: NSObject, ObservableObject {
     private var keyObserver: NSObjectProtocol?
 
     init(isPrivate: Bool = false) {
+        LaunchTimer.mark("window model")
+        defer { LaunchTimer.mark("window model done") }
         LiveCount.change(\.windows, by: 1)
         self.isPrivate = isPrivate
         dataStore = isPrivate ? .nonPersistent() : .default()
@@ -448,6 +450,7 @@ final class BrowserModel: NSObject, ObservableObject {
             if !placed.isEmpty { tabs = placed + tabs.filter { !$0.isPinned } }
         }
         if !isPrivate, !Self.didRestoreSession { SpeedBenchmark.startIfAsked(in: self); LeakTest.startIfAsked(in: self); AutofillTest.startIfAsked(in: self); ShieldSnapshot.startIfAsked(in: self); BackgroundPlayTest.startIfAsked(in: self); EvalTest.startIfAsked(in: self) }
+        if !isPrivate { EvalTest.startIfAsked(in: self) }   // (testing only; also after restoring tabs)
         if !isPrivate { Self.didRestoreSession = true }
         if visibleTabs.allSatisfy(\.isPinned) {
             // A new window opens the homepage if Settings › General says so.
@@ -457,7 +460,7 @@ final class BrowserModel: NSObject, ObservableObject {
 
     /// A tab from last time, waiting to load until you click it.
     private func addRestoredTab(_ url: URL, space: UUID) -> BrowserTab {
-        let tab = BrowserTab(model: self, store: SpaceStore.shared.dataStore(forSpace: space))
+        let tab = BrowserTab(model: self, store: SpaceStore.shared.dataStore(forSpace: space), waiting: true)
         tab.spaceID = space
         tab.restoreLazily(url)
         tabs.append(tab)

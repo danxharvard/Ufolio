@@ -141,7 +141,7 @@ enum Speed {
             guard message.frameInfo.isMainFrame else { return }
             if let body = message.body as? [String: Any], let text = body["preload"] as? String, text.count < 2000,
                let url = URL(string: text), let webView = message.webView {
-                let tab = BrowserModel.all.allObjects.lazy.flatMap(\.tabs).first { $0.webView === webView }
+                let tab = BrowserModel.all.allObjects.lazy.flatMap(\.tabs).first { $0.hasPageView && $0.webView === webView }
                 // Sites that switch pages with their own code (YouTube, Twitch…) never navigate on
                 // a click: loading the link ahead there only loaded a whole second copy of the site
                 // alongside the video you'd just clicked.
@@ -699,15 +699,21 @@ enum BackgroundPlayTest {
 /// Testing only (UFOLIO_EVAL_URL=<page>, UFOLIO_EVAL_JS=<script returning a value>): loads the
 /// page, waits, prints what the script returns, and quits.
 enum EvalTest {
+    private static var started = false
     static func startIfAsked(in model: BrowserModel) {
         let env = ProcessInfo.processInfo.environment
-        guard let address = env["UFOLIO_EVAL_URL"], let js = env["UFOLIO_EVAL_JS"] else { return }
+        guard !started, let address = env["UFOLIO_EVAL_URL"], let js = env["UFOLIO_EVAL_JS"] else { return }
+        started = true
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 3_000_000_000)
+            // UFOLIO_EVAL_TAB=<n>: switch to the n-th tab first (a tab restored from last time, say).
+            if let n = env["UFOLIO_EVAL_TAB"].flatMap(Int.init), model.tabs.indices.contains(n) { model.selectedID = model.tabs[n].id }
             guard let tab = model.selectedTab else { return }
             // "current": leave the tab as it is (a restored session, say).
             if address != "current", let url = URL(string: address) { tab.load(url) }
-            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            // UFOLIO_EVAL_WAIT: seconds to wait before running the script (6 by default).
+            let wait = env["UFOLIO_EVAL_WAIT"].flatMap(Double.init) ?? 6
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
             let value = try? await tab.webView.callAsyncJavaScript(js, contentWorld: .page)
             FileHandle.standardError.write("eval: \(value.map { "\($0)" } ?? "nil")\n".data(using: .utf8)!)
             NSApp.terminate(nil)
@@ -719,6 +725,17 @@ enum EvalTest {
 /// window appeared, and when the next frame was drawn.
 enum LaunchTimer {
     private static var done = false
+    static let on = ProcessInfo.processInfo.environment["UFOLIO_LAUNCH_TIME"] != nil
+    /// A step of launching, with the time since the process started (testing only).
+    static func mark(_ step: String) {
+        guard on else { return }
+        var info = kinfo_proc(), size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+        sysctl(&mib, 4, &info, &size, nil, 0)
+        let start = info.kp_proc.p_un.__p_starttime
+        let started = Double(start.tv_sec) + Double(start.tv_usec) / 1e6
+        FileHandle.standardError.write("launch: \(step) \(Int((Date().timeIntervalSince1970 - started) * 1000)) ms\n".data(using: .utf8)!)
+    }
     static func windowAppeared() {
         guard !done, ProcessInfo.processInfo.environment["UFOLIO_LAUNCH_TIME"] != nil else { return }
         done = true

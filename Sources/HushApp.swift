@@ -10,6 +10,7 @@ struct HushApp: App {
     @AppStorage(Prefs.theme) private var theme = "classic"
 
     init() {
+        LaunchTimer.mark("app init")
         Prefs.register()
         // Before any window: if this version has failed to start twice, offer the previous one.
         Rollback.checkAtLaunch()
@@ -49,6 +50,7 @@ struct HushApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
+        LaunchTimer.mark("will finish launching")
         // Only one Hush at a time: if another copy is already running, bring it forward and quit.
         if let id = Bundle.main.bundleIdentifier {
             let others = NSRunningApplication.runningApplications(withBundleIdentifier: id)
@@ -103,6 +105,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        LaunchTimer.mark("did finish launching")
+        defer { LaunchTimer.mark("did finish launching done") }
         // If Hush last quit with its window closed, show it again. With a single-window
         // scene this can only ever show the one window, never a second.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
