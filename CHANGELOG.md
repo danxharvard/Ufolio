@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.51.9: smoother and steadier
+
+- Fixed tabs in a minimised window going missing after a restart.
+- Bug fixes and stability improvements.
+
 ## 0.51.8: fewer surprises
 
 - Quitting, or closing a window, while a site was asking to use your camera, microphone or
