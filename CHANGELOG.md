@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.51.8: fewer surprises
+
+- Quitting, or closing a window, while a site was asking to use your camera, microphone or
+  location no longer blocks that site for good. A question put away unanswered now counts as
+  "not this time", never as your answer.
+- A closing window answers any question still waiting from a site, rather than leaving the page
+  waiting for ever.
+- What's New now shows everything since the version you last used (an update that skipped a
+  version only showed the newest one's notes).
+- Deleting a profile now says it also erases that profile's history and bookmarks, and Settings
+  no longer claims they're shared between profiles.
+- The "Open safe files" setting no longer says archives open by themselves (they never do).
+
 ## 0.51.7: safer passwords, steadier tabs
 
 - Your saved passwords are safer: if the password vault's key couldn't be read for a moment,
