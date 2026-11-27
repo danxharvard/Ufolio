@@ -1292,6 +1292,12 @@ extension BrowserTab: WKUIDelegate {
         // Its own set of blocking rules and scripts: sharing the opener's meant a pop-up on a
         // site with Force Field off switched blocking off for the original page too.
         configuration.userContentController = WKUserContentController()
+        // Inside a Link preview, links meant for a new window open in the preview itself (a new
+        // tab would switch tabs, which closes the preview while it was still opening the link).
+        if model.preview === self {
+            if let url = action.request.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") { load(url) }
+            return nil
+        }
         // "Preview Link" from the right-click menu.
         if (webView as? HushWebView)?.openNextAsPreview == true {
             (webView as? HushWebView)?.openNextAsPreview = false
@@ -1503,10 +1509,13 @@ final class HushWebView: WKWebView {
             background.target = self
             background.representedObject = original
             menu.insertItem(background, at: index + 1)
-            let preview = NSMenuItem(title: "Preview Link", action: #selector(previewLink(_:)), keyEquivalent: "")
-            preview.target = self
-            preview.representedObject = original
-            menu.insertItem(preview, at: index)
+            // (Not inside a preview itself: opening one closes the other, mid-way through.)
+            if !ignoresBlockers {
+                let preview = NSMenuItem(title: "Preview Link", action: #selector(previewLink(_:)), keyEquivalent: "")
+                preview.target = self
+                preview.representedObject = original
+                menu.insertItem(preview, at: index)
+            }
         }
         guard onHideElements != nil, url != nil else { return }
         menu.addItem(.separator())
