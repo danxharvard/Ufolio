@@ -163,32 +163,23 @@ struct HushLogoTile: View {
     }
 }
 
-/// The logo playing its eclipse once: the tracker drifts behind the moon and fades.
+/// The logo with its eclipse complete (it used to play the eclipse as it appeared).
 struct AnimatedHushLogo: View {
     var size: CGFloat
-    @State private var eclipse: CGFloat = 0
-    @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
 
     var body: some View {
-        HushLogoTile(size: size, eclipse: eclipse)
-            .onAppear {
-                guard !reduceMotion else { eclipse = 1; return }
-                withAnimation(.easeInOut(duration: 1.4).delay(0.35)) { eclipse = 1 }
-            }
+        HushLogoTile(size: size, eclipse: 1)
     }
 }
 
-/// The saucer flying about and zapping ads with its beams (the setup guide's welcome).
-/// Drawn from the clock at 30 frames a second; still when Reduce Motion is on.
+/// The saucer zapping ads with its beams (the setup guide's welcome).
 struct UFOZapperScene: View {
-    @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
-    /// Paused while its window isn't the one you're using (Settings left open behind the browser
-    /// kept drawing 30 frames a second for nobody).
-    @Environment(\.controlActiveState) private var activeState
+    /// A still picture of one moment (a bolt on its way, an ad bursting): it used to be drawn
+    /// 30 times a second.
+    private let t = 1.4
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || activeState == .inactive)) { context in
-            let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
+        Group {
             GeometryReader { geo in
                 let w = geo.size.width, h = geo.size.height
                 // A lazy figure-of-eight across the sky.

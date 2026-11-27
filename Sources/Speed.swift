@@ -307,7 +307,7 @@ enum LeakTest {
             var report: [String] = []
             func stage(_ name: String) async {
                 let c = LiveCount.now
-                report.append("\(name): tabs \(c.tabs), webViews \(c.webViews), windows \(c.windows)")
+                report.append("\(name): tabs \(c.tabs), webViews \(c.webViews), windows \(c.windows), in list \(model.tabs.count), preview \(model.preview != nil), docks \(model.dockTabs.count)")
                 try? report.joined(separator: "\n").write(toFile: dir + "/report.txt", atomically: true, encoding: .utf8)
                 try? name.write(toFile: dir + "/stage", atomically: true, encoding: .utf8)
                 try? await Task.sleep(nanoseconds: 12_000_000_000)   // the script measures memory now
@@ -320,6 +320,19 @@ enum LeakTest {
                     try? await Task.sleep(nanoseconds: 1_500_000_000)
                 }
                 _ = round
+            }
+            // Link previews and a docked site, opened and let go (they must leave nothing behind).
+            if let first = urls.first, let from = model.selectedTab {
+                for _ in 0..<3 {
+                    model.showPreview(first, from: from)
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    model.closePreview()
+                }
+                if let site = DockedSites.shared.dock(first, title: "Leak test") {
+                    model.toggleDock(site)
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    DockedSites.shared.undock(site)
+                }
             }
             try? await Task.sleep(nanoseconds: 20_000_000_000)
             await stage("open")

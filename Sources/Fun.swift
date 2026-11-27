@@ -62,17 +62,13 @@ enum UFODay {
 // MARK: - Live sky
 
 /// The start page background that follows the real time of day: dawn, a blue day, sunset, dusk
-/// and a starry night with the odd shooting star.
+/// and a starry night. (Its colours change once a minute; there are no moving parts.)
 struct LiveSky: View {
-    @State private var streak: Streak?
-
-    private struct Streak: Equatable { let id = UUID(); let from: CGPoint; let to: CGPoint; var done = false }
-
     var body: some View {
         TimelineView(.everyMinute) { context in
             let hour = Self.hour(context.date)
             let night = Self.starAmount(hour)
-            GeometryReader { geo in
+            GeometryReader { _ in
                 ZStack {
                     LinearGradient(colors: Self.colors(hour), startPoint: .top, endPoint: .bottom)
                     if night > 0 {
@@ -85,29 +81,6 @@ struct LiveSky: View {
                                          with: .color(.white.opacity((0.35 + rng.next() * 0.65) * night)))
                             }
                         }
-                    }
-                    if let streak, night > 0.5 {
-                        Capsule()
-                            .fill(LinearGradient(colors: [.white.opacity(0), .white.opacity(0.9)], startPoint: .leading, endPoint: .trailing))
-                            .frame(width: 90, height: 1.6)
-                            .rotationEffect(.radians(atan2(streak.to.y - streak.from.y, streak.to.x - streak.from.x)))
-                            .position(streak.done ? streak.to : streak.from)
-                            .opacity(streak.done ? 0 : 1)
-                    }
-                }
-                .task(id: night > 0.5) {
-                    // Now and then, at night, a shooting star (never with Reduce Motion or Effects off).
-                    guard night > 0.5 else { return }
-                    while !Task.isCancelled {
-                        try? await Task.sleep(nanoseconds: UInt64.random(in: 18...45) * 1_000_000_000)
-                        guard Effects.on, Effects.someoneIsHere, !Task.isCancelled else { continue }
-                        let start = CGPoint(x: geo.size.width * .random(in: 0.2...0.8), y: geo.size.height * .random(in: 0.05...0.3))
-                        let end = CGPoint(x: start.x + .random(in: 160...300), y: start.y + .random(in: 60...120))
-                        streak = Streak(from: start, to: end)
-                        try? await Task.sleep(nanoseconds: 30_000_000)
-                        withAnimation(.easeIn(duration: 0.9)) { streak?.done = true }
-                        try? await Task.sleep(nanoseconds: 1_000_000_000)
-                        streak = nil
                     }
                 }
             }
@@ -162,41 +135,11 @@ struct SeededRandom {
     }
 }
 
-// MARK: - Cloaking field (Stealth Mode)
-
-/// A faint shimmer running round the edge of a Stealth window.
-struct CloakingField: View {
-    @State private var angle = 0.0
-    @State private var done = false
-
-    var body: some View {
-        if !done && Effects.on { field }
-    }
-
-    private var field: some View {
-        RoundedRectangle(cornerRadius: 11, style: .continuous)
-            .strokeBorder(AngularGradient(colors: [Color(red: 0.62, green: 0.48, blue: 1).opacity(0.0),
-                                                   Color(red: 0.62, green: 0.48, blue: 1).opacity(0.55),
-                                                   Color(red: 0.35, green: 0.90, blue: 0.95).opacity(0.45),
-                                                   Color(red: 0.62, green: 0.48, blue: 1).opacity(0.0)],
-                                          center: .center, angle: .degrees(angle)), lineWidth: 1.5)
-            .allowsHitTesting(false)
-            // One sweep as the Stealth window opens, then the field is removed altogether: a
-            // window-sized layer kept over the page made every redraw in the window slower.
-            .task {
-                withAnimation(.easeInOut(duration: 3)) { angle += 360 }
-                try? await Task.sleep(nanoseconds: 3_200_000_000)
-                done = true
-            }
-    }
-}
-
 // MARK: - A small saucer
 
 struct MiniSaucer: View {
     var size: CGFloat = 18
     var partyHat = false
-    @State private var bob = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -208,13 +151,7 @@ struct MiniSaucer: View {
                     .offset(y: -size * 0.24)
             }
         }
-        .offset(y: bob ? -1.5 : 1.5)
-        .onAppear {
-            // A few bobs as it arrives, then it rests: a never-ending animation kept the start page
-            // redrawing (and the Mac working) the whole time it was open.
-            guard Effects.on else { return }
-            withAnimation(.easeInOut(duration: 1.6).repeatCount(5, autoreverses: true)) { bob = true }
-        }
+
     }
 }
 
@@ -469,53 +406,9 @@ enum UfolioBirthday {
     }
 }
 
-// MARK: - Tractor beam (finished downloads)
-
-/// A soft beam of light that lifts a finished download into the Downloads button.
-struct TractorBeam: View {
-    let trigger: Int
-    @State private var glow = false
-    @State private var beam = false
-
-    var body: some View {
-        ZStack {
-            BeamCone()
-                .fill(LinearGradient(colors: [Color.accentColor.opacity(0.0), Color.accentColor.opacity(0.45)],
-                                     startPoint: .bottom, endPoint: .top))
-                .frame(width: 26, height: 34)
-                .offset(y: 24)
-                .opacity(beam ? 1 : 0)
-                .scaleEffect(x: 1, y: beam ? 1 : 0.2, anchor: .top)
-            Circle()
-                .fill(Color.accentColor.opacity(glow ? 0.35 : 0))
-                .frame(width: 30, height: 30)
-                .blur(radius: 6)
-        }
-        .allowsHitTesting(false)
-        .onChange(of: trigger) { _, _ in
-            guard Effects.on else { return }
-            withAnimation(.easeOut(duration: 0.35)) { beam = true; glow = true }
-            withAnimation(.easeIn(duration: 0.6).delay(0.6)) { beam = false }
-            withAnimation(.easeOut(duration: 0.8).delay(0.9)) { glow = false }
-        }
-    }
-}
-
-private struct BeamCone: Shape {
-    func path(in r: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: r.midX - r.width * 0.18, y: r.minY))
-        p.addLine(to: CGPoint(x: r.midX + r.width * 0.18, y: r.minY))
-        p.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
-        p.addLine(to: CGPoint(x: r.minX, y: r.maxY))
-        p.closeSubpath()
-        return p
-    }
-}
-
 // MARK: - "take me to your leader"
 
-/// The address bar easter egg: a saucer swoops in, beams down a greeting and leaves.
+/// The address bar easter egg: a saucer beams down a greeting for a moment.
 struct LeaderEasterEgg: View {
     let onDone: () -> Void
     @State private var phase = 0   // 0 offstage left, 1 hovering, 2 gone right
@@ -539,16 +432,9 @@ struct LeaderEasterEgg: View {
         }
         .allowsHitTesting(false)
         .task {
-            if !Effects.on {
-                phase = 1
-                try? await Task.sleep(nanoseconds: 2_500_000_000)
-                onDone()
-                return
-            }
-            withAnimation(.spring(response: 0.9, dampingFraction: 0.75)) { phase = 1 }
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            withAnimation(.easeIn(duration: 0.8)) { phase = 2 }
-            try? await Task.sleep(nanoseconds: 900_000_000)
+            // Shown still for a moment (no flying in and out: animated pictures cost the Mac work).
+            phase = 1
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
             onDone()
         }
     }

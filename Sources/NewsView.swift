@@ -486,32 +486,18 @@ private struct NewsPicture: View {
     }
 }
 
-/// Shimmering placeholders while the first stories arrive.
+/// Placeholders while the first stories arrive (still: the shimmer was drawn 30 times a second).
 private struct NewsSkeleton: View {
-    /// Still while the window isn't the one you're using.
-    @Environment(\.controlActiveState) private var activeState
-
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: activeState == .inactive)) { context in
-            let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.6) / 1.6
-            VStack(spacing: 16) {
-                block(height: 360, phase: phase)
-                HStack(spacing: 16) { block(height: 280, phase: phase); block(height: 280, phase: phase) }
-            }
+        VStack(spacing: 16) {
+            block(height: 360)
+            HStack(spacing: 16) { block(height: 280); block(height: 280) }
         }
     }
 
-    private func block(height: CGFloat, phase: Double) -> some View {
+    private func block(height: CGFloat) -> some View {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
             .fill(Color.primary.opacity(0.06))
-            .overlay(
-                GeometryReader { geo in
-                    LinearGradient(colors: [.clear, Color.primary.opacity(0.07), .clear], startPoint: .leading, endPoint: .trailing)
-                        .frame(width: geo.size.width * 0.5)
-                        .offset(x: -geo.size.width * 0.5 + geo.size.width * 1.5 * phase)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            )
             .frame(height: height)
     }
 }

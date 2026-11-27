@@ -127,11 +127,9 @@ private struct AlienHead: Shape {
     }
 }
 
-/// The Stealth start page's emblem: a saucer shimmering in and out of its cloaking field, with
-/// a band of light sweeping across it. Still with Reduce Motion or Effects off.
+/// The Stealth start page's emblem: a saucer in its cloaking field. A still picture (it used to
+/// shimmer in and out as the page appeared).
 struct CloakedSaucer: View {
-    @State private var cloaked = false
-    @State private var sweep = false
     var body: some View {
         ZStack {
             // A soft violet glow behind it.
@@ -141,46 +139,15 @@ struct CloakedSaucer: View {
             // Faint rings, like a field around it.
             ForEach(0..<2) { i in
                 Ellipse()
-                    .strokeBorder(PrivateChrome.lavender.opacity(cloaked ? 0.10 : 0.22), style: StrokeStyle(lineWidth: 1, dash: [3, 5]))
+                    .strokeBorder(PrivateChrome.lavender.opacity(0.22), style: StrokeStyle(lineWidth: 1, dash: [3, 5]))
                     .frame(width: 130 + CGFloat(i) * 26, height: 54 + CGFloat(i) * 12)
                     .offset(y: 14)
             }
             SaucerArt(beam: 0)
                 .frame(width: 104, height: 104)
-                .opacity(cloaked ? 0.32 : 0.95)
-                .overlay {
-                    // The shimmer: a bright band passing over the saucer (and only the saucer).
-                    GeometryReader { g in
-                        LinearGradient(colors: [.clear, .white.opacity(0.6), .clear], startPoint: .leading, endPoint: .trailing)
-                            .frame(width: g.size.width * 0.4)
-                            .offset(x: sweep ? g.size.width : -g.size.width * 0.4)
-                    }
-                    .mask(SaucerArt(beam: 0))
-                    .allowsHitTesting(false)
-                }
+                .opacity(0.95)
         }
-        .onAppear { animate(Effects.on) }
         .accessibilityHidden(true)
-    }
-
-    private func animate(_ on: Bool) {
-        guard on else {
-            var still = Transaction(animation: nil)
-            still.disablesAnimations = true
-            withTransaction(still) { cloaked = false; sweep = false }
-            return
-        }
-        // A couple of shimmers as the page appears, then it rests. Running forever, this redrew
-        // the frosted window behind it on every frame, which made the whole Stealth window lag.
-        withAnimation(.linear(duration: 2.2).delay(0.4)) { sweep = true }
-        Task { @MainActor in
-            for _ in 0..<2 {
-                withAnimation(.easeInOut(duration: 1.3)) { cloaked = true }
-                try? await Task.sleep(nanoseconds: 1_300_000_000)
-                withAnimation(.easeInOut(duration: 1.3)) { cloaked = false }
-                try? await Task.sleep(nanoseconds: 1_300_000_000)
-            }
-        }
     }
 }
 

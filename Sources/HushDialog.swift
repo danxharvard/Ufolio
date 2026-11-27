@@ -276,18 +276,18 @@ private struct DialogButtonStyle: ButtonStyle {
     }
 }
 
-/// The animated top of every dialog: drifting stars, a soft glow, the art gently floating,
-/// and particles that move in the dialog's own way.
+/// The top of every dialog: stars, a soft glow, the art, and particles laid out in the dialog's
+/// own way. A still picture: it used to be redrawn 30 times a second while a dialog was open.
 struct DialogScene: View {
     let art: HushDialog.Art
     let badge: String?
     let colors: [Color]
     let motion: HushDialog.Motion
-    @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
+    /// The moment the picture shows (particles spread nicely here).
+    private let t = 1.7
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
-            let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
+        Group {
             GeometryReader { geo in
                 let center = CGPoint(x: geo.size.width / 2, y: geo.size.height * 0.56)
                 ZStack {

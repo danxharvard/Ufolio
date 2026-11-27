@@ -101,7 +101,6 @@ final class BrowserModel: NSObject, ObservableObject {
     func switchSpace(to id: UUID) {
         guard !isPrivate, id != spaceID, SpaceStore.shared.space(id) != nil else { return }
         FeatureUsage.mark(.orbits)
-        WarpSpeed.engage(for: self)
         if let current = selectedID { lastSelected[spaceID] = current }
         closeSplit()   // (pauses the side that goes out of sight)
         spaceID = id
