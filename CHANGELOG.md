@@ -2,16 +2,18 @@
 
 ## 0.52.0: pages before you click
 
-- **Pages before you click:** point at a link and its page is fetched, so it opens almost instantly.
-- **YouTube without ads:** video ads are skipped the moment they start.
-- **Link preview:** ⌥-click a link to peek at it in a floating card, without leaving your page.
-- **Compact mode:** ⌃⌘C hides the tabs and toolbar so the page fills the window.
-- **Docked sites:** keep chat or music open in a panel beside every page.
-- **Name your bookmarks:** give a bookmark any name as you save it.
-- **A clearer toolbar:** buttons that say what they do.
-- **Lighter on your Mac:** faster launch with lots of tabs, smoother YouTube, and tabs that give back more memory.
-- Fixed saved passwords being filled in by themselves into hidden boxes on a page.
-- Bug fixes and stability improvements.
+**Pages Before You Click**
+- Ufolio fetches a page as soon as you point at its link, so it opens almost instantly. Try it by resting the pointer on a link before you click. Now available in 0.52.0.
+
+**YouTube Without Ads**
+- Video ads on YouTube are skipped the moment they start. Try it by playing any YouTube video. Now available in 0.52.0.
+
+**Link Preview**
+- Peek at a link in a floating card without leaving your page. Try it by holding ⌥ and clicking a link. Now available in 0.52.0.
+
+**Bug fixes**
+- Bug fixed where saved passwords could be filled in by themselves into hidden boxes on a page.
+- Other bug fixes and improvements.
 
 ## 0.52.0-beta.13: smoother tabs (beta)
 
