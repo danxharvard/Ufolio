@@ -34,6 +34,9 @@ enum WebKitExtras {
     /// Ends the page straight away (what Safari does when a tab closes): its memory and web
     /// process are given back even if something still holds on to the web view.
     static func close(_ webView: WKWebView) { call(webView, "_close") }
+    /// Lets go of the earlier pages this tab keeps whole in memory for an instant Back (Back
+    /// still works: it loads them again).
+    static func clearBackForwardCache(_ webView: WKWebView) { call(webView, "_clearBackForwardCache") }
 
     /// The auto-play rules for a page about to load, as Safari sets them (WebKit's per-page
     /// website policies). With only the web view's own "needs a click for sound" switch, a video

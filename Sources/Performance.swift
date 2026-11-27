@@ -353,8 +353,14 @@ final class PerformanceCenter: ObservableObject {
         busyChecks = busyChecks.filter { seenNow[$0.key] != nil }
     }
 
+    /// Tabs using 250 MB or more at the last measure (every 30 seconds): they sleep sooner when idle.
+    private(set) var heavyTabIDs: Set<UUID> = []
+
     func keepWithinMemoryLimit() {
         let usage = measure()
+        heavyTabIDs = Set(usage.tabs.filter { entry in
+            entry.bytes >= Self.heavyTabBytes && !entry.isAsleep && !(entry.tab.map(isProtectedHeavy) ?? true)
+        }.map(\.id))
         evaluatePowerMode(usage)
         guard Self.memorySaverOn else { return }
         var over = Int64(usage.total) - Int64(Self.memoryLimit)

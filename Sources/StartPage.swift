@@ -89,7 +89,17 @@ struct StartPage: View {
         .animation(.smooth(duration: 0.26), value: customisingNews)
         .animation(.smooth(duration: 0.26), value: closed.tabs.count)
         .animation(.smooth(duration: 0.26), value: personalising)
-        .onAppear { weather.refreshIfNeeded() }
+        .onAppear {
+            weather.refreshIfNeeded()
+            // The sites you're most likely to open from here get their connections ready now
+            // (a look-up and a secure handshake, nothing downloaded), so even a quick click on a
+            // favourite skips that part of the wait. Each site at most once every 30 seconds.
+            let likely = bookmarks.items(in: nil).prefix(6).map(\.url) + suggestions.prefix(3).map(\.url)
+            let view = model.selectedTab?.webView
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                for url in likely { Speed.preconnect(url, in: view) }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: QuitHelper.closeSheets)) { _ in personalising = false }
     }
 
@@ -332,7 +342,7 @@ private struct FavouriteTile: View {
             // Pointing at a favourite: get its connection ready before the click.
             if inside {
                 Speed.preconnect(bookmark.url, in: model.selectedTab?.webView)
-                Preloader.preloadSoon(bookmark.url, for: model.selectedTab)   // rested on it: load it
+                Preloader.preloadSoon(bookmark.url, for: model.selectedTab, delay: Preloader.restDelay)   // rested on it: load it
             } else { Preloader.cancelSoon() }
         }
         .animation(.spring(response: 0.25, dampingFraction: 0.75), value: hovering)
@@ -443,7 +453,7 @@ private struct SuggestionCard: View {
             hovering = inside
             if inside {
                 Speed.preconnect(site.url, in: model.selectedTab?.webView)
-                Preloader.preloadSoon(site.url, for: model.selectedTab)
+                Preloader.preloadSoon(site.url, for: model.selectedTab, delay: Preloader.restDelay)
             } else { Preloader.cancelSoon() }
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.8), value: hovering)

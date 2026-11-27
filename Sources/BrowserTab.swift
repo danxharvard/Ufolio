@@ -22,6 +22,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     private var madeWebView: WKWebView?
     /// Where a waiting tab's cookies live, until its page view is made.
     private var waitingStore: WKWebsiteDataStore?
+    /// Whether this idle spell's instant-Back pages have been let go already (see sleepIdleTabs).
+    var backCacheReleased = false
     /// False for a restored tab that hasn't made its page view yet.
     var hasPageView: Bool { madeWebView != nil }
     weak var model: BrowserModel?

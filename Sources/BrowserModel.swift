@@ -9,6 +9,7 @@ final class BrowserModel: NSObject, ObservableObject {
             // The tab you leave starts its idle clock; the one you pick wakes if it was asleep.
             let old = tabs.first(where: { $0.id == oldValue })
             old?.lastActive = Date()
+            old?.backCacheReleased = false   // a fresh idle spell starts
             // A link preview belongs to the page it was opened from.
             if preview != nil, selectedID != oldValue { closePreview() }
             // Pause sound and video in the tab you leave (Eco, or Settings › Performance),
@@ -256,17 +257,30 @@ final class BrowserModel: NSObject, ObservableObject {
             && tab.hasParkedPages && Date().timeIntervalSince(tab.lastActive) > 300 {
             tab.dropParkedPages()
         }
+        // The same for the earlier pages WebKit itself keeps whole in each tab for an instant
+        // Back: once a tab has been left alone for five minutes they go (once per idle spell).
+        for tab in tabs where tab !== selectedTab && !(splitPair?.contains(tab.id) ?? false)
+            && !tab.isAsleep && !tab.backCacheReleased && Date().timeIntervalSince(tab.lastActive) > 300 {
+            tab.backCacheReleased = true
+            WebKitExtras.clearBackForwardCache(tab.webView)
+        }
         let minutes = PerformanceCenter.shared.sleepMinutes   // shorter in Power Saver
         guard minutes > 0 else { return }
         sleepBackgroundTabs(idleFor: minutes * 60)
+        // Big pages (a web app, a map: 250 MB or more at the last measure) sleep after five idle
+        // minutes whatever the chosen time: one of them frees as much as several articles, and
+        // pointing at the tab wakes it again before you click.
+        let heavy = PerformanceCenter.shared.heavyTabIDs
+        if !heavy.isEmpty, minutes * 60 > 300 { sleepBackgroundTabs(idleFor: 300, only: heavy) }
     }
 
     /// Sleeps background tabs idle for at least `seconds`, unless they're playing media
     /// or using the camera or microphone.
-    func sleepBackgroundTabs(idleFor seconds: TimeInterval) {
+    func sleepBackgroundTabs(idleFor seconds: TimeInterval, only: Set<UUID>? = nil) {
         // The other side of Split View is on screen too: never put it to sleep.
         let visible = splitPair.flatMap { $0.contains(selectedID) ? $0 : nil }
         for tab in tabs where tab !== selectedTab && !(visible?.contains(tab.id) ?? false) && !tab.isAsleep && !tab.isLoading
+            && (only?.contains(tab.id) ?? true)
             && Date().timeIntervalSince(tab.lastActive) >= seconds
             && tab.webView.cameraCaptureState == .none && tab.webView.microphoneCaptureState == .none
             && !WebKitExtras.isPictureInPictureActive(tab.webView) {   // its floating video is still on screen
@@ -372,6 +386,7 @@ final class BrowserModel: NSObject, ObservableObject {
         splitPair = SplitPair(left: pair.right, right: pair.left)
     }
     private var audioTimer: Timer?
+    private var prewake: DispatchWorkItem?
     private var keyObserver: NSObjectProtocol?
 
     init(isPrivate: Bool = false) {
@@ -449,7 +464,7 @@ final class BrowserModel: NSObject, ObservableObject {
             if !placed.isEmpty { tabs = placed + tabs.filter { !$0.isPinned } }
         }
         if !isPrivate, !Self.didRestoreSession { SpeedBenchmark.startIfAsked(in: self); LeakTest.startIfAsked(in: self); AutofillTest.startIfAsked(in: self); ShieldSnapshot.startIfAsked(in: self); BackgroundPlayTest.startIfAsked(in: self); EvalTest.startIfAsked(in: self) }
-        if !isPrivate { EvalTest.startIfAsked(in: self); SwitchTest.startIfAsked(in: self) }   // (testing only; also after restoring tabs)
+        if !isPrivate { EvalTest.startIfAsked(in: self); SwitchTest.startIfAsked(in: self); SpeedBenchmark.prefetchTestIfAsked(in: self) }   // (testing only; also after restoring tabs)
         if !isPrivate { Self.didRestoreSession = true }
         if visibleTabs.allSatisfy(\.isPinned) {
             // A new window opens the homepage if Settings › General says so.
@@ -635,6 +650,25 @@ final class BrowserModel: NSObject, ObservableObject {
     func pointerOverTab(_ tab: BrowserTab, _ inside: Bool) {
         if inside { tabUnderPointer = tab.id } else if tabUnderPointer == tab.id { tabUnderPointer = nil }
         Self.watchMiddleClicks()
+        wakeWhenPointedAt(tab, inside)
+    }
+
+    /// A sleeping tab starts waking as soon as you rest the pointer on it, so it's ready (or
+    /// nearly) by the time you click: tabs can sleep, and give their memory back, without you
+    /// ever waiting for one. Only after a short pause on it (passing over tabs wakes nothing),
+    /// never in Low Power Mode, and its sound and video stay paused until you switch to it.
+    private func wakeWhenPointedAt(_ tab: BrowserTab, _ inside: Bool) {
+        prewake?.cancel()
+        prewake = nil
+        guard inside, tab.isAsleep, tab.url != nil, tab !== selectedTab,
+              !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
+        let work = DispatchWorkItem { [weak self, weak tab] in
+            guard let self, let tab, self.tabUnderPointer == tab.id, tab.isAsleep, tab !== self.selectedTab else { return }
+            tab.wakeIfNeeded()
+            if !tab.isAsleep, tab !== self.selectedTab { tab.webView.setAllMediaPlaybackSuspended(true) }
+        }
+        prewake = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: work)
     }
 
     /// A middle-click (the scroll wheel pressed) on a tab closes it, as in other browsers. One

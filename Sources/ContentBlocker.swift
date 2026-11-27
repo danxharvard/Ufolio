@@ -295,6 +295,7 @@ final class ContentBlocker: ObservableObject {
         if CleanLinks.deAMPEnabled { controller.addUserScript(CleanLinks.deAMPScript) }
         if AutofillCenter.isEnabled { controller.addUserScript(AutofillCenter.script) }
         controller.addUserScript(HushlistLink.script)   // only does anything on hushlist.online
+        if Speed.prefetchOnHover { controller.addUserScript(Speed.prefetchSwitch) }
         controller.addUserScript(Speed.hoverScript)     // connects to a link's site as you point at it
         if let codecs = VideoCodecs.script { controller.addUserScript(codecs) }   // hardware-decoded YouTube
     }

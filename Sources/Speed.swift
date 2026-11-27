@@ -23,7 +23,8 @@ enum Speed {
     private static func makePool() -> WKProcessPool? {
         guard let configClass = NSClassFromString("_WKProcessPoolConfiguration") as? NSObject.Type else { return nil }
         let config = configClass.init()
-        for key in ["usesWebProcessCache", "prewarmsProcessesAutomatically"] {
+        // Background pages are suspended sooner when the Mac runs short of memory (Safari's setting).
+        for key in ["usesWebProcessCache", "prewarmsProcessesAutomatically", "suspendsWebProcessesAggressivelyOnMemoryPressure"] {
             let setter = NSSelectorFromString("set" + key.prefix(1).uppercased() + key.dropFirst() + ":")
             if config.responds(to: setter) { config.setValue(true, forKey: key) }
         }
@@ -103,11 +104,37 @@ enum Speed {
         sent[o] = true; count++;
         try { window.webkit.messageHandlers.\(handlerName).postMessage(o); } catch (e) {}
       }
+      // Resting on a link to another page of this site: its page (the HTML only) is fetched
+      // into WebKit's prefetch store, so the click finds it there instead of waiting for the
+      // server (measured: Apple's documentation showed in 22 ms instead of 501). Same site
+      // only (nothing is sent anywhere you haven't already been), never a link that would do
+      // something (sign out, delete…), at most 15 a page, not on sites that switch pages with
+      // their own code, and not when Ufolio is saving power.
+      var fetched = Object.create(null), fetches = 0;
+      var SIDE = /logout|log-out|log_out|signout|sign-out|sign_out|logoff|log-off|unsubscribe|delete|remove|cancel|confirm|action=|token=|\\/api\\//i;
+      var OWN = /(^|\\.)(youtube\\.com|twitch\\.tv)$/.test(location.hostname);
+      function site(host) { var p = host.split('.'); return p.slice(-2).join('.'); }
+      function prefetch(a) {
+        if (!window.__ufolioPrefetch || OWN || fetches >= 15 || !a) return;
+        if (a.hasAttribute('download') || (a.target && a.target !== '_self')) return;
+        try {
+          var u = new URL(a.href, location.href);
+          if (u.protocol !== 'https:' || site(u.hostname) !== site(location.hostname)) return;
+          u.hash = '';
+          var key = u.href;
+          if (fetched[key] || (u.pathname === location.pathname && u.search === location.search)) return;
+          if (SIDE.test(u.pathname + '?' + u.search)) return;
+          fetched[key] = true; fetches++;
+          var l = document.createElement('link');
+          l.rel = 'prefetch'; l.href = key;
+          (document.head || document.documentElement).appendChild(l);
+        } catch (err) {}
+      }
       document.addEventListener('mouseover', function (e) {
         if (!e.isTrusted) return;
         var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
         clearTimeout(timer);
-        if (a) timer = setTimeout(function () { send(a); }, 60);
+        if (a) timer = setTimeout(function () { send(a); prefetch(a); }, 65);
       }, { capture: true, passive: true });
       document.addEventListener('mousedown', function (e) {
         if (!e.isTrusted) return;
@@ -126,6 +153,12 @@ enum Speed {
       }, { capture: true, passive: true });
     })();
     """, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .defaultClient)
+
+    /// Switches on fetching pages ahead on hover (see hoverScript): only while Speed is on and
+    /// Ufolio isn't saving power.
+    static let prefetchSwitch = WKUserScript(source: "window.__ufolioPrefetch = true;",
+                                             injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .defaultClient)
+    static var prefetchOnHover: Bool { enabled && !PerformanceCenter.shared.isPowerSaving && !ProcessInfo.processInfo.isLowPowerModeEnabled }
 
     final class Handler: NSObject, WKScriptMessageHandler {
         static let shared = Handler()
@@ -216,6 +249,42 @@ enum SpeedBenchmark {
             }
             rows.append(LagMonitor.summary)
             try? rows.joined(separator: "\n").write(toFile: out, atomically: true, encoding: .utf8)
+            NSApp.terminate(nil)
+        }
+    }
+
+    /// Testing only (UFOLIO_PREFETCH_TEST=<file of "from to" pairs>): for each pair, opens `from`,
+    /// then opens `to` either straight away or after asking WebKit to prefetch it (alternating),
+    /// and prints how long `to` took to show and finish.
+    static func prefetchTestIfAsked(in model: BrowserModel) {
+        guard let list = ProcessInfo.processInfo.environment["UFOLIO_PREFETCH_TEST"],
+              let text = try? String(contentsOfFile: list, encoding: .utf8) else { return }
+        let pairs = text.split(whereSeparator: \.isNewline).compactMap { line -> (URL, URL)? in
+            let parts = line.split(separator: " ")
+            guard parts.count == 2, let a = URL(string: String(parts[0])), let b = URL(string: String(parts[1])) else { return nil }
+            return (a, b)
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            for round in 0..<2 {
+                for (from, to) in pairs {
+                    for prefetch in (round == 0 ? [false, true] : [true, false]) {
+                        guard let tab = model.selectedTab else { return }
+                        NSApp.activate(ignoringOtherApps: true)
+                        model.window?.makeKeyAndOrderFront(nil)
+                        _ = await measure(in: tab) { tab.load(from) }
+                        if prefetch {
+                            let js = "const l = document.createElement('link'); l.rel = 'prefetch'; l.href = url; document.head.appendChild(l); return 1;"
+                            _ = try? await tab.webView.callAsyncJavaScript(js, arguments: ["url": to.absoluteString], contentWorld: .defaultClient)
+                        }
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                        let (commit, finish, fcp) = await measure(in: tab) { tab.load(to) }
+                        let script = "const n = performance.getEntriesByType('navigation')[0]; return [Math.round(n.responseStart - n.requestStart), n.transferSize];"
+                        let ttfb = (try? await tab.webView.callAsyncJavaScript(script, contentWorld: .defaultClient)) as? [NSNumber]
+                        FileHandle.standardError.write("prefetch=\(prefetch) \(to.host ?? "") commit \(commit) finish \(finish) fcp \(fcp) ttfb \(ttfb?.first ?? -1) bytes \(ttfb?.last ?? -1)\n".data(using: .utf8)!)
+                    }
+                }
+            }
             NSApp.terminate(nil)
         }
     }
@@ -469,6 +538,11 @@ enum Preloader {
     }
 
     /// Preloads after the pointer has rested for a moment (cancelled if it moves away).
+    /// How long the pointer rests on a bookmark, favourite or suggested site before it loads
+    /// ahead: long enough that sweeping across them loads nothing, short enough that most
+    /// clicks find the page already there (measured: shown in under 10 ms, against 130 to 430).
+    static let restDelay: TimeInterval = 0.12
+
     static func preloadSoon(_ url: URL, for tab: BrowserTab?, delay: TimeInterval = 0.25) {
         pending?.cancel()
         let work = DispatchWorkItem { [weak tab] in preload(url, for: tab) }

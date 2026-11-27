@@ -458,7 +458,7 @@ private struct BookmarkChip: View {
             hovering = inside
             if inside {
                 Speed.preconnect(bookmark.url, in: model.selectedTab?.webView)
-                Preloader.preloadSoon(bookmark.url, for: model.selectedTab)   // rested on it: load it
+                Preloader.preloadSoon(bookmark.url, for: model.selectedTab, delay: Preloader.restDelay)   // rested on it: load it
             } else { Preloader.cancelSoon() }
         }
         .animation(.snappy(duration: 0.16), value: hovering)
