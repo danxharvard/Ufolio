@@ -99,7 +99,12 @@ struct BrowserWindow: View {
             if (note.object as? NSWindow) === model.window { TrafficLights.align(in: model.window) }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { note in
-            if (note.object as? NSWindow) === model.window { ExtensionEvents.windowClosed(model) }
+            if (note.object as? NSWindow) === model.window {
+                ExtensionEvents.windowClosed(model)
+                // Questions still waiting (a site asking for the camera, say) are answered "no" as the
+                // window goes: nothing would ever answer them, and the page was left waiting.
+                model.dialogs.cancelAll()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { note in
             if (note.object as? NSWindow) === model.window { isFullScreen = true }
