@@ -249,6 +249,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         self.model = model
         isPrivate = model.isPrivate
         super.init()
+        if ChaosTest.on { ChaosTest.everyTab.add(self) }   // testing only
         if waiting {
             waitingStore = store ?? model.dataStore
         } else {

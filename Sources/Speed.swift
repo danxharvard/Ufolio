@@ -811,6 +811,68 @@ enum SwitchTest {
     }
 }
 
+/// Testing only (UFOLIO_CHAOS=<seconds>): random rapid actions (open, close, switch, sleep,
+/// wake, previews, Split View, Back/Forward, reload, pointing at tabs) to shake out crashes,
+/// hangs and leaks. Prints what it did, the window's longest stalls and what's left alive.
+enum ChaosTest {
+    static let on = ProcessInfo.processInfo.environment["UFOLIO_CHAOS"] != nil
+    /// Every tab made during the test (weakly), to describe any that outlive being closed.
+    static let everyTab = NSHashTable<BrowserTab>.weakObjects()
+
+    static func startIfAsked(in model: BrowserModel) {
+        guard let text = ProcessInfo.processInfo.environment["UFOLIO_CHAOS"], let seconds = Double(text) else { return }
+        let sites = ["https://en.wikipedia.org/wiki/Mars", "https://www.bbc.co.uk/news", "https://example.com",
+                     "https://github.com/apple", "https://news.ycombinator.com", "https://www.theverge.com",
+                     "https://developer.apple.com/documentation", "https://www.youtube.com"].compactMap(URL.init(string:))
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            LagMonitor.start()
+            var rng = SystemRandomNumberGenerator()
+            var counts: [String: Int] = [:]
+            let end = Date().addingTimeInterval(seconds)
+            while Date() < end {
+                let tabs = model.tabs
+                let any = tabs.randomElement(using: &rng)
+                let action = Int.random(in: 0..<14, using: &rng)
+                switch action {
+                case 0, 1: model.newTab(url: sites.randomElement(using: &rng), select: Bool.random(using: &rng)); counts["open", default: 0] += 1
+                case 2: if tabs.count > 2, let t = any { model.close(t) }; counts["close", default: 0] += 1
+                case 3, 4: if let t = any { model.selectedID = t.id }; counts["switch", default: 0] += 1
+                case 5: if let t = any, t !== model.selectedTab { t.sleep(force: true) }; counts["sleep", default: 0] += 1
+                case 6: if let t = any { model.pointerOverTab(t, true) }; counts["point", default: 0] += 1
+                case 7: if let from = model.selectedTab { model.showPreview(sites.randomElement(using: &rng)!, from: from) }; counts["preview", default: 0] += 1
+                case 8: model.closePreview(); counts["closePreview", default: 0] += 1
+                case 9: if model.splitPair == nil, let t = any, t !== model.selectedTab { model.openSplit(with: t) } else { model.closeSplit() }; counts["split", default: 0] += 1
+                case 10: model.selectedTab?.goBack(); counts["back", default: 0] += 1
+                case 11: model.selectedTab?.goForward(); counts["forward", default: 0] += 1
+                case 12: model.selectedTab?.reload(); counts["reload", default: 0] += 1
+                default: model.selectedTab?.load(sites.randomElement(using: &rng)!); counts["navigate", default: 0] += 1
+                }
+                try? await Task.sleep(nanoseconds: UInt64.random(in: 20_000_000...350_000_000, using: &rng))
+            }
+            model.closePreview(); model.closeSplit()
+            let keep = model.selectedTab
+            for t in model.tabs where t !== keep { model.close(t, remember: false) }
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            let c = LiveCount.now
+            let done = counts.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", ")
+            FileHandle.standardError.write("chaos: \(done)\nchaos: \(LagMonitor.summary)\nchaos: left alive after 8 s: tabs \(c.tabs), webViews \(c.webViews)\n".data(using: .utf8)!)
+            try? await Task.sleep(nanoseconds: 32_000_000_000)
+            let later = LiveCount.now
+            FileHandle.standardError.write("chaos: after 40 s: tabs \(later.tabs), webViews \(later.webViews), in list \(model.tabs.count), preview \(model.preview != nil)\n".data(using: .utf8)!)
+            for t in everyTab.allObjects where !model.tabs.contains(where: { $0 === t }) {
+                let blockers = (t.hasPageView ? (t.webView as? HushWebView)?.ignoresBlockers : nil) ?? false
+                FileHandle.standardError.write("chaos: survivor \(t.url?.absoluteString ?? "-") asleep \(t.isAsleep) pageView \(t.hasPageView) previewFlag \(blockers) inWindow \(t.hasPageView && t.webView.window != nil) model \(t.model != nil) at \(Unmanaged.passUnretained(t).toOpaque())\n".data(using: .utf8)!)
+            }
+            // UFOLIO_CHAOS_HOLD=<seconds>: stay open afterwards (to inspect with heap/leaks).
+            if let hold = ProcessInfo.processInfo.environment["UFOLIO_CHAOS_HOLD"].flatMap(Double.init) {
+                try? await Task.sleep(nanoseconds: UInt64(hold * 1_000_000_000))
+            }
+            NSApp.terminate(nil)
+        }
+    }
+}
+
 /// Testing only (UFOLIO_EVAL_URL=<page>, UFOLIO_EVAL_JS=<script returning a value>): loads the
 /// page, waits, prints what the script returns, and quits.
 enum EvalTest {
