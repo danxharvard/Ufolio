@@ -21,19 +21,21 @@ enum Beam {
         filter.message = Data(url.absoluteString.utf8)
         filter.correctionLevel = "M"
         guard let output = filter.outputImage else { return nil }
-        let scale = (size * 2) / output.extent.width
-        let scaled = output.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        let rep = NSCIImageRep(ciImage: scaled)
-        let image = NSImage(size: NSSize(width: size, height: size))
-        image.addRepresentation(rep)
-        return image
+        // Drawn once into a plain bitmap, one pixel per module (it's shown without smoothing):
+        // a Core Image picture was redrawn by Core Image every time the card repainted.
+        guard let cg = context.createCGImage(output, from: output.extent) else { return nil }
+        return NSImage(cgImage: cg, size: NSSize(width: size, height: size))
     }
+    private static let context = CIContext(options: [.useSoftwareRenderer: false, .cacheIntermediates: false])
 }
 
 private struct BeamCard: View {
     let url: URL
     @State private var qr: NSImage?
     @State private var tooLong = false
+    /// Looked up once when the card opens (it was asked again every time the card redrew).
+    @State private var airDrop = NSSharingService(named: .sendViaAirDrop)
+    @State private var canAirDrop = false
 
     var body: some View {
         VStack(spacing: 12) {
@@ -56,19 +58,22 @@ private struct BeamCard: View {
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 10) {
                 // Greyed out when AirDrop is off or unavailable (the button used to do nothing).
-                let airDrop = NSSharingService(named: .sendViaAirDrop)
                 Button {
                     airDrop?.perform(withItems: [url])
                 } label: { Label("AirDrop", systemImage: "airplayaudio") }
-                .disabled(!(airDrop?.canPerform(withItems: [url]) ?? false))
+                .disabled(!canAirDrop)
                 ShareButton(url: url)
             }
             .controlSize(.large)
         }
         .padding(.top, 8)
         .task {
-            qr = Beam.qrCode(for: url, size: 168)
-            tooLong = qr == nil
+            canAirDrop = airDrop?.canPerform(withItems: [url]) ?? false
+            // Made away from the main thread, so the card opens at once.
+            let address = url
+            let image = await Task.detached(priority: .userInitiated) { Beam.qrCode(for: address, size: 168) }.value
+            qr = image
+            tooLong = image == nil
         }
     }
 }
