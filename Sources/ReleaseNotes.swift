@@ -63,7 +63,9 @@ struct ReleaseNotes {
             } else if !line.isEmpty, raw.hasPrefix("  "), !items.isEmpty {
                 items[items.count - 1] += " " + line   // a bullet continued on the next line
             } else if !line.isEmpty {
-                if items.isEmpty && sections.isEmpty { intro.append(line) } else { items.append(line) }
+                // A plain sentence, not a change ("Everything in 0.51.7 is in this beta too."): it
+                // used to be listed as one more bullet point.
+                intro.append(line)
             }
         }
         closeVersion()
