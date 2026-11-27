@@ -59,7 +59,9 @@ final class UpdateGate: ObservableObject {
         request.setValue("Ufolio", forHTTPHeaderField: "User-Agent")
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               (response as? HTTPURLResponse).map({ $0.statusCode == 200 }) ?? true, data.count < 10_000,
-              let (sigData, _) = try? await URLSession.shared.data(from: Self.source.appendingPathExtension("sig")),
+              // The signature is fetched fresh too: a cached older one wouldn't match a new file.
+              let (sigData, _) = try? await URLSession.shared.data(for: URLRequest(url: Self.source.appendingPathExtension("sig"),
+                  cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)),
               let sig = Data(base64Encoded: String(decoding: sigData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)),
               Updater.isSigned(Self.signingPrefix + data, signature: sig) else { return }   // can't tell: let them in
         let decoder = JSONDecoder()
