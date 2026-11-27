@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.52.0-beta.13: smoother tabs (beta)
+
+- Fixed the window pausing for a moment when several tabs went to sleep at once.
+- Bug fixes and stability improvements.
+
 ## 0.52.0-beta.12: pages before you click (beta)
 
 - **Pages before you click:** point at a link and Ufolio fetches the page, so it opens almost instantly.
