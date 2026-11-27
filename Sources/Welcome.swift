@@ -36,7 +36,7 @@ enum LaunchPrompts {
         UserDefaults.standard.set(current, forKey: "lastSeenVersion")
         if !Prefs.bool(Prefs.hasOnboarded) { return .welcome }
         // First launch after an update: show what's new (once).
-        if lastSeen != current, let notes = ReleaseNotes.bundled.notes(for: current), !notes.sections.isEmpty {
+        if lastSeen != current, let notes = ReleaseNotes.bundled.notes(since: lastSeen, upTo: current), !notes.sections.isEmpty {
             return .whatsNew(notes)
         }
         let snoozed = (UserDefaults.standard.object(forKey: "defaultBannerSnoozedUntil") as? Date).map { $0 > Date() } ?? false
