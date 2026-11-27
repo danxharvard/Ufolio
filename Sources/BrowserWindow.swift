@@ -460,6 +460,7 @@ private struct MorePanel: View {
     let close: () -> Void
     @Environment(\.openWindow) private var openWindow
     @AppStorage(Prefs.tabLayout) private var tabLayout = TabLayout.top.rawValue
+    @AppStorage(Prefs.compactMode) private var compactMode = false
     @State private var zoomRevision = 0
 
     var body: some View {
@@ -499,6 +500,8 @@ private struct MorePanel: View {
                     tabLayout == TabLayout.side.rawValue ? "Tabs Along the Top" : "Tabs Down the Side") {
                     tabLayout = (tabLayout == TabLayout.side.rawValue ? TabLayout.top : TabLayout.side).rawValue
                 }
+                row(compactMode ? "arrow.up.left.and.arrow.down.right" : "arrow.down.right.and.arrow.up.left",
+                    compactMode ? "Leave Compact Mode" : "Compact Mode", .compactMode) { CompactMode.toggle() }
                 row("gearshape", "Settings", shortcutText: "⌘,") { SettingsOpener.open() }
                 row("questionmark.circle", "Help and Feedback", chevron: true) {
                     NSWorkspace.shared.open(URL(string: "https://github.com/danxharvard/Ufolio")!)
