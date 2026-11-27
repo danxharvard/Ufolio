@@ -4,17 +4,22 @@ import AVFoundation
 /// 60s–80s sci-fi. It's made from scratch here (no sound file), plays quietly once at launch,
 /// and can be turned off in Settings › Appearance.
 enum LaunchSound {
-    private static var engine: AVAudioEngine?
+    /// Everything to do with the audio engine happens on this queue: starting one up takes the
+    /// Mac a moment (about a fifth of a second here), and on the main thread that held up the
+    /// first window at every launch.
+    private static let queue = DispatchQueue(label: "ufolio.launchsound", qos: .userInitiated)
+    private static var engine: AVAudioEngine?   // only touched on `queue`
 
     static func playIfWanted() {
         guard Prefs.bool(Prefs.launchSound) else { return }
-        DispatchQueue.global(qos: .userInitiated).async {
+        queue.async {
             guard let buffer = makeBuffer() else { return }
-            DispatchQueue.main.async { play(buffer) }
+            play(buffer)
         }
     }
 
     private static func play(_ buffer: AVAudioPCMBuffer) {
+        dispatchPrecondition(condition: .onQueue(queue))
         let engine = AVAudioEngine()
         let player = AVAudioPlayerNode()
         engine.attach(player)
@@ -27,7 +32,7 @@ enum LaunchSound {
             // Let go of the audio engine once it's finished (nothing keeps running).
             // Only this play's engine: pressing Play again in Settings started a new one, which
             // the first play's ending then stopped, cutting the second sound short.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            queue.asyncAfter(deadline: .now() + 0.3) {
                 engine.stop()
                 if self.engine === engine { self.engine = nil }
             }
