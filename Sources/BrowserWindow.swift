@@ -137,6 +137,7 @@ struct BrowserWindow: View {
                 }
                 .transition(.opacity)
             }
+            UpdateGateOverlay()   // over everything: a version too old to keep using
         }
         .animation(.smooth(duration: 0.26), value: showWelcome)
         .animation(.smooth(duration: 0.26), value: whatsNew?.version)
@@ -212,6 +213,7 @@ struct BrowserWindow: View {
                         }
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
+                    UpdateGateBanner()
                     FindBarHost(model: model)
                 }
             .background(tint?.toolbar ?? Chrome.toolbar)
@@ -291,6 +293,7 @@ struct BrowserWindow: View {
                     }
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
+                UpdateGateBanner()
                 FindBarHost(model: model)
                 TranslationHost()
                 SelectedTab(model: model) { tab in WebStoreBar(tab: tab) }
