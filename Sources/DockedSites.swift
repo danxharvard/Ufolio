@@ -60,6 +60,8 @@ extension BrowserModel {
         if dockOpen == site.id { dockOpen = nil; return }
         if dockTabs[site.id] == nil {
             let tab = BrowserTab(model: self, store: currentStore)
+            // In this Orbit's profile: its sign-ins, and its history (not the default profile's).
+            tab.spaceID = spaceID
             tab.load(site.url)
             dockTabs[site.id] = tab
         }
@@ -88,6 +90,19 @@ extension BrowserModel {
             tab.tearDown()
             dockTabs[id] = nil
         }
+    }
+
+    /// Switching to an Orbit with another profile (or an Orbit's profile changing): docked pages signed in under the old profile
+    /// let go (they load again, in the new profile, when you next open them). A docked chat
+    /// used to stay signed in to the other profile's account.
+    func releaseDocksFromOtherProfiles() {
+        for (id, tab) in dockTabs where tab.webView.configuration.websiteDataStore !== currentStore {
+            if dockOpen == id { dockOpen = nil }
+            tab.tearDown()
+            dockTabs[id] = nil
+        }
+        // Their history goes to this Orbit's profile from now on.
+        for tab in dockTabs.values { tab.spaceID = spaceID }
     }
 
     /// Docks the page in a tab and opens its panel.

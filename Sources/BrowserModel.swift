@@ -103,6 +103,7 @@ final class BrowserModel: NSObject, ObservableObject {
         if let current = selectedID { lastSelected[spaceID] = current }
         if splitPair != nil { splitPair = nil }
         spaceID = id
+        releaseDocksFromOtherProfiles()
         let mine = visibleTabs
         if let remembered = lastSelected[id], mine.contains(where: { $0.id == remembered }) {
             selectedID = remembered
@@ -161,6 +162,7 @@ final class BrowserModel: NSObject, ObservableObject {
             if let url = tab.url { if wasSelected { copy.load(url) } else { copy.restoreLazily(url) } }
             if wasSelected { selectedID = copy.id }
         }
+        releaseDocksFromOtherProfiles()
         scheduleSessionSave()
     }
 
@@ -197,6 +199,7 @@ final class BrowserModel: NSObject, ObservableObject {
             }
             selectedTab?.wakeIfNeeded()
         }
+        releaseDocksFromOtherProfiles()
         objectWillChange.send()
         scheduleSessionSave()
     }
