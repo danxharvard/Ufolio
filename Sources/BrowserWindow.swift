@@ -442,19 +442,12 @@ struct BrowserWindow: View {
 struct MoreMenuButton: View {
     let model: BrowserModel   // only handed to the panel (which watches it while open)
     @State private var showing = false
-    @State private var hovering = false
 
     var body: some View {
         Button { showing.toggle() } label: {
-            Image(systemName: "ellipsis.circle")
-                .font(ToolbarIcon.font)
-                .foregroundStyle(ToolbarIcon.color)
-                .frame(width: ToolbarIcon.button.width, height: ToolbarIcon.button.height)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(hovering || showing ? 0.08 : 0)))
-                .contentShape(Rectangle())
+            ToolbarBadge(topSymbol: "ellipsis", bottom: "MORE", pressed: showing)
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
         .help("More: zoom, print, history, settings and more")
         .popover(isPresented: $showing, arrowEdge: .bottom) {
             MorePanel(model: model) { showing = false }
@@ -746,6 +739,56 @@ enum ToolbarIcon {
     static let button = CGSize(width: 30, height: 26)
 }
 
+/// The toolbar's main buttons (Downloads, AD BLOCKING, GO STEALTH, MORE): one size and one
+/// shape for all of them, an outlined box with a bold word over a small one, so each says what
+/// it does and they read as a set.
+struct ToolbarBadge: View {
+    var top: String = ""
+    /// A symbol in place of the top word (the arrow for Downloads, ••• for More).
+    var topSymbol: String? = nil
+    let bottom: String
+    var color: Color = ToolbarIcon.color
+    /// Outlined in its own colour (AD BLOCKING while it's on) rather than the usual grey.
+    var tinted = false
+    var pressed = false
+    @State private var hovering = false
+
+    static let size = CGSize(width: 50, height: 24)
+
+    var body: some View {
+        VStack(spacing: -1) {
+            Group {
+                if let topSymbol {
+                    Image(systemName: topSymbol).font(.system(size: 9.5, weight: .bold)).frame(height: 12)
+                } else {
+                    Text(top).font(.system(size: 10, weight: .heavy))
+                }
+            }
+            Text(bottom).font(.system(size: 6.5, weight: .heavy)).tracking(0.2)
+                .lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .foregroundStyle(color)
+        .frame(width: Self.size.width, height: Self.size.height)
+        .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(Color.primary.opacity(hovering || pressed ? 0.08 : 0)))
+        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .strokeBorder(tinted ? color.opacity(0.7) : Color.primary.opacity(0.28), lineWidth: 1.1))
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .animation(.snappy(duration: 0.16), value: hovering)
+        .padding(.horizontal, 2)
+    }
+}
+
+/// Force Field's green: the AD BLOCKING badge while it's protecting the page.
+enum ForceFieldColor {
+    static let on = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(red: 0.36, green: 0.85, blue: 0.48, alpha: 1)
+            : NSColor(red: 0.13, green: 0.58, blue: 0.27, alpha: 1)
+    })
+}
+
 struct ToolbarIconButton: View {
     let symbol: String
     let help: String
@@ -789,28 +832,20 @@ struct ShieldsButton: View {
         return !blocker.isShieldsDown(host)
     }
 
-    @State private var hovering = false
     @State private var pulse = false
     @State private var lastPulse = Date.distantPast
     @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
 
     var body: some View {
         Button { showing.toggle() } label: {
-            // A shield, which everyone reads as "protection": ticked and in colour while Force
-            // Field is on, crossed out and grey when it's off for this site.
-            Image(systemName: shieldsUp ? "checkmark.shield" : "shield.slash")
-                .font(ToolbarIcon.shieldFont)
-                .foregroundStyle(shieldsUp ? Color.accentColor : ToolbarIcon.color)
-                .scaleEffect(pulse ? 1.18 : 1)
-                .frame(width: ToolbarIcon.button.width, height: ToolbarIcon.button.height)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color.primary.opacity(hovering ? 0.08 : 0)))
-                .contentShape(Rectangle())
+            // Says what it does: AD BLOCKING, in green, while Force Field protects this site;
+            // ADS ALLOWED, in grey, when it's off for it.
+            ToolbarBadge(top: shieldsUp ? "AD" : "ADS", bottom: shieldsUp ? "BLOCKING" : "ALLOWED",
+                         color: shieldsUp ? ForceFieldColor.on : ToolbarIcon.color, tinted: shieldsUp, pressed: showing)
+                .scaleEffect(pulse ? 1.08 : 1)
         }
         .buttonStyle(.plain)
         .help(shieldsUp ? "Force Field: blocking ads and trackers on this site" : "Force Field is off for this site")
-        .onHover { hovering = $0 }
-        .animation(.snappy(duration: 0.16), value: hovering)
         // A tiny "hush" pulse when something is blocked (at most once a second).
         .onChange(of: tab.blockedOnPage) { _, count in
             guard count > 0, !reduceMotion, Date().timeIntervalSince(lastPulse) > 1 else { return }
@@ -827,8 +862,8 @@ struct ShieldsButton: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 3.5)
                     .frame(minWidth: 13, minHeight: 13)
-                    .background(Capsule().fill(Color.accentColor))
-                    .offset(x: 3, y: -1)
+                    .background(Capsule().fill(ForceFieldColor.on))
+                    .offset(x: 2, y: -6)
                     .allowsHitTesting(false)
                     .transition(.scale.combined(with: .opacity))
             }

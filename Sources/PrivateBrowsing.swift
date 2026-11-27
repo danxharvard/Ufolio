@@ -15,18 +15,12 @@ enum PrivateChrome {
 struct PrivateWindowButton: View {
     let isPrivate: Bool
     @Environment(\.openWindow) private var openWindow
-    @State private var hovering = false
 
     var body: some View {
         Button { openWindow(id: "private") } label: {
-            StealthIcon(color: isPrivate ? PrivateChrome.lavender : ToolbarIcon.color)
-                .frame(width: ToolbarIcon.button.width, height: ToolbarIcon.button.height)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color.primary.opacity(hovering ? 0.08 : 0)))
-                .contentShape(Rectangle())
+            ToolbarBadge(top: "GO", bottom: "STEALTH", color: isPrivate ? PrivateChrome.lavender : ToolbarIcon.color)
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
         .help("New Stealth Window: browse without saving history (⇧⌘N)")
     }
 }

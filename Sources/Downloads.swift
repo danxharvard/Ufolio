@@ -435,10 +435,14 @@ struct DownloadsButton: View {
 
     var body: some View {
         if !downloads.items.isEmpty {
-            ToolbarIconButton(symbol: "arrow.down.circle", help: "Downloads") { showing.toggle() }
-                .overlay {
+            Button { showing.toggle() } label: {
+                ToolbarBadge(topSymbol: "arrow.down", bottom: "DOWNLOADS", pressed: showing)
+            }
+            .buttonStyle(.plain)
+            .help("Downloads")
+                .overlay(alignment: .bottom) {
                     if downloads.activeCount > 0 {
-                        ActiveRing(items: downloads.items.filter { $0.state == .downloading })
+                        ActiveBar(items: downloads.items.filter { $0.state == .downloading })
                             .allowsHitTesting(false)
                     }
                 }
@@ -448,18 +452,20 @@ struct DownloadsButton: View {
     }
 }
 
-private struct ActiveRing: View {
+/// How far the downloads have got: a thin bar along the bottom of the DOWNLOADS badge.
+private struct ActiveBar: View {
     let items: [DownloadItem]
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.25)) { _ in
             let progress = items.isEmpty ? 0 : items.map(\.progress).reduce(0, +) / Double(items.count)
-            Circle()
-                .trim(from: 0, to: max(0.03, progress))
-                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .frame(width: 21, height: 21)
-                .animation(.smooth(duration: 0.26), value: progress)
+            GeometryReader { geo in
+                Capsule().fill(Color.accentColor)
+                    .frame(width: max(4, (geo.size.width) * progress), height: 2)
+                    .animation(.smooth(duration: 0.26), value: progress)
+            }
+            .frame(width: ToolbarBadge.size.width - 10, height: 2)
+            .padding(.bottom, 3)
         }
     }
 }
