@@ -429,7 +429,7 @@ struct SpacesSettings: View {
                         .disabled(store.profiles.count >= SpaceStore.maxProfiles)
                 }
             } header: { SectionTitle("Profiles") } footer: {
-                Footnote("A profile has its own cookies, sign-ins, site data and cache. History, bookmarks and passwords are shared. Deleting a profile erases its website data.")
+                Footnote("A profile has its own cookies, sign-ins, site data, cache, history and bookmarks. Passwords are shared. Deleting a profile erases its website data, history and bookmarks.")
             }
         }
         .formStyle(SafariFormStyle())
@@ -444,7 +444,7 @@ struct SpacesSettings: View {
         DialogHost.settings.present(HushDialog(
             art: .symbol("person.crop.circle.badge.minus"), theme: .danger, motion: .drift,
             title: "Delete “\(profile.name)”?",
-            message: "Signs you out of every site in this profile and erases its website data. Orbits using it switch to the default profile.",
+            message: "Signs you out of every site in this profile and erases its website data, history and bookmarks. Orbits using it switch to the default profile.",
             choices: [.init(title: "Cancel", role: .cancel), .init(title: "Delete", role: .destructive)],
             completion: { choice, _ in if choice == 1 { store.removeProfile(profile.id) } }))
     }
