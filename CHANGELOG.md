@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.52.0-beta.10: smoother YouTube, faster launch (beta)
+
+- **Smoother YouTube:** on Macs that can't decode VP9 video in hardware, YouTube now plays in a format the graphics chip decodes, so it uses less power and runs cooler.
+- **Faster launch:** with lots of tabs from last time, Ufolio opens much sooner and uses less memory.
+- Fixed tabs in a minimised window going missing after a restart.
+- Bug fixes and stability improvements.
+
 ## 0.52.0-beta.9: Link preview, Compact mode and Docked sites (beta)
 
 - **Link preview:** ⌥-click a link to peek at it in a floating card, without leaving your page.
