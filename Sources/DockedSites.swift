@@ -102,19 +102,26 @@ struct DockArea: View {
     @ObservedObject var model: BrowserModel
     @ObservedObject private var store = DockedSites.shared
     @AppStorage("dock.wide") private var wide = false
+    /// The window's width, so a panel never takes more than 40% of it (a narrow window's page
+    /// was squeezed to almost nothing).
+    @State private var windowWidth: CGFloat = 1400
 
     var body: some View {
         if !model.isPrivate && !store.sites.isEmpty {
             HStack(spacing: 6) {
                 if let id = model.dockOpen, let site = store.sites.first(where: { $0.id == id }), let tab = model.dockTabs[id] {
                     DockPanel(model: model, site: site, tab: tab, wide: $wide)
-                        .frame(width: wide ? 560 : 390)
+                        .frame(width: min(wide ? 560 : 390, max(260, windowWidth * 0.4)))
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
                 DockRail(model: model, sites: store.sites)
             }
             .padding(.leading, 6)
             .animation(.spring(response: 0.3, dampingFraction: 0.88), value: model.dockOpen)
+            .onAppear { windowWidth = model.window?.frame.width ?? windowWidth }
+            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResizeNotification)) { note in
+                if let window = note.object as? NSWindow, window === model.window { windowWidth = window.frame.width }
+            }
         }
     }
 }
