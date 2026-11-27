@@ -210,6 +210,9 @@ final class BrowserModel: NSObject, ObservableObject {
     @Published var addressFocusToken = 0
     /// The window showing this model (set by the view once it's on screen).
     weak var window: NSWindow?
+    /// Set as its window closes (the model can linger a moment after): its tabs are no longer
+    /// part of the session.
+    var windowClosed = false
 
     static let all = NSHashTable<BrowserModel>.weakObjects()
 
@@ -481,7 +484,12 @@ final class BrowserModel: NSObject, ObservableObject {
             let pinned = self.tabs.filter { $0.url != nil && $0.isPinned }
             // Every open window's tabs, this one's first: each window used to overwrite the
             // others', so with two windows open only one window's tabs came back next launch.
-            let others = BrowserModel.all.allObjects.filter { $0 !== self && !$0.isPrivate && ($0.window?.isVisible ?? false) }
+            // Minimised windows, and windows while Ufolio is hidden (⌘H), count too: they aren't
+            // "visible", so their tabs used to be left out and were gone at the next launch.
+            let others = BrowserModel.all.allObjects.filter { model in
+                guard model !== self, !model.isPrivate, !model.windowClosed, let window = model.window else { return false }
+                return window.isVisible || window.isMiniaturized || NSApp.isHidden
+            }
             let saved = ([self] + others).flatMap { model in model.tabs.filter { $0.url != nil && !(model !== self && $0.isPinned) } }
             let d = UserDefaults.standard
             d.set(pinned.compactMap { $0.url?.absoluteString }, forKey: "pinnedTabs")
