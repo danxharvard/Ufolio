@@ -305,7 +305,7 @@ struct BrowserWindow: View {
         // Compact mode: the tabs and toolbar come back over the page from the top edge.
         .overlay(alignment: .top) {
             if compact {
-                CompactReveal(edge: .top, revealed: $revealTop, keepOpen: { editingAddress }) {
+                CompactReveal(edge: .top, revealed: $revealTop, keepOpen: { editingAddress || CompactMode.chromeInUse(model.window) }) {
                     topChrome
                         .background(windowGlass)
                         .shadow(color: .black.opacity(0.18), radius: 14, y: 5)
@@ -372,7 +372,7 @@ struct BrowserWindow: View {
         // Compact mode: the tab column comes back over the page from the left edge.
         .overlay(alignment: .leading) {
             if compact {
-                CompactReveal(edge: .leading, revealed: $revealSide, keepOpen: { editingAddress }) {
+                CompactReveal(edge: .leading, revealed: $revealSide, keepOpen: { editingAddress || CompactMode.chromeInUse(model.window) }) {
                     sideColumn
                         .background(windowGlass)
                         .shadow(color: .black.opacity(0.18), radius: 14, x: 5)

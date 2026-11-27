@@ -8,9 +8,26 @@ enum CompactMode {
     static var isOn: Bool { Prefs.bool(Prefs.compactMode) }
 
     static func toggle() {
+        watchMenus()
         FeatureUsage.mark(.compact)
         UserDefaults.standard.set(!isOn, forKey: Prefs.compactMode)
     }
+
+    /// Something opened from the hidden chrome is still in use (a popover such as MORE or
+    /// AD BLOCKING, or a menu): it stays showing, or the popover vanished with it the moment the
+    /// pointer moved down into it.
+    static func chromeInUse(_ window: NSWindow?) -> Bool {
+        if menuOpen { return true }
+        return window?.childWindows?.contains { $0.isVisible } ?? false
+    }
+
+    private static var menuOpen = false
+    private static let menuWatch: [NSObjectProtocol] = {
+        let center = NotificationCenter.default
+        return [center.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: .main) { _ in menuOpen = true },
+                center.addObserver(forName: NSMenu.didEndTrackingNotification, object: nil, queue: .main) { _ in menuOpen = false }]
+    }()
+    static func watchMenus() { _ = menuWatch }
 
     /// The window buttons sit over the page in Compact mode: shown only with the tabs.
     static func showWindowButtons(_ show: Bool, in window: NSWindow?) {
@@ -52,6 +69,7 @@ struct CompactReveal<Content: View>: View {
             }
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.9), value: revealed)
+        .onAppear { CompactMode.watchMenus() }   // (also when Ufolio opens already in Compact mode)
     }
 
     private func show() {
