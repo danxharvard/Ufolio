@@ -48,7 +48,9 @@ private struct LinkPreviewCard: View {
         .onAppear {
             // Esc closes it (the page inside has the keyboard, so it's watched for here).
             escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                guard event.keyCode == 53, event.window === model.window, model.preview === tab else { return event }
+                guard event.keyCode == 53, event.window === model.window, model.preview === tab,
+                      // Esc while typing in the address bar (or any field) is for that field.
+                      !(event.window?.firstResponder is NSTextView) else { return event }
                 model.closePreview()
                 return nil
             }
