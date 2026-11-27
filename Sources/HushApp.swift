@@ -115,6 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 45) { PerformanceCenter.tidyDisk() }
         ContentBlocker.shared.prepare()
         ContentBlocker.shared.startListUpdates()
+        YouTubeAds.startUpdates()
         ExtensionEvents.launch()
         PerformanceCenter.shared.start()
         Updater.shared.start()

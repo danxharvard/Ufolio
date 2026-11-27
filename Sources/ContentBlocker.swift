@@ -182,7 +182,8 @@ final class ContentBlocker: ObservableObject {
         HushlistLink.shared.sync(controller, host: host)
         let shields = ShieldSettings.shared
         if old.map(isShieldsDown) != host.map(isShieldsDown) || old == nil || shields.effective(for: old) != shields.effective(for: host)
-            || old.map(isInsecureAllowed) != host.map(isInsecureAllowed) {
+            || old.map(isInsecureAllowed) != host.map(isInsecureAllowed)
+            || YouTubeAds.applies(to: old) != YouTubeAds.applies(to: host) {
             configure(controller)
         }
     }
@@ -254,6 +255,7 @@ final class ContentBlocker: ObservableObject {
                     "deamp": CleanLinks.deAMPScript, "autofill": AutofillCenter.script,
                     "hushlist": HushlistLink.script, "hover": Speed.hoverScript,
                 ]
+                    .merging(skip.contains("youtube") ? ["youtube": YouTubeAds.shared.script].compactMapValues { $0 } : [:]) { a, _ in a }
                 let drop = Set(skip.split(separator: ",").compactMap { named[String($0)] }.map(ObjectIdentifier.init))
                 let keep = controller.userScripts.filter { !drop.contains(ObjectIdentifier($0)) }
                 controller.removeAllUserScripts()
@@ -280,6 +282,10 @@ final class ContentBlocker: ObservableObject {
                 if Prefs.bool(Prefs.collapseAdSpace) && (Prefs.bool(Prefs.adBlockEnabled) || lists.contains(where: \.enabled)) {
                     controller.addUserScript(UserScripts.collapseAdSpace)
                 }
+                // YouTube's video ads: its own script, on YouTube's pages only.
+                if Prefs.bool(Prefs.adBlockEnabled), YouTubeAds.applies(to: host), let script = YouTubeAds.shared.script {
+                    controller.addUserScript(script)
+                }
             }
         }
         // Secure connections are a privacy setting of their own, kept even when Hush Guard is off.
@@ -303,6 +309,13 @@ final class ContentBlocker: ObservableObject {
         // Pages already on that site get their rules without the upgrade straight away.
         for controller in controllers.allObjects {
             if let current = hostOf.object(forKey: controller) as String?, Domains.site(current) == site { configure(controller) }
+        }
+    }
+
+    /// Sets up again the tabs whose current page passes `test` (a page script that changed, say).
+    func reconfigure(where test: (String?) -> Bool) {
+        for controller in controllers.allObjects where test(hostOf.object(forKey: controller) as String?) {
+            configure(controller)
         }
     }
 
