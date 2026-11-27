@@ -119,7 +119,8 @@ final class SitePermissions: ObservableObject {
                     else { self?.set(true, for: site, kinds) }
                     completion(true)
                 default:                                 // Don't Allow: remembered, so the site stops asking
-                    if !privately { self?.set(false, for: site, kinds) }
+                    // (Not when the question was only put away, by the window closing, say.)
+                    if !privately, choice != DialogHost.dismissed { self?.set(false, for: site, kinds) }
                     completion(false)
                 }
             })
