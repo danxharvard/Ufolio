@@ -696,6 +696,34 @@ enum BackgroundPlayTest {
     }
 }
 
+/// Testing only (UFOLIO_SWITCH_TEST=<n tabs>): opens n tabs (two of them loaded), then switches
+/// between the loaded two 30 times, timing each switch until the window has redrawn.
+enum SwitchTest {
+    static func startIfAsked(in model: BrowserModel) {
+        guard let text = ProcessInfo.processInfo.environment["UFOLIO_SWITCH_TEST"], let count = Int(text) else { return }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            let a = model.newTab(url: URL(string: "https://en.wikipedia.org/wiki/Mars")!, select: true)
+            let b = model.newTab(url: URL(string: "https://www.bbc.co.uk/news")!, select: true)
+            for i in 0..<max(0, count - 2) { model.openAll([URL(string: "https://example.com/?\(i)")!]) }
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            var times: [Double] = []
+            for i in 0..<30 {
+                let target = i.isMultiple(of: 2) ? a : b
+                let start = CACurrentMediaTime()
+                model.selectedID = target.id
+                model.window?.contentView?.layoutSubtreeIfNeeded()
+                model.window?.displayIfNeeded()
+                times.append((CACurrentMediaTime() - start) * 1000)
+                try? await Task.sleep(nanoseconds: 300_000_000)
+            }
+            let sorted = times.sorted()
+            FileHandle.standardError.write("switch: median \(String(format: "%.1f", sorted[15])) ms, worst \(String(format: "%.1f", sorted.last!)) ms (\(model.tabs.count) tabs)\n".data(using: .utf8)!)
+            NSApp.terminate(nil)
+        }
+    }
+}
+
 /// Testing only (UFOLIO_EVAL_URL=<page>, UFOLIO_EVAL_JS=<script returning a value>): loads the
 /// page, waits, prints what the script returns, and quits.
 enum EvalTest {
