@@ -1310,6 +1310,9 @@ extension BrowserTab: WKUIDelegate {
     }
 
     func webViewDidClose(_ webView: WKWebView) {
+        // A page closing itself (window.close()) inside a Link preview closes the preview; it
+        // isn't in the tab list, so it used to stay up showing a dead page.
+        if let model, model.preview === self { model.closePreview(); return }
         model?.close(self)
     }
 
