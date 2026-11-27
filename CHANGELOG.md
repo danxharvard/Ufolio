@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.52.0: pages before you click
+
+- **Pages before you click:** point at a link and its page is fetched, so it opens almost instantly.
+- **YouTube without ads:** video ads are skipped the moment they start.
+- **Link preview:** ⌥-click a link to peek at it in a floating card, without leaving your page.
+- **Compact mode:** ⌃⌘C hides the tabs and toolbar so the page fills the window.
+- **Docked sites:** keep chat or music open in a panel beside every page.
+- **Name your bookmarks:** give a bookmark any name as you save it.
+- **A clearer toolbar:** buttons that say what they do.
+- **Lighter on your Mac:** faster launch with lots of tabs, smoother YouTube, and tabs that give back more memory.
+- Fixed saved passwords being filled in by themselves into hidden boxes on a page.
+- Bug fixes and stability improvements.
+
 ## 0.52.0-beta.13: smoother tabs (beta)
 
 - Fixed the window pausing for a moment when several tabs went to sleep at once.
