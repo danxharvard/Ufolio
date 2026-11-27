@@ -570,6 +570,28 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
       window.__hushAutofillReady = true;
       function post(m) { try { webkit.messageHandlers.hushAutofill.postMessage(m); } catch (e) {} }
       function visible(el) { var r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; }
+      // For filling in by itself (no click from you): only a field you could really see and use.
+      // A page, or a tracker running on it, can add a tiny, see-through or off-screen login box
+      // and read what lands in it; such boxes are never filled without you.
+      // A floating label laid over the field is fine; a box covering the whole field isn't.
+      function smaller(a, b) { return a.width * a.height < b.width * b.height * 0.8; }
+      function onScreen(el) {
+        var r = el.getBoundingClientRect();
+        if (r.width < 24 || r.height < 12) return false;
+        if (r.right <= 0 || r.bottom <= 0 || r.left >= document.documentElement.scrollWidth || r.top + window.scrollY >= document.documentElement.scrollHeight) return false;
+        if (typeof el.checkVisibility === 'function' &&
+            !el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true })) return false;
+        var cs = getComputedStyle(el);
+        if (parseFloat(cs.opacity) < 0.1 || cs.visibility !== 'visible' || cs.clipPath && cs.clipPath !== 'none') return false;
+        // Something on top of it (a box hidden under the page): the middle of it must be the field.
+        var x = r.left + r.width / 2, y = r.top + r.height / 2;
+        if (x >= 0 && y >= 0 && x < window.innerWidth && y < window.innerHeight) {
+          var top = document.elementFromPoint(x, y);
+          if (top && top !== el && !el.contains(top) && top.control !== el && !(top.closest && top.closest('label')) &&
+              !(top.parentElement && top.parentElement.contains(el) && smaller(top.getBoundingClientRect(), r))) return false;
+        }
+        return true;
+      }
       function words(el) { return [el.name, el.id, el.placeholder, el.getAttribute('aria-label'), el.getAttribute('autocomplete')].join(' ').toLowerCase(); }
       function ac(el) { return (el.getAttribute('autocomplete') || '').toLowerCase().replace(/^section-\S+\s+/, '').replace(/^(shipping|billing)\s+/, '').trim(); }
       var CONTACT = {'name':1,'given-name':1,'additional-name':1,'family-name':1,'email':1,'tel':1,'tel-national':1,'organization':1,
@@ -602,13 +624,13 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
       var asked = [];
       function lookForSignIn() {
         var pw = Array.prototype.filter.call(document.querySelectorAll('input[type=password]'), function (el) {
-          return visible(el) && !el.value && kindOf(el) === 'login';
+          return onScreen(el) && !el.value && kindOf(el) === 'login';
         })[0];
         var user = null;
         if (!pw) {
           // The first step of a two-step sign-in: just a username or email box.
           user = Array.prototype.filter.call(document.querySelectorAll('input'), function (el) {
-            return isTextInput(el) && visible(el) && !el.value && (/\b(username|webauthn)\b/.test(ac(el)) || (el.type === 'email' && /user|login|sign|account|identifier/.test(words(el))));
+            return isTextInput(el) && onScreen(el) && !el.value && (/\b(username|webauthn)\b/.test(ac(el)) || (el.type === 'email' && /user|login|sign|account|identifier/.test(words(el))));
           })[0];
         }
         var target = pw || user;
@@ -784,10 +806,10 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
           if (data.auto) {
             // Filled by itself as the page loads: only boxes you can see that are still empty.
             pw = Array.prototype.filter.call(document.querySelectorAll('input[type=password]'), function (el) {
-              return visible(el) && !el.value && kindOf(el) === 'login';
+              return onScreen(el) && !el.disabled && !el.readOnly && !el.value && kindOf(el) === 'login';
             })[0] || null;
             user = Array.prototype.filter.call(document.querySelectorAll('input'), function (el) {
-              return isTextInput(el) && visible(el) && !el.value &&
+              return isTextInput(el) && onScreen(el) && !el.disabled && !el.readOnly && !el.value &&
                 (pw ? (kindOf(el) === 'login' && (!pw.form || el.form === pw.form)) : (/\b(username|webauthn)\b/.test(ac(el)) || el.type === 'email'));
             })[0] || null;
             if (pw && data.password) put(pw, data.password);
