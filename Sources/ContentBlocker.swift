@@ -296,6 +296,7 @@ final class ContentBlocker: ObservableObject {
         if AutofillCenter.isEnabled { controller.addUserScript(AutofillCenter.script) }
         controller.addUserScript(HushlistLink.script)   // only does anything on hushlist.online
         controller.addUserScript(Speed.hoverScript)     // connects to a link's site as you point at it
+        if let codecs = VideoCodecs.script { controller.addUserScript(codecs) }   // hardware-decoded YouTube
     }
 
     // MARK: Sites without https
