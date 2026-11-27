@@ -1629,6 +1629,8 @@ private struct UpdateSettings: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            DeveloperSection()   // hidden until unlocked from the start page
+
             if !earlierVersions.isEmpty {
                 Section {
                     ForEach(showAllVersions ? earlierVersions : Array(earlierVersions.prefix(3))) { version in

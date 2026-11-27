@@ -56,7 +56,7 @@ final class Updater: ObservableObject {
         guard Self.testEnv("UFOLIO_UPDATE_PROBE") != nil else { return }
         Task { @MainActor in
             for beta in [false, true] {
-                let found = try? await Self.fromWebsite(beta: beta)
+                let found = try? await Self.fromWebsite(beta: beta, experimental: false)
                 FileHandle.standardError.write("probe \(beta ? "beta" : "regular"): \(found.map { "\($0.version) zip=\($0.asset?.absoluteString ?? "not ready") sig=\($0.signature != nil)" } ?? "nothing")\n".data(using: .utf8)!)
             }
             apiPausedUntil = Date().addingTimeInterval(3600)   // as if the API had said no
@@ -108,7 +108,10 @@ final class Updater: ObservableObject {
             // The beta channel (Settings, off by default) looks at every recent release, early
             // test builds included; otherwise only the latest finished release. Either way the
             // download has to pass exactly the same signature and fingerprint checks.
-            let beta = Prefs.bool(Prefs.betaUpdates)
+            // Experimental builds (the hidden developer area) are a channel above beta: they see
+            // every release; the beta channel never offers an experimental build.
+            let experimental = Self.experimentalChannel
+            let beta = experimental || Prefs.bool(Prefs.betaUpdates)
             var found: Found?
             // GitHub's API allows 60 questions an hour per network; when it's said no, it isn't
             // asked again until it said it would answer (github.com itself answers meanwhile).
@@ -129,14 +132,14 @@ final class Updater: ObservableObject {
                     UserDefaults.standard.set(lastChecked, forKey: "updates.lastChecked")
                     if status == 404 { state = .upToDate; return } // nothing published yet
                     guard status == 200 else { throw UpdateError("GitHub didn’t answer properly (error \(status)).") }
-                    found = try Self.fromAPI(data, beta: beta)
+                    found = try Self.fromAPI(data, beta: beta, experimental: experimental)
                     if found == nil { state = .upToDate; return }
                 }
             }
             if found == nil {
                 // Limited by the API: the same answer from github.com's own pages.
                 guard api == "https://api.github.com" else { throw UpdateError("GitHub didn’t answer properly.") }
-                guard let fallback = try await Self.fromWebsite(beta: beta) else {
+                guard let fallback = try await Self.fromWebsite(beta: beta, experimental: experimental) else {
                     throw UpdateError("GitHub is limiting update checks from your network right now. Ufolio will try again later.")
                 }
                 lastChecked = Date()
@@ -187,14 +190,15 @@ final class Updater: ObservableObject {
     private var apiPausedUntil = Date.distantPast
 
     /// From the API's answer: the newest release, with its files' addresses and fingerprint.
-    private static func fromAPI(_ data: Data, beta: Bool) throws -> Found? {
+    private static func fromAPI(_ data: Data, beta: Bool, experimental: Bool) throws -> Found? {
         let decoded = try JSONSerialization.jsonObject(with: data)
-        let candidates: [[String: Any]] = beta
-            ? ((decoded as? [[String: Any]]) ?? []).filter { ($0["draft"] as? Bool) != true }
-            : (decoded as? [String: Any]).map { [$0] } ?? []
         func versionOf(_ release: [String: Any]) -> String? {
             (release["tag_name"] as? String)?.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
         }
+        let candidates: [[String: Any]] = beta
+            ? ((decoded as? [[String: Any]]) ?? []).filter { ($0["draft"] as? Bool) != true }
+                .filter { experimental || !isExperimental(versionOf($0) ?? "") }
+            : (decoded as? [String: Any]).map { [$0] } ?? []
         guard let json = candidates.max(by: { a, b in
                   guard let va = versionOf(a), let vb = versionOf(b) else { return versionOf(a) == nil }
                   return isNewer(vb, than: va)
@@ -216,7 +220,7 @@ final class Updater: ObservableObject {
     /// where /releases/latest points (or, for betas, the newest tag in the releases feed). The
     /// files' addresses follow GitHub's fixed pattern; the download still has to pass the same
     /// signature check. (No fingerprint here: the signature is what proves it genuine.)
-    private static func fromWebsite(beta: Bool) async throws -> Found? {
+    private static func fromWebsite(beta: Bool, experimental: Bool) async throws -> Found? {
         let site = "https://github.com/\(repo)"
         var version: String?
         if beta {
@@ -229,7 +233,7 @@ final class Updater: ObservableObject {
             let tags = pattern.matches(in: feed, range: NSRange(feed.startIndex..., in: feed)).compactMap {
                 Range($0.range(at: 1), in: feed).map { String(feed[$0]) }
             }
-            version = tags.filter(isVersion).max { isNewer($1, than: $0) }
+            version = tags.filter { isVersion($0) && (experimental || !isExperimental($0)) }.max { isNewer($1, than: $0) }
         } else {
             var request = URLRequest(url: URL(string: "\(site)/releases/latest")!, timeoutInterval: 20)
             request.cachePolicy = .reloadIgnoringLocalCacheData
@@ -251,6 +255,14 @@ final class Updater: ObservableObject {
         let ready = ((try? await URLSession.shared.data(for: head))?.1 as? HTTPURLResponse)?.statusCode == 200
         return Found(version: version, asset: ready ? asset : nil, signature: ready ? signature : nil, digest: nil,
                      notes: nil, page: URL(string: "\(site)/releases/tag/v\(version)"))
+    }
+
+    /// An experimental build ("0.53.0-exp.1"): only offered on the experimental channel.
+    static func isExperimental(_ version: String) -> Bool { version.contains("-exp") }
+
+    /// Experimental builds: switched on in the developer area, after agreeing to the terms.
+    static var experimentalChannel: Bool {
+        Prefs.bool(Prefs.developerUnlocked) && Prefs.bool(Prefs.experimentalUpdates)
     }
 
     /// "0.51.4" or "0.52.0-beta.4", and nothing else.

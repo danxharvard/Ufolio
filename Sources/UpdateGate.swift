@@ -72,7 +72,7 @@ final class UpdateGate: ObservableObject {
         guard minimum.issued >= seen else { return }
         UserDefaults.standard.set(minimum.issued, forKey: Self.issuedKey)
 
-        let required = Prefs.bool(Prefs.betaUpdates) ? minimum.beta : minimum.stable
+        let required = Prefs.bool(Prefs.betaUpdates) || Updater.experimentalChannel ? minimum.beta : minimum.stable
         let current = Updater.shared.currentVersion
         let next: State
         if !Updater.isNewer(required, than: current) {

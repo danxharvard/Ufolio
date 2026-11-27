@@ -87,6 +87,10 @@ enum Prefs {
     static let autoInstallUpdates = "autoInstallUpdates"
     /// Early test builds (off by default). They pass exactly the same signature checks.
     static let betaUpdates = "betaUpdates"
+    /// The hidden developer area (unlocked by clicking the start page's Ufolio icon five times),
+    /// and its experimental builds channel.
+    static let developerUnlocked = "developerUnlocked"
+    static let experimentalUpdates = "experimentalUpdates"
     // Privacy
     static let blockThirdPartyCookies = "blockThirdPartyCookies"
     static let httpsUpgrade = "httpsUpgrade"
@@ -174,6 +178,8 @@ enum Prefs {
         autoCheckUpdates: true,
         autoInstallUpdates: true,
         betaUpdates: false,
+        developerUnlocked: false,
+        experimentalUpdates: false,
         blockThirdPartyCookies: true,
         httpsUpgrade: true,
         globalPrivacyControl: true,

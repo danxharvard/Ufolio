@@ -151,6 +151,8 @@ struct StartPage: View {
     private var header: some View {
         VStack(spacing: 8) {
             AnimatedHushLogo(size: 54)
+                .contentShape(Rectangle())
+                .onTapGesture { DeveloperArea.iconClicked(in: model.window) }   // five clicks: the developer area
                 .padding(.bottom, 4)
             AlienTitle(size: 50)
             if UFODay.isToday {
