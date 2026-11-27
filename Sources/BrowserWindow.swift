@@ -160,6 +160,7 @@ struct BrowserWindow: View {
                 }
                 .transition(.opacity)
             }
+            UpdateGateOverlay()   // over everything: a version too old to keep using
         }
         .animation(.smooth(duration: 0.26), value: showWelcome)
         .animation(.smooth(duration: 0.26), value: whatsNew?.version)
@@ -233,7 +234,10 @@ struct BrowserWindow: View {
                         }
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
-                    if !compact { FindBarHost(model: model) }
+                    if !compact {
+                        UpdateGateBanner()
+                        FindBarHost(model: model)
+                    }
                 }
             .background(tint?.toolbar ?? Chrome.toolbar)
             .overlay(alignment: .bottom) { Hairline() }
@@ -248,7 +252,10 @@ struct BrowserWindow: View {
     /// Tabs along the top: the tab row in the title bar, the toolbar, then the page.
     private var topLayout: some View {
         VStack(spacing: 0) {
-            if compact { FindBarHost(model: model) } else { topChrome }
+            if compact {
+                UpdateGateBanner()
+                FindBarHost(model: model)
+            } else { topChrome }
 
             TranslationHost()
             // "Add to Ufolio" on Chrome Web Store pages (takes no space anywhere else).
@@ -331,6 +338,7 @@ struct BrowserWindow: View {
                     }
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
+                UpdateGateBanner()
                 FindBarHost(model: model)
                 TranslationHost()
                 SelectedTab(model: model) { tab in WebStoreBar(tab: tab) }
