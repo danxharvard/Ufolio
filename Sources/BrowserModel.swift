@@ -9,12 +9,14 @@ final class BrowserModel: NSObject, ObservableObject {
             // The tab you leave starts its idle clock; the one you pick wakes if it was asleep.
             let old = tabs.first(where: { $0.id == oldValue })
             old?.lastActive = Date()
-            // Its hover preview, while it's still on screen (one snapshot; nothing kept awake).
-            if let old, old !== selectedTab { old.capturePreview() }
-            selectedTab?.wakeIfNeeded()
             // Pause sound and video in the tab you leave (Eco, or Settings › Performance),
             // unless it's still showing on the other side of Split View.
             let stillVisible = old.map { splitPair?.contains($0.id) == true && splitPair?.contains(selectedID) == true } ?? false
+            // Its hover preview, while it's still on screen (one snapshot; nothing kept awake).
+            // Not when it's still showing in Split View: clicking from one side to the other
+            // took a snapshot every time.
+            if let old, old !== selectedTab, !stillVisible { old.capturePreview() }
+            selectedTab?.wakeIfNeeded()
             // Silent video and animations in a tab you can't see are always paused (they only cost
             // memory, graphics and battery); sound keeps playing unless you've asked otherwise.
             // A video playing in the tab you leave pops out into Picture in Picture (Settings ›
@@ -99,7 +101,7 @@ final class BrowserModel: NSObject, ObservableObject {
         FeatureUsage.mark(.orbits)
         WarpSpeed.engage(for: self)
         if let current = selectedID { lastSelected[spaceID] = current }
-        if splitPair != nil { splitPair = nil }
+        closeSplit()   // (pauses the side that goes out of sight)
         spaceID = id
         let mine = visibleTabs
         if let remembered = lastSelected[id], mine.contains(where: { $0.id == remembered }) {
@@ -337,10 +339,23 @@ final class BrowserModel: NSObject, ObservableObject {
 
     /// Leaves Split View, showing the given tab (or the active one).
     func closeSplit(keeping id: UUID? = nil) {
-        guard splitPair != nil else { return }
+        guard let pair = splitPair else { return }
+        let shown = id ?? selectedID
         splitPair = nil
         splitLinksAcross = false
         if let id { selectedID = id }
+        // The side that goes out of sight is treated as a tab you've left: its idle clock starts
+        // and its silent video stops (it used to keep playing unseen, and could stay awake for
+        // as long as it had sat in the pair).
+        if let hidden = tabs.first(where: { $0.id == (pair.left == shown ? pair.right : pair.left) }),
+           hidden !== selectedTab, !hidden.isAsleep {
+            hidden.lastActive = Date()
+            hidden.capturePreview()
+            if !WebKitExtras.isPictureInPictureActive(hidden.webView),
+               PerformanceCenter.shared.pausesBackgroundMedia || !hidden.isPlayingAudio {
+                hidden.webView.setAllMediaPlaybackSuspended(true)
+            }
+        }
     }
 
     func swapSplit() {
