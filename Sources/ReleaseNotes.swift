@@ -28,6 +28,18 @@ struct ReleaseNotes {
         versions.first { $0.version == version }
     }
 
+    /// Everything new since the version you last used (up to five versions), as one list: an
+    /// update that skipped versions (0.51.5 straight to 0.51.7) only showed the newest one's notes.
+    func notes(since lastSeen: String?, upTo current: String) -> Version? {
+        guard let start = versions.firstIndex(where: { $0.version == current }) else { return nil }
+        var sections: [Section] = []
+        for version in versions[start...].prefix(5) {
+            if version.version == lastSeen { break }
+            sections += version.sections
+        }
+        return Version(version: current, intro: versions[start].intro, sections: sections)
+    }
+
     static func parse(_ text: String) -> ReleaseNotes {
         var versions: [Version] = []
         var version: String?
