@@ -74,11 +74,15 @@ final class DialogHost: ObservableObject {
         dialog.completion(choice, checked)
     }
 
-    /// Answers every waiting dialog with Cancel (e.g. when Hush quits or the window closes).
+    /// The answer a dialog gets when it's put away without you choosing (`dismissed`).
+    static let dismissed = -1
+
+    /// Answers every waiting dialog as dismissed (Ufolio quitting, the window closing): treated
+    /// as "no", but never remembered as your choice (a site used to be blocked for good).
     func cancelAll() {
         let waiting = queue
         queue = []
-        for dialog in waiting { dialog.completion(dialog.cancelIndex, false) }
+        for dialog in waiting { dialog.completion(Self.dismissed, false) }
     }
 
     /// True when a window already has questions waiting (so a page can't pile more on).
