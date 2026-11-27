@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.52.0-beta.9: Link preview, Compact mode and Docked sites (beta)
+
+- **Link preview:** ⌥-click a link to peek at it in a floating card, without leaving your page.
+- **Compact mode:** ⌃⌘C hides the tabs and toolbar so the page fills the window.
+- **Docked sites:** keep chat or music open in a panel beside every page.
+- **Update reminders:** very old versions of Ufolio are asked to update.
+- Bug fixes and stability improvements.
+
 ## 0.52.0-beta.8: no more YouTube ads (beta)
 
 - YouTube ads are blocked. They come from YouTube's own servers, so blocking ad servers never
