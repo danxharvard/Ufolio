@@ -641,6 +641,8 @@ final class BrowserModel: NSObject, ObservableObject {
     }
 
     func closeSelectedTab() {
+        // A Link preview on top closes first (⌘W used to close the tab underneath it).
+        if preview != nil { closePreview(); return }
         guard let tab = selectedTab else { return }
         // ⌘W on a pinned tab leaves it pinned and moves to a normal tab, as in Safari (a stray ⌘W
         // used to lose it; its right-click menu still closes it).
