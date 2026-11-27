@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.52.0-beta.11: name your bookmarks (beta)
+
+- **Name your bookmarks:** when you save a bookmark, you can give it any name first.
+- **Lighter on your Mac:** pictures around the browser are now still, so they no longer keep your Mac busy.
+- Fixed saved passwords being filled in by themselves into hidden boxes on a page.
+- Bug fixes and stability improvements.
+
 ## 0.52.0-beta.10: smoother YouTube, faster launch (beta)
 
 - **Smoother YouTube:** on Macs that can't decode VP9 video in hardware, YouTube now plays in a format the graphics chip decodes, so it uses less power and runs cooler.
