@@ -805,8 +805,40 @@ final class BrowserModel: NSObject, ObservableObject {
         scheduleSessionSave()
     }
 
+    /// ⌘D, the star and the menus: a page already bookmarked is removed straight away; a new
+    /// one asks what to call it first (its title, ready to change).
     func toggleBookmarkForSelectedTab() {
         guard let tab = selectedTab, let url = tab.url else { return }
-        BookmarkStore.store(for: tab.profileID).toggle(url: url, title: tab.displayTitle)
+        let store = BookmarkStore.store(for: tab.profileID)
+        if store.contains(url) { store.toggle(url: url, title: tab.displayTitle); return }
+        guard !DialogHost.isBusy(window) else { return }
+        let name = BookmarkName(tab.displayTitle)
+        DialogHost.show(HushDialog(
+            art: .site(url), theme: .save, motion: .rise,
+            title: "Add Bookmark",
+            detail: AnyView(BookmarkNameField(name: name)),
+            choices: [.init(title: "Cancel", role: .cancel), .init(title: "Save", role: .primary)],
+            completion: { choice, _ in if choice == 1 { store.add(url: url, title: name.text) } }), in: window)
+    }
+}
+
+/// The name being typed for a new bookmark.
+final class BookmarkName: ObservableObject {
+    @Published var text: String
+    init(_ text: String) { self.text = text }
+}
+
+/// The name field in the Add Bookmark card: filled with the page's title, selected and ready to type over.
+struct BookmarkNameField: View {
+    @ObservedObject var name: BookmarkName
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField("Name", text: $name.text)
+            .textFieldStyle(.roundedBorder)
+            .focused($focused)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 2)
+            .onAppear { DispatchQueue.main.async { focused = true } }
     }
 }

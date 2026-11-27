@@ -72,6 +72,14 @@ final class BookmarkStore: ObservableObject {
         save()
     }
 
+    /// Adds a bookmark with the name you gave it (nothing if the page is already bookmarked).
+    func add(url: URL, title: String) {
+        guard !contains(url) else { return }
+        let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        items.append(Bookmark(title: name.isEmpty ? (url.host ?? url.absoluteString) : String(name.prefix(200)), url: url))
+        save()
+    }
+
     /// Adds bookmarks brought over from another browser, skipping ones you already have.
     func add(imported: [(title: String, url: URL)]) -> Int {
         // Added all at once: appending one by one redrew everything showing bookmarks each time.
