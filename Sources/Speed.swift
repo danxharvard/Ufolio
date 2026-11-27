@@ -833,7 +833,11 @@ enum ChaosTest {
             while Date() < end {
                 let tabs = model.tabs
                 let any = tabs.randomElement(using: &rng)
-                let action = Int.random(in: 0..<14, using: &rng)
+                var action = Int.random(in: 0..<14, using: &rng)
+                // UFOLIO_CHAOS_SKIP=preview,split,sleep,point: leave those actions out (to narrow a problem down).
+                let skip = ProcessInfo.processInfo.environment["UFOLIO_CHAOS_SKIP"] ?? ""
+                if (skip.contains("preview") && (action == 7 || action == 8)) || (skip.contains("split") && action == 9)
+                    || (skip.contains("sleep") && action == 5) || (skip.contains("point") && action == 6) { action = 3 }
                 switch action {
                 case 0, 1: model.newTab(url: sites.randomElement(using: &rng), select: Bool.random(using: &rng)); counts["open", default: 0] += 1
                 case 2: if tabs.count > 2, let t = any { model.close(t) }; counts["close", default: 0] += 1
