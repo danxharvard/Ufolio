@@ -372,9 +372,11 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         let config = WKSnapshotConfiguration()
         config.snapshotWidth = 340
         webView.takeSnapshot(with: config) { [weak self] image, _ in
-            // Encoded away from the main thread: this runs on every tab switch, which should be instant.
-            guard let cg = image?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+            // Converted and encoded away from the main thread: this runs on every tab switch, which
+            // should be instant (the conversion alone took 30 to 60 ms on the main thread).
+            guard let image else { return }
             DispatchQueue.global(qos: .utility).async {
+                guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
                 let data = NSBitmapImageRep(cgImage: cg).representation(using: .jpeg, properties: [.compressionFactor: 0.5])
                 DispatchQueue.main.async {
                     guard let self, let data else { return }
@@ -426,9 +428,13 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             // was encoded. The tab you're looking at gets its picture straight away.
             if self.model?.selectedTab === self || image == nil {
                 self.snapshotData = image.flatMap(Self.compressed)
-            } else if let cg = image?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            } else if let image {
                 self.snapshotData = nil
+                // Turned into a picture away from the main thread too: macOS redraws WebKit's
+                // snapshot through a full colour conversion first (30 to 60 ms a tab), and putting
+                // several tabs to sleep at once used to stall the window for up to a second.
                 DispatchQueue.global(qos: .utility).async { [weak self] in
+                    guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
                     let data = NSBitmapImageRep(cgImage: cg).representation(using: .jpeg, properties: [.compressionFactor: 0.5])
                     DispatchQueue.main.async {
                         // Not for a tab closed meanwhile (it let go of its picture as it closed).
@@ -850,6 +856,8 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         Preloader.discard(forTab: id)
         observers.removeAll()
         // A tab restored from last time that never made its page view has none to close.
+        // Pictures go too: macOS can keep a closed tab's menu (and so the tab) for a while.
+        previewData = nil
         guard hasPageView else { snapshotData = nil; sleepState = nil; return }
         webView.stopLoading()
         webView.navigationDelegate = nil
