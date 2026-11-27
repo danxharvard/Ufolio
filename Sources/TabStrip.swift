@@ -336,6 +336,9 @@ struct TabMenuItems: View {
                 Label(off ? "Pop Out Videos on This Site" : "Don’t Pop Out Videos on This Site", systemImage: "pip")
             }
         }
+        if !model.isPrivate, tab.url != nil, !DockedSites.shared.isDocked(tab.url) {
+            Button { model.dock(tab) } label: { Label("Dock This Site", systemImage: "sidebar.right") }
+        }
         if !model.isPrivate && SpaceStore.shared.spaces.count > 1 {
             Menu {
                 ForEach(SpaceStore.shared.spaces.filter { $0.id != tab.spaceID }) { space in

@@ -61,6 +61,10 @@ enum Prefs {
     static let askDefaultBrowser = "askDefaultBrowser"
     static let hasOnboarded = "hasOnboarded"
     static let tabLayout = "tabLayout"
+    /// Compact mode: the tabs and toolbar hide until the pointer reaches the window's edge.
+    static let compactMode = "compactMode"
+    /// Docked sites (chat, music…) kept loaded in a panel beside the page.
+    static let dockedSites = "dockedSites"
     static let sideTabsWidth = "sideTabsWidth"
     // AutoFill
     static let autofillPasswords = "autofillPasswords"

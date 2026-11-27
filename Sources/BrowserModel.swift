@@ -9,6 +9,8 @@ final class BrowserModel: NSObject, ObservableObject {
             // The tab you leave starts its idle clock; the one you pick wakes if it was asleep.
             let old = tabs.first(where: { $0.id == oldValue })
             old?.lastActive = Date()
+            // A link preview belongs to the page it was opened from.
+            if preview != nil, selectedID != oldValue { closePreview() }
             // Its hover preview, while it's still on screen (one snapshot; nothing kept awake).
             if let old, old !== selectedTab { old.capturePreview() }
             selectedTab?.wakeIfNeeded()
@@ -300,6 +302,11 @@ final class BrowserModel: NSObject, ObservableObject {
     }
     /// Split View: the two tabs shown side by side, and how much room the left one gets.
     @Published var splitPair: SplitPair?
+    /// Link preview: a page opened in a floating card over this one (⌥-click a link), not yet a tab.
+    @Published private(set) var preview: BrowserTab?
+    /// Docked sites: which panel is open, and the pages of those opened so far (kept loaded).
+    @Published var dockOpen: UUID?
+    var dockTabs: [UUID: BrowserTab] = [:]
     @Published var splitRatio: CGFloat = 0.5
 
     func isInSplit(_ tab: BrowserTab) -> Bool { splitPair?.contains(tab.id) ?? false }
@@ -723,6 +730,49 @@ final class BrowserModel: NSObject, ObservableObject {
                 tab.restoreLazily(url)
             }
         }
+    }
+
+    // MARK: Link preview
+
+    /// Opens a link in the floating preview (from the tab it was clicked in, with its sign-ins).
+    func showPreview(_ url: URL, from source: BrowserTab?) {
+        let store = source?.webView.configuration.websiteDataStore ?? currentStore
+        let tab = BrowserTab(model: self, store: store)
+        present(preview: tab, from: source)
+        tab.load(url)
+    }
+
+    /// The preview for a link WebKit is opening itself (right-click › Preview Link).
+    func showPreview(configuration: WKWebViewConfiguration, from source: BrowserTab?) -> BrowserTab {
+        let tab = BrowserTab(model: self, configuration: configuration)
+        present(preview: tab, from: source)
+        return tab
+    }
+
+    private func present(preview tab: BrowserTab, from source: BrowserTab?) {
+        closePreview()
+        FeatureUsage.mark(.linkPreview)
+        tab.spaceID = source?.spaceID ?? spaceID
+        (tab.webView as? HushWebView)?.ignoresBlockers = true   // it sits on top of the page
+        preview = tab
+    }
+
+    func closePreview() {
+        guard let tab = preview else { return }
+        preview = nil
+        tab.tearDown()
+    }
+
+    /// The preview becomes a real tab beside the one it came from (or opens beside it in Split View).
+    func expandPreview(split: Bool = false) {
+        guard let tab = preview else { return }
+        preview = nil
+        (tab.webView as? HushWebView)?.ignoresBlockers = false
+        let index = selectedTab.flatMap { current in tabs.firstIndex { $0 === current } }.map { $0 + 1 } ?? tabs.count
+        tabs.insert(tab, at: min(index, tabs.count))
+        ExtensionEvents.opened(tab)
+        if split { openSplit(with: tab) } else { selectedID = tab.id }
+        scheduleSessionSave()
     }
 
     func toggleBookmarkForSelectedTab() {

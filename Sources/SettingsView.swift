@@ -1026,7 +1026,7 @@ private struct PrivacySettings: View {
         // What's held in memory goes too: a page loading ahead, pages kept for an instant Back,
         // and closed tabs' cached page processes (Back used to show a page still signed in).
         Preloader.discard()
-        for model in BrowserModel.all.allObjects { model.tabs.forEach { $0.dropParkedPages(forget: true) } }
+        for model in BrowserModel.all.allObjects { model.tabs.forEach { $0.dropParkedPages(forget: true) }; model.releaseDocks(); model.closePreview() }
         Speed.releaseCachedProcesses()
         let stores = SpaceStore.shared.allDataStores
         var remaining = stores.count

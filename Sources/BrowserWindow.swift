@@ -30,6 +30,10 @@ struct BrowserWindow: View {
 
     @AppStorage(Prefs.tabLayout) private var tabLayout = TabLayout.top.rawValue
     @AppStorage(Prefs.theme) private var theme = "classic"
+    /// Compact mode, and whether its hidden tabs/toolbar (top) or tab column (side) are showing.
+    @AppStorage(Prefs.compactMode) private var compact = false
+    @State private var revealTop = false
+    @State private var revealSide = false
     @State private var leaderEgg = false
     private var sideTabs: Bool { tabLayout == TabLayout.side.rawValue }
 
@@ -83,11 +87,27 @@ struct BrowserWindow: View {
             // frosted glass, menus and scroll bars are drawn dark by macOS itself.
             if model.isPrivate, let window, window.appearance?.name != .darkAqua { window.appearance = NSAppearance(named: .darkAqua) }
             if window != nil { ExtensionEvents.windowOpened(model) }
+            if compact, !(revealTop || revealSide) { CompactMode.showWindowButtons(false, in: window) }
             TrafficLights.align(in: window)
         })
         // Turning Magic Theme on picks up the current site's colour straight away.
         .onChange(of: magicTheme) { _, on in siteColor = on ? model.selectedTab?.siteColor : nil }
         .onChange(of: tabLayout) { _, _ in
+            DispatchQueue.main.async { TrafficLights.align(in: model.window) }
+        }
+        // Compact mode: ⌘L brings the address bar back; the window buttons show with the tabs.
+        .onChange(of: model.addressFocusToken) { _, _ in
+            guard compact else { return }
+            if sideTabs { revealSide = true } else { revealTop = true }
+        }
+        .onChange(of: compact) { _, on in
+            revealTop = false; revealSide = false
+            CompactMode.showWindowButtons(!on, in: model.window)
+            DispatchQueue.main.async { TrafficLights.align(in: model.window) }
+        }
+        .onChange(of: revealTop || revealSide) { _, showing in
+            guard compact else { return }
+            CompactMode.showWindowButtons(showing, in: model.window)
             DispatchQueue.main.async { TrafficLights.align(in: model.window) }
         }
         // Switching light/dark makes macOS lay out the title bar again, which can put the window
@@ -104,6 +124,9 @@ struct BrowserWindow: View {
                 // Questions still waiting (a site asking for the camera, say) are answered "no" as the
                 // window goes: nothing would ever answer them, and the page was left waiting.
                 model.dialogs.cancelAll()
+                // A link preview or docked site doesn't outlive its window.
+                model.closePreview()
+                model.releaseDocks()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { note in
@@ -193,11 +216,9 @@ struct BrowserWindow: View {
         .frame(minWidth: 640, minHeight: 420)
     }
 
-    /// Tabs along the top: the tab row in the title bar, the toolbar, then the page.
-    private var topLayout: some View {
+    /// The tab row (in the title bar, beside the window buttons) and the toolbar under it.
+    private var topChrome: some View {
         VStack(spacing: 0) {
-            // Tabs in the title bar, beside the window buttons.
-            VStack(spacing: 0) {
             WindowTabBar(model: model, toolbarColor: tint?.toolbar ?? Chrome.toolbar, leadingInset: isFullScreen ? 10 : 80)
                 .background(tint?.frame ?? .clear)
             VStack(spacing: 0) {
@@ -212,21 +233,22 @@ struct BrowserWindow: View {
                         }
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
-                    FindBarHost(model: model)
+                    if !compact { FindBarHost(model: model) }
                 }
             .background(tint?.toolbar ?? Chrome.toolbar)
             .overlay(alignment: .bottom) { Hairline() }
-            }
-            .environment(\.colorScheme, tint?.scheme ?? systemScheme)
-            .animation(.easeInOut(duration: 0.35), value: siteColor)
-            .background(SelectedTab(model: model) { tab in
-                SiteColorReader(tab: tab) { color in
-                    // Only with Magic Theme on: otherwise each site's colour redrew the whole window for nothing.
-                    let wanted = magicTheme && !model.isPrivate ? color : nil
-                    if wanted != siteColor { siteColor = wanted }
-                }
-                    .id(tab.id)
-            })
+        }
+        .environment(\.colorScheme, tint?.scheme ?? systemScheme)
+        .animation(.easeInOut(duration: 0.35), value: siteColor)
+    }
+
+    /// Typing in the address bar keeps Compact mode's chrome out while the pointer wanders.
+    private var editingAddress: Bool { model.addressField?.currentEditor() != nil }
+
+    /// Tabs along the top: the tab row in the title bar, the toolbar, then the page.
+    private var topLayout: some View {
+        VStack(spacing: 0) {
+            if compact { FindBarHost(model: model) } else { topChrome }
 
             TranslationHost()
             // "Add to Ufolio" on Chrome Web Store pages (takes no space anywhere else).
@@ -258,9 +280,29 @@ struct BrowserWindow: View {
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.08)).allowsHitTesting(false))
             // Bookmarks & History (⇧⌘L) slides in over the page's edge, so the page never resizes.
             .overlay(alignment: .leading) { SidebarSlot(model: model) }
+            .overlay { LinkPreviewOverlay(model: model) }
+            DockArea(model: model)
             }
             .padding([.horizontal, .bottom], 6)
             .padding(.top, 6)
+        }
+        .background(SelectedTab(model: model) { tab in
+            SiteColorReader(tab: tab) { color in
+                // Only with Magic Theme on: otherwise each site's colour redrew the whole window for nothing.
+                let wanted = magicTheme && !model.isPrivate ? color : nil
+                if wanted != siteColor { siteColor = wanted }
+            }
+                .id(tab.id)
+        })
+        // Compact mode: the tabs and toolbar come back over the page from the top edge.
+        .overlay(alignment: .top) {
+            if compact {
+                CompactReveal(edge: .top, revealed: $revealTop, keepOpen: { editingAddress }) {
+                    topChrome
+                        .background(windowGlass)
+                        .shadow(color: .black.opacity(0.18), radius: 14, y: 5)
+                }
+            }
         }
     }
 
@@ -268,9 +310,7 @@ struct BrowserWindow: View {
     /// tabs; the page sits beside it as a rounded card.
     private var sideLayout: some View {
         HStack(spacing: 0) {
-            SideTabBar(model: model, suggestions: suggestions, onGo: go)
-                .background(tint?.frame ?? .clear)
-                .environment(\.colorScheme, tint?.scheme ?? systemScheme)
+            if !compact { sideColumn }
             VStack(spacing: 0) {
                 // The top row: bookmarks (if shown), and the ⋯ panel at the top right.
                 HStack(spacing: 0) {
@@ -304,6 +344,8 @@ struct BrowserWindow: View {
                     }
                     .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.08)).allowsHitTesting(false))
                     .overlay(alignment: .leading) { SidebarSlot(model: model) }
+                    .overlay { LinkPreviewOverlay(model: model) }
+                    DockArea(model: model)
                 }
                 .padding(.trailing, 8)
                 .padding(.bottom, 8)
@@ -318,6 +360,23 @@ struct BrowserWindow: View {
                 }
                 .id(tab.id)
         })
+        // Compact mode: the tab column comes back over the page from the left edge.
+        .overlay(alignment: .leading) {
+            if compact {
+                CompactReveal(edge: .leading, revealed: $revealSide, keepOpen: { editingAddress }) {
+                    sideColumn
+                        .background(windowGlass)
+                        .shadow(color: .black.opacity(0.18), radius: 14, x: 5)
+                }
+            }
+        }
+    }
+
+    /// The tab column: window buttons, address bar, Orbits and tabs.
+    private var sideColumn: some View {
+        SideTabBar(model: model, suggestions: suggestions, onGo: go)
+            .background(tint?.frame ?? .clear)
+            .environment(\.colorScheme, tint?.scheme ?? systemScheme)
     }
 
     /// Back, forward and reload; the address bar across the middle; then the tools.

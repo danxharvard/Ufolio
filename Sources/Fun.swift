@@ -382,7 +382,7 @@ enum StealthDays {
 
 /// Which features you've tried, so the start page can suggest one you haven't.
 enum FeatureUsage: String, CaseIterable {
-    case palette, split, reader, stealth, zapper, sidebar, orbits, find, sideTabs, hushlist
+    case palette, split, reader, stealth, zapper, sidebar, orbits, find, sideTabs, hushlist, linkPreview, compact, docked
 
     static func mark(_ feature: FeatureUsage) {
         let key = "used." + feature.rawValue
@@ -408,6 +408,9 @@ enum FeatureUsage: String, CaseIterable {
         case .find: return "Press ⌘F to find words on a page."
         case .sideTabs: return "Prefer tabs down the side? Switch in Settings › Appearance."
         case .hushlist: return "Block even more with Hushlist, free in Settings › Force Field."
+        case .linkPreview: return "⌥-click a link to preview it over the page, without leaving where you are."
+        case .compact: return "Press ⌃⌘C for Compact mode: just the page, with the tabs and toolbar a push of the pointer away."
+        case .docked: return "Keep chat or music beside every page: right-click a tab and choose Dock This Site."
         }
     }
 }

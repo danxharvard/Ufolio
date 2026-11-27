@@ -120,7 +120,7 @@ final class PerformanceCenter: ObservableObject {
             Task { await FaviconCache.shared.purgeMemory(); await NewsImages.shared.purgeMemory() }
             Speed.releaseCachedProcesses()
             Preloader.discard()
-            for model in BrowserModel.all.allObjects { model.tabs.forEach { $0.dropParkedPages() } }
+            for model in BrowserModel.all.allObjects { model.tabs.forEach { $0.dropParkedPages() }; model.releaseHiddenDocks() }
             MainActor.assumeIsolated {
                 SettingsWindow.releaseNow()          // rebuilt next time you open Settings
                 BackgroundStore.shared.purgeIfHidden()   // the start page picture, if no start page shows

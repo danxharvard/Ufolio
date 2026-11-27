@@ -248,6 +248,8 @@ struct HushCommands: Commands {
                 if model.splitPair != nil { model.closeSplit(keeping: model.selectedID) } else { model.openSplit() }
             }
             .keyboardShortcut(Shortcuts.get(.splitView))
+            Button("Compact Mode") { CompactMode.toggle() }
+                .keyboardShortcut(Shortcuts.get(.compactMode))
             // Labels that are always right: menus aren't told when a single tab changes, so a
             // "Mute"/"Unmute" style label could show the wrong one until you switched tabs.
             Button("Show or Leave Reader") { browser?.selectedTab?.toggleReader() }

@@ -39,7 +39,11 @@ enum SiteForgetter {
         // Nothing of it stays in memory either: a page of it loading ahead, pages of it kept for
         // Back in other tabs, and closed tabs' cached page processes.
         Preloader.discard()
-        for browser in BrowserModel.all.allObjects { browser.tabs.forEach { $0.forgetParkedPages(site: site) } }
+        for browser in BrowserModel.all.allObjects {
+            browser.tabs.forEach { $0.forgetParkedPages(site: site) }
+            browser.releaseDocks(site: site)
+            if let preview = browser.preview, Domains.site(preview.url?.host ?? "") == site { browser.closePreview() }
+        }
         Speed.releaseCachedProcesses()
         // Close the site's tabs (a new tab replaces them if nothing else is left).
         let tabs = model.tabs.filter { Domains.site($0.url?.host ?? "") == site }

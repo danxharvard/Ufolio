@@ -9,7 +9,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
     case reload, back, forward, nextTab, previousTab
     case print, savePage, copyCleanLink
     case zoomIn, zoomOut, actualSize
-    case splitView, reader, pictureInPicture, translate, muteTab
+    case splitView, reader, pictureInPicture, translate, muteTab, compactMode
     case bookmark, bookmarksBar, history, sidebar
     case commandPalette, nextSpace, previousSpace
 
@@ -42,6 +42,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .pictureInPicture: return "Picture in Picture"
         case .translate: return "Translate Page"
         case .muteTab: return "Mute Tab"
+        case .compactMode: return "Compact Mode"
         case .bookmark: return "Bookmark This Page"
         case .bookmarksBar: return "Show Bookmarks Bar"
         case .history: return "Show All History"
@@ -59,7 +60,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .reload, .back, .forward, .nextTab, .previousTab: return "Getting around"
         case .print, .savePage, .copyCleanLink: return "Pages"
         case .zoomIn, .zoomOut, .actualSize: return "Zoom"
-        case .splitView, .reader, .pictureInPicture, .translate, .muteTab: return "Views and media"
+        case .splitView, .reader, .pictureInPicture, .translate, .muteTab, .compactMode: return "Views and media"
         case .bookmark, .bookmarksBar, .history, .sidebar: return "Bookmarks and history"
         case .commandPalette, .nextSpace, .previousSpace: return "Command Palette and Orbits"
         }
@@ -92,6 +93,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .pictureInPicture: return KeyCombo("p", [.command, .option])
         case .translate: return KeyCombo("y", [.command, .shift])
         case .muteTab: return KeyCombo("m", [.command, .control])
+        case .compactMode: return KeyCombo("c", [.command, .control])
         case .bookmark: return KeyCombo("d")
         case .bookmarksBar: return KeyCombo("b", [.command, .shift])
         case .history: return KeyCombo("y")

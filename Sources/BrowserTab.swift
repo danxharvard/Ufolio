@@ -837,6 +837,14 @@ extension BrowserTab: WKNavigationDelegate {
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                  preferences: WKWebpagePreferences,
                  decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
+        // ⌥-click: Link preview, the page in a floating card over this one (as in Zen's Glance).
+        if action.navigationType == .linkActivated, action.modifierFlags.contains(.option),
+           !action.modifierFlags.contains(.command), let model, model.preview !== self,
+           let url = action.request.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+            decisionHandler(.cancel, preferences)
+            model.showPreview(url, from: self)
+            return
+        }
         // ⌘-click opens the link in a new background tab.
         // Only web addresses: anything else goes through the checks below.
         // (A middle-click does the same, as in every other browser, instead of replacing this page.)
@@ -1284,6 +1292,11 @@ extension BrowserTab: WKUIDelegate {
         // Its own set of blocking rules and scripts: sharing the opener's meant a pop-up on a
         // site with Force Field off switched blocking off for the original page too.
         configuration.userContentController = WKUserContentController()
+        // "Preview Link" from the right-click menu.
+        if (webView as? HushWebView)?.openNextAsPreview == true {
+            (webView as? HushWebView)?.openNextAsPreview = false
+            return model.showPreview(configuration: configuration, from: self).webView
+        }
         // "Open Link in Background Tab" from the right-click menu.
         let background = (webView as? HushWebView)?.openNextInBackground ?? false
         (webView as? HushWebView)?.openNextInBackground = false
@@ -1416,7 +1429,7 @@ final class HushWebView: WKWebView {
     // checks for a card over the pointer and ignores the event.
 
     private func covered(_ point: NSPoint) -> Bool {
-        guard let window else { return false }
+        guard !ignoresBlockers, let window else { return false }
         return ClickBlocker.BlockingView.covers(point, in: window)
     }
     private func covered(_ event: NSEvent) -> Bool { event.window === window && covered(event.locationInWindow) }
@@ -1490,6 +1503,10 @@ final class HushWebView: WKWebView {
             background.target = self
             background.representedObject = original
             menu.insertItem(background, at: index + 1)
+            let preview = NSMenuItem(title: "Preview Link", action: #selector(previewLink(_:)), keyEquivalent: "")
+            preview.target = self
+            preview.representedObject = original
+            menu.insertItem(preview, at: index)
         }
         guard onHideElements != nil, url != nil else { return }
         menu.addItem(.separator())
@@ -1515,6 +1532,20 @@ final class HushWebView: WKWebView {
         // WebKit asks for the new tab straight away; never let the flag linger for a later one.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.openNextInBackground = false }
     }
+
+    /// The next page this one opens goes into Link preview instead of a tab.
+    var openNextAsPreview = false
+
+    @objc private func previewLink(_ sender: NSMenuItem) {
+        guard let original = sender.representedObject as? NSMenuItem, let action = original.action else { return }
+        openNextAsPreview = true
+        NSApp.sendAction(action, to: original.target, from: original)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.openNextAsPreview = false }
+    }
+
+    /// The Link preview's page sits on top of the page underneath: the blocker that stops clicks
+    /// reaching that page mustn't stop this one.
+    var ignoresBlockers = false
 
     @objc private func hideElements() { onHideElements?() }
     @objc private func pictureInPicture() { WebKitExtras.togglePictureInPicture(self) }
