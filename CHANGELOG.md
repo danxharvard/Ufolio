@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.52.0-beta.8: no more YouTube ads (beta)
+
+- YouTube ads are blocked. They come from YouTube's own servers, so blocking ad servers never
+  caught them: Ufolio now mutes and skips a video ad the moment it starts, and hides YouTube's ad
+  boxes and sponsored results. You may see a second or two of dark player while an ad is skipped.
+  YouTube changes its ads often, so this updates itself (checked daily, and only used if it's
+  signed by Ufolio) without waiting for a new version of Ufolio.
+- Closing a window with a camera, microphone or location question still waiting no longer
+  blocks that site for good: the question is answered Don't Allow for now, not remembered.
+- What's New shows the notes for every version since the one you last used, and no longer lists
+  a beta's closing note as a change.
+- The safe-files setting no longer says archives open by themselves.
+
 ## 0.52.0-beta.7: safer passwords, steadier tabs (beta)
 
 - Your saved passwords are safer: if the password vault's key couldn't be read for a moment,
