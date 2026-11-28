@@ -120,8 +120,8 @@ enum OriginWarmup {
 
 /// The site you usually open first is loading before you click it: on a fast connection, the
 /// first start page after launch loads that site in the background (the one you opened first
-/// last time, or your first favourite). One page at most, let go after a minute if you don't
-/// open it. Not on a metered or Low Data connection, in Low Power Mode, or with Instant pages off.
+/// last time, or your first favourite). One page at most, kept for three minutes while the start page
+/// waits (let go at once if you go somewhere else). Not on a metered or Low Data connection, in Low Power Mode, or with Instant pages off.
 enum LaunchWarmup {
     private static let key = "skywalker.firstSite"
     private static var noted = false
@@ -150,7 +150,7 @@ enum LaunchWarmup {
             DispatchQueue.main.async {
                 // Still on the start page: a click elsewhere already went somewhere.
                 guard let model, let tab = model.selectedTab, tab.url == nil, !noted else { return }
-                Preloader.preload(target, for: tab, lifetime: 60)
+                Preloader.preload(target, for: tab, lifetime: 180)
             }
         }
         monitor.start(queue: .global(qos: .utility))

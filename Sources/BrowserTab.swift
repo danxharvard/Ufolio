@@ -564,6 +564,9 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
             adopt(ready, for: url)
             return
         }
+        // Going somewhere else: a page loaded ahead for this tab won't be wanted now, so its
+        // memory goes at once (it used to stay until it timed out).
+        Preloader.discard(forTab: id)
         // A sleeping tab's page isn't connected yet (no blocking, no delegates): wake it first,
         // going straight to the new address rather than restoring the old page.
         if isAsleep { sleepState = nil; wakeIfNeeded(loading: false) }
