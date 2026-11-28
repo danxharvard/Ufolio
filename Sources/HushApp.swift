@@ -115,6 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Lookalike.refreshKnown()   // ready before the first page loads
         AppearanceMode.apply(Prefs.string(Prefs.appearance))   // before any window shows
         LaunchSound.playIfWanted()   // the short "arrival" sound (Settings › Appearance)
+        MyCard.refreshStatus()   // the Contacts permission, worked out in the background (it takes macOS a moment)
         DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + 30) { FaviconCache.pruneDisk() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 45) { PerformanceCenter.tidyDisk() }
         ContentBlocker.shared.prepare()
@@ -404,6 +405,8 @@ enum WindowOpener {
 @MainActor
 enum SettingsWindow {
     private static var window: NSWindow?
+    /// The Settings window, if it's been made (for testing).
+    static var current: NSWindow? { window }
 
     /// Whether the window's contents are live. A closed Settings window would otherwise keep
     /// redrawing in the background whenever ads are blocked, stats change or memory is measured.

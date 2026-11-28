@@ -215,10 +215,37 @@ enum CardVault {
 // MARK: - Your contact card
 
 enum MyCard {
-    static var status: CNAuthorizationStatus { CNContactStore.authorizationStatus(for: .contacts) }
+    /// Whether Ufolio may read your contact card. Asking macOS takes a round trip to its privacy
+    /// service (about 0.2 s), so the answer is kept: worked out in the background at launch and
+    /// whenever you come back to Ufolio (you may have changed it in System Settings). Opening
+    /// Settings › Passwords, or clicking into a name box on a page, used to wait for it each time.
+    static var status: CNAuthorizationStatus {
+        lock.lock(); let known = cached; lock.unlock()
+        if let known { return known }
+        let fresh = CNContactStore.authorizationStatus(for: .contacts)
+        lock.lock(); cached = fresh; lock.unlock()
+        return fresh
+    }
+    private static let lock = NSLock()
+    private static var cached: CNAuthorizationStatus?
+
+    /// Looks the answer up again, off the main thread.
+    static func refreshStatus() {
+        _ = activeWatch
+        DispatchQueue.global(qos: .utility).async {
+            let fresh = CNContactStore.authorizationStatus(for: .contacts)
+            lock.lock(); cached = fresh; lock.unlock()
+        }
+    }
+    private static let activeWatch: NSObjectProtocol = NotificationCenter.default.addObserver(
+        forName: NSApplication.didBecomeActiveNotification, object: nil, queue: nil) { _ in refreshStatus() }
 
     static func requestAccess(_ completion: @escaping (Bool) -> Void) {
-        CNContactStore().requestAccess(for: .contacts) { ok, _ in DispatchQueue.main.async { completion(ok) } }
+        CNContactStore().requestAccess(for: .contacts) { ok, _ in
+            let fresh = CNContactStore.authorizationStatus(for: .contacts)
+            lock.lock(); cached = fresh; lock.unlock()
+            DispatchQueue.main.async { completion(ok) }
+        }
     }
 
     private static let keys: [CNKeyDescriptor] = [
@@ -406,8 +433,15 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
             fromKeychain { CardVault.list().map(Option.card) }
             return
         case "contact":
-            guard Prefs.bool(Prefs.autofillContact), MyCard.status != .denied, MyCard.status != .restricted else { return }
-            options = [.contact(MyCard.status == .authorized ? MyCard.displayName : nil)]
+            // Your card is read in the background too (a Contacts look-up stalled the page
+            // you were typing in).
+            guard Prefs.bool(Prefs.autofillContact) else { return }
+            fromKeychain {
+                let status = MyCard.status
+                guard status != .denied, status != .restricted else { return [] }
+                return [.contact(status == .authorized ? MyCard.displayName : nil)]
+            }
+            return
         default:
             return
         }
@@ -493,8 +527,10 @@ final class AutofillCenter: NSObject, WKScriptMessageHandler {
             }
         case .contact:
             let go = { [weak self] in
-                guard let fields = MyCard.fields() else { return }
-                self?.send(kind: "contact", data: fields, host: host, tab: tab)
+                DispatchQueue.global(qos: .userInitiated).async {
+                    guard let fields = MyCard.fields() else { return }
+                    DispatchQueue.main.async { self?.send(kind: "contact", data: fields, host: host, tab: tab) }
+                }
             }
             if MyCard.status == .authorized { go() } else { MyCard.requestAccess { if $0 { go() } } }
         }
