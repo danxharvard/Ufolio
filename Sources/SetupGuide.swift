@@ -13,6 +13,7 @@ struct SetupGuide: View {
     @State private var step: Step = .welcome
     @State private var forward = true
     @State private var appeared = false
+    @State private var buttonHover = false
 
     // Answers (each starts from the current setting).
     /// Found when the guide appears. (As starting values these were worked out again, scanning
@@ -40,16 +41,24 @@ struct SetupGuide: View {
             HStack(spacing: 0) {
                 leftPanel
                     .frame(width: 330)
-                    .background(.regularMaterial)
+                // A hairline between question and choices, fading out at both ends.
+                LinearGradient(colors: [.clear, Color.primary.opacity(0.1), .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(width: 1)
+                    .padding(.vertical, 30)
                 rightPanel
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(.ultraThinMaterial.opacity(0.6))
             }
             .frame(width: 860, height: 540)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Color.white.opacity(0.12)))
-            .shadow(color: .black.opacity(0.35), radius: 40, y: 18)
-            .scaleEffect(appeared ? 1 : 0.96)
+            .background(.regularMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            // Glass catches the light along its top edge.
+            .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .strokeBorder(LinearGradient(colors: [Color.white.opacity(0.32), Color.white.opacity(0.06), Color.white.opacity(0.12)],
+                                             startPoint: .top, endPoint: .bottom), lineWidth: 1))
+            .shadow(color: .black.opacity(0.3), radius: 50, y: 24)
+            .scaleEffect(appeared ? 1 : 0.94)
+            .offset(y: appeared ? 0 : 14)
+            .blur(radius: appeared ? 0 : 8)
             .opacity(appeared ? 1 : 0)
         }
         .onAppear {
@@ -60,11 +69,21 @@ struct SetupGuide: View {
             Task.detached(priority: .userInitiated) {
                 let found = BrowserImporter.available()
                 var art: [String: NSImage] = [:]
-                for source in found.prefix(5) { art[source.name] = NSWorkspace.shared.icon(forFile: source.appPath) }
+                // A browser since removed (its bookmarks still on the Mac) has no app to take an icon
+                // from: macOS handed back a blank document. It gets a globe instead.
+                for source in found.prefix(5) where FileManager.default.fileExists(atPath: source.appPath) {
+                    art[source.name] = NSWorkspace.shared.icon(forFile: source.appPath)
+                }
                 let ready = art
                 await MainActor.run { sources = found; icons = ready }
             }
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) { appeared = true }
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.86)) { appeared = true }
+            // The address bar behind the guide had the keyboard: Return (and any typing) went into
+            // it, unseen, instead of pressing Get Started. (Once more a moment later, as a new
+            // window puts the cursor in its address bar as it opens.)
+            let unfocus = { if let window = NSApp.keyWindow, window.firstResponder is NSText { window.makeFirstResponder(nil) } }
+            DispatchQueue.main.async(execute: unfocus)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: unfocus)
         }
     }
 
@@ -77,10 +96,11 @@ struct SetupGuide: View {
                     Button { go(-1) } label: {
                         Label("Back", systemImage: "arrow.left").font(.system(size: 13, weight: .medium))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(GuidePress())
                     .disabled(importing)
                     .foregroundStyle(Color.accentColor)
                     .keyboardShortcut(.leftArrow, modifiers: [])
+                    .transition(.opacity.combined(with: .offset(x: -6)))
                 } else {
                     Color.clear
                 }
@@ -89,6 +109,11 @@ struct SetupGuide: View {
             .padding(.bottom, 26)
 
             VStack(alignment: .leading, spacing: 14) {
+                if step != .welcome && step != .done {
+                    Text("STEP \(step.rawValue) OF \(Step.allCases.count - 2)")
+                        .font(.system(size: 10.5, weight: .bold)).tracking(1.4)
+                        .foregroundStyle(Color.accentColor.opacity(0.9))
+                }
                 Text(step.title)
                     .font(.system(size: 32, weight: .bold, design: .rounded))
                     .fixedSize(horizontal: false, vertical: true)
@@ -99,7 +124,8 @@ struct SetupGuide: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .id(step)
-            .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 8)), removal: .opacity))
+            .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 10)).combined(with: .glide(blur: 6)),
+                                    removal: .opacity.combined(with: .glide(blur: 4))))
 
             Spacer()
 
@@ -111,14 +137,28 @@ struct SetupGuide: View {
                     if importing { ProgressView().controlSize(.small).tint(.white) }
                     Text(importing ? "Importing…" : step.buttonTitle)
                         .font(.system(size: 14, weight: .semibold))
+                        .contentTransition(.interpolate)
+                    if !importing {
+                        Image(systemName: step == .done ? "sparkles" : "arrow.right")
+                            .font(.system(size: 12.5, weight: .bold))
+                            .offset(x: buttonHover ? 3 : 0)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: 40)
+                .frame(height: 42)
                 .foregroundStyle(.white)
-                .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.accentColor.gradient))
+                .background(
+                    RoundedRectangle(cornerRadius: 13, style: .continuous).fill(Color.accentColor.gradient)
+                        .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            .fill(LinearGradient(colors: [Color.white.opacity(buttonHover ? 0.26 : 0.18), .clear],
+                                                 startPoint: .top, endPoint: .center)))
+                        .shadow(color: Color.accentColor.opacity(buttonHover ? 0.45 : 0.28), radius: buttonHover ? 14 : 8, y: 5)
+                )
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(GuidePress(scale: 0.965))
+            .onHover { hovering in withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { buttonHover = hovering } }
             .disabled(importing)
             .keyboardShortcut(.defaultAction)
         }
@@ -141,8 +181,9 @@ struct SetupGuide: View {
             }
         }
         .id(step)
-        .transition(.asymmetric(insertion: .opacity.combined(with: .offset(x: forward ? 24 : -24)),
-                                removal: .opacity.combined(with: .offset(x: forward ? -24 : 24))))
+        .transition(.asymmetric(
+            insertion: .opacity.combined(with: .offset(x: forward ? 36 : -36)).combined(with: .scale(scale: 0.97)).combined(with: .glide(blur: 10)),
+            removal: .opacity.combined(with: .offset(x: forward ? -36 : 36)).combined(with: .scale(scale: 0.98)).combined(with: .glide(blur: 8))))
         .padding(36)
     }
 
@@ -152,8 +193,11 @@ struct SetupGuide: View {
                 .frame(height: 210)
             VStack(alignment: .leading, spacing: 14) {
                 Highlight(symbol: "bolt.fill", color: .orange, text: "Blazing fast: ads and trackers stopped before they reach the page")
+                    .staggered(0, base: 0.25)
                 Highlight(symbol: "memorychip.fill", color: .green, text: "Native and light on memory and battery")
+                    .staggered(1, base: 0.25)
                 Highlight(symbol: "hand.raised.fill", color: .blue, text: "No account, no tracking: your data stays on this Mac")
+                    .staggered(2, base: 0.25)
             }
         }
     }
@@ -161,12 +205,17 @@ struct SetupGuide: View {
     private var bringStuffChoices: some View {
         VStack(spacing: 12) {
             ChoiceCard(title: "No, start fresh", selected: importChoice == nil) { importChoice = nil }
-            ForEach(sources.prefix(5)) { source in
+                .staggered(0)
+            ForEach(Array(sources.prefix(5).enumerated()), id: \.element.id) { index, source in
                 ChoiceCard(title: source.name, subtitle: "Bookmarks and the sites you visit most",
                            selected: importChoice == source.name,
-                           art: icons[source.name].map { AnyView(Image(nsImage: $0).resizable().frame(width: 34, height: 34)) }) {
+                           art: AnyView(Group {
+                               if let icon = icons[source.name] { Image(nsImage: icon).resizable().frame(width: 34, height: 34) }
+                               else { Image(systemName: "globe").font(.system(size: 20)).foregroundStyle(.secondary).frame(width: 34, height: 34) }
+                           })) {
                     importChoice = source.name
                 }
+                .staggered(index + 1)
             }
             if let importResult {
                 Label(importResult, systemImage: "exclamationmark.circle").font(.system(size: 12)).foregroundStyle(.orange)
@@ -177,11 +226,12 @@ struct SetupGuide: View {
 
     private var searchChoices: some View {
         VStack(spacing: 10) {
-            ForEach(SearchEngine.allCases) { option in
+            ForEach(Array(SearchEngine.allCases.enumerated()), id: \.element.id) { index, option in
                 ChoiceCard(title: option.name, subtitle: option.setupNote, selected: engine == option.rawValue,
                            art: AnyView(Favicon(url: option.homepage, size: 26))) {
                     engine = option.rawValue
                 }
+                .staggered(index)
             }
         }
         .frame(maxWidth: 380)
@@ -189,12 +239,13 @@ struct SetupGuide: View {
 
     private var guardChoices: some View {
         VStack(spacing: 12) {
-            ForEach(BlockingMode.allCases) { option in
+            ForEach(Array(BlockingMode.allCases.enumerated()), id: \.element.id) { index, option in
                 ChoiceCard(title: option.label + (option == .standard ? " (recommended)" : ""), subtitle: option.detail,
                            selected: blocking == option.rawValue,
                            art: AnyView(IconTile(symbol: option.symbol, colors: option.colors, size: 34))) {
                     blocking = option.rawValue
                 }
+                .staggered(index)
             }
         }
         .frame(maxWidth: 400)
@@ -202,10 +253,11 @@ struct SetupGuide: View {
 
     private var tabChoices: some View {
         HStack(alignment: .top, spacing: 18) {
-            ForEach(TabLayout.allCases) { option in
+            ForEach(Array(TabLayout.allCases.enumerated()), id: \.element.id) { index, option in
                 PreviewCard(title: option.label, subtitle: option.detail, selected: tabLayout == option.rawValue) {
                     LayoutPreview(side: option == .side)
                 } action: { tabLayout = option.rawValue }
+                .staggered(index)
             }
         }
     }
@@ -213,10 +265,11 @@ struct SetupGuide: View {
     private var lookChoices: some View {
         VStack(spacing: 26) {
             HStack(alignment: .top, spacing: 14) {
-                ForEach(AppearanceMode.allCases) { option in
+                ForEach(Array(AppearanceMode.allCases.enumerated()), id: \.element.id) { index, option in
                     PreviewCard(title: option.label, subtitle: nil, selected: appearance == option.rawValue) {
                         ThemePreview(mode: option)
                     } action: { appearance = option.rawValue }
+                    .staggered(index)
                 }
             }
             VStack(spacing: 10) {
@@ -228,9 +281,12 @@ struct SetupGuide: View {
                                 .fill(option.color.map { AnyShapeStyle($0.gradient) }
                                       ?? AnyShapeStyle(AngularGradient(colors: [.red, .orange, .yellow, .green, .blue, .purple, .red], center: .center)))
                                 .frame(width: 22, height: 22)
-                                .overlay(Circle().strokeBorder(Color.primary.opacity(accent == option.rawValue ? 0.75 : 0), lineWidth: 2).padding(-4))
+                                .overlay(Circle().strokeBorder(Color.primary.opacity(accent == option.rawValue ? 0.75 : 0), lineWidth: 2)
+                                    .padding(accent == option.rawValue ? -4 : 2))
+                                .scaleEffect(accent == option.rawValue ? 1.12 : 1)
+                                .animation(.spring(response: 0.32, dampingFraction: 0.6), value: accent)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(GuidePress(scale: 0.85))
                         .help(option.label)
                     }
                 }
@@ -245,7 +301,9 @@ struct SetupGuide: View {
                            art: AnyView(Image(systemName: "checkmark.seal.fill").font(.system(size: 24)).foregroundStyle(.green))) {}
             } else {
                 ChoiceCard(title: "Yes, make Ufolio my default", subtitle: "macOS will ask you to confirm.", selected: makeDefault) { makeDefault = true }
+                    .staggered(0)
                 ChoiceCard(title: "Not yet, I'm still exploring", selected: !makeDefault) { makeDefault = false }
+                    .staggered(1)
             }
         }
         .frame(maxWidth: 380)
@@ -254,10 +312,14 @@ struct SetupGuide: View {
     private var summary: some View {
         VStack(alignment: .leading, spacing: 14) {
             SummaryRow(symbol: "magnifyingglass", text: "Searching with \((SearchEngine(rawValue: engine) ?? .google).name)")
+                .staggered(0)
             SummaryRow(symbol: "shield.lefthalf.filled", text: "Force Field: \((BlockingMode(rawValue: blocking) ?? .standard).label)")
+                .staggered(1)
             SummaryRow(symbol: tabLayout == TabLayout.side.rawValue ? "sidebar.left" : "rectangle.topthird.inset.filled",
                        text: (TabLayout(rawValue: tabLayout) ?? .top).label)
+                .staggered(2)
             SummaryRow(symbol: "paintbrush.fill", text: "\((AppearanceMode(rawValue: appearance) ?? .system).label) theme")
+                .staggered(3)
             if let importResult { SummaryRow(symbol: "square.and.arrow.down", text: importResult) }
             if isDefault { SummaryRow(symbol: "checkmark.seal.fill", text: "Ufolio is your default browser") }
             Text("You can change any of these in Settings (⌘,).")
@@ -271,7 +333,7 @@ struct SetupGuide: View {
     private func go(_ delta: Int) {
         guard let target = Step(rawValue: step.rawValue + delta) else { return }
         forward = delta > 0
-        withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) { step = target }
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.88)) { step = target }
     }
 
     private func next() {
@@ -409,9 +471,13 @@ private struct ChoiceCard: View {
             HStack(spacing: 14) {
                 ZStack {
                     Circle().strokeBorder(selected ? Color.accentColor : Color.secondary.opacity(0.5), lineWidth: 1.5)
-                    if selected { Circle().fill(Color.accentColor).padding(4) }
+                    Circle().fill(Color.accentColor)
+                        .overlay(Image(systemName: "checkmark").font(.system(size: 9, weight: .heavy)).foregroundStyle(.white))
+                        .scaleEffect(selected ? 1 : 0.2)
+                        .opacity(selected ? 1 : 0)
                 }
                 .frame(width: 20, height: 20)
+                .animation(.spring(response: 0.34, dampingFraction: 0.58), value: selected)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(selected ? Color.accentColor : .primary)
@@ -425,16 +491,18 @@ private struct ChoiceCard: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, subtitle == nil ? 15 : 12)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.primary.opacity(selected ? 0.09 : hovering ? 0.07 : 0.045)))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(selected ? Color.accentColor.opacity(0.85) : Color.primary.opacity(0.08), lineWidth: selected ? 1.5 : 1))
+            .background(RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .fill(selected ? AnyShapeStyle(Color.accentColor.opacity(0.12)) : AnyShapeStyle(Color.primary.opacity(hovering ? 0.075 : 0.045))))
+            .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .strokeBorder(selected ? Color.accentColor.opacity(0.85) : Color.primary.opacity(hovering ? 0.14 : 0.08), lineWidth: selected ? 1.5 : 1))
+            .shadow(color: .black.opacity(hovering ? 0.14 : 0), radius: 10, y: 4)
+            .offset(y: hovering ? -1.5 : 0)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GuidePress(scale: 0.98))
         .onHover { hovering = $0 }
-        .animation(.snappy(duration: 0.16), value: hovering)
-        .animation(.easeOut(duration: 0.15), value: selected)
+        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: hovering)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
     }
 }
 
@@ -461,11 +529,13 @@ private struct PreviewCard<Preview: View>: View {
                         .frame(width: 180)
                 }
             }
+            .scaleEffect(hovering ? 1.025 : 1)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(GuidePress(scale: 0.97))
         .onHover { hovering = $0 }
-        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: hovering)
+        .animation(.spring(response: 0.3, dampingFraction: 0.72), value: hovering)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selected)
     }
 }
 
@@ -573,15 +643,68 @@ private struct SummaryRow: View {
 private struct ProgressDots: View {
     let count: Int
     let current: Int
+    @Namespace private var pill
 
     var body: some View {
         HStack(spacing: 6) {
             ForEach(0..<count, id: \.self) { i in
                 Capsule()
-                    .fill(i == current ? Color.accentColor : Color.primary.opacity(0.18))
-                    .frame(width: i == current ? 18 : 6, height: 6)
+                    .fill(i < current ? Color.accentColor.opacity(0.45) : Color.primary.opacity(0.18))
+                    .frame(width: i == current ? 22 : 6, height: 6)
+                    .overlay {
+                        if i == current { Capsule().fill(Color.accentColor.gradient).matchedGeometryEffect(id: "pill", in: pill) }
+                    }
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: current)
+        .animation(.spring(response: 0.45, dampingFraction: 0.78), value: current)
     }
+}
+
+// MARK: - Fluid motion
+
+/// Presses down a touch while held and springs back, like a button on iPhone.
+private struct GuidePress: ButtonStyle {
+    var scale: CGFloat = 0.95
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? scale : 1)
+            .brightness(configuration.isPressed ? -0.03 : 0)
+            .animation(.spring(response: 0.24, dampingFraction: 0.62), value: configuration.isPressed)
+    }
+}
+
+/// Comes into focus: blurred at the start of a transition, sharp at the end.
+private struct GlideBlur: ViewModifier {
+    let radius: CGFloat
+    func body(content: Content) -> some View { content.blur(radius: radius) }
+}
+
+extension AnyTransition {
+    fileprivate static func glide(blur radius: CGFloat) -> AnyTransition {
+        .modifier(active: GlideBlur(radius: radius), identity: GlideBlur(radius: 0))
+    }
+}
+
+/// Drifts in shortly after the one before it, so a list arrives as a gentle wave.
+private struct Staggered: ViewModifier {
+    let index: Int
+    let base: Double
+    @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 10)
+            .scaleEffect(shown ? 1 : 0.97, anchor: .top)
+            .onAppear {
+                guard !reduceMotion else { shown = true; return }
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.82).delay(base + Double(index) * 0.05)) { shown = true }
+            }
+    }
+}
+
+extension View {
+    fileprivate func staggered(_ index: Int, base: Double = 0.08) -> some View { modifier(Staggered(index: index, base: base)) }
 }
