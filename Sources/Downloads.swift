@@ -440,7 +440,7 @@ struct DownloadsButton: View {
             }
             .buttonStyle(.plain)
             .help("Downloads")
-                .overlay(alignment: .bottom) {
+                .overlay {
                     if downloads.activeCount > 0 {
                         ActiveBar(items: downloads.items.filter { $0.state == .downloading })
                             .allowsHitTesting(false)
@@ -452,21 +452,37 @@ struct DownloadsButton: View {
     }
 }
 
-/// How far the downloads have got: a thin bar along the bottom of the DOWNLOADS badge.
+/// How far the downloads have got: a ring travelling round the DOWNLOADS badge's outline,
+/// clockwise from the top centre, gliding on as each part arrives until it meets itself.
+/// (Several at once: their progress together.)
 private struct ActiveBar: View {
     let items: [DownloadItem]
 
     var body: some View {
+        // Read four times a second: the items' own updates aren't watched from here.
         TimelineView(.periodic(from: .now, by: 0.25)) { _ in
             let progress = items.isEmpty ? 0 : items.map(\.progress).reduce(0, +) / Double(items.count)
-            GeometryReader { geo in
-                Capsule().fill(Color.accentColor)
-                    .frame(width: max(4, (geo.size.width) * progress), height: 2)
-                    .animation(.smooth(duration: 0.26), value: progress)
-            }
-            .frame(width: ToolbarBadge.size.width - 10, height: 2)
-            .padding(.bottom, 3)
+            OutlineRing(progress: max(0.02, min(1, progress)))
+                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
+                .frame(width: ToolbarBadge.size.width, height: ToolbarBadge.size.height)
+                .animation(.linear(duration: 0.25), value: progress)
         }
+    }
+}
+
+/// The badge's outline, drawn from the top centre clockwise for the given share of the way round.
+private struct OutlineRing: Shape {
+    var progress: Double
+    var animatableData: Double { get { progress } set { progress = newValue } }
+
+    func path(in rect: CGRect) -> Path {
+        // A rounded rectangle's outline starts halfway down its right side; the top centre is
+        // three quarters of the way round from there.
+        let outline = RoundedRectangle(cornerRadius: 6, style: .continuous).inset(by: 0.8).path(in: rect)
+        let start = 0.75, end = start + progress
+        var path = outline.trimmedPath(from: start, to: min(1, end))
+        if end > 1 { path.addPath(outline.trimmedPath(from: 0, to: end - 1)) }
+        return path
     }
 }
 
