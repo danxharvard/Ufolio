@@ -693,7 +693,7 @@ final class BrowserModel: NSObject, ObservableObject {
                 while let view = node, !(view is WKWebView) { node = view.superview }
                 guard node == nil else { return event }   // over the page
                 if event.type == .otherMouseUp {
-                    if event.buttonNumber == 3 { model.selectedTab?.goBack() } else { model.selectedTab?.goForward() }
+                    if event.buttonNumber == 3 { model.pageInFront?.goBack() } else { model.pageInFront?.goForward() }
                 }
                 return nil
             }
@@ -827,6 +827,11 @@ final class BrowserModel: NSObject, ObservableObject {
         if ChaosTest.on { ChaosTest.previewTabs.add(tab) }
         preview = tab
     }
+
+    /// The page you're looking at: an open Link preview, otherwise the selected tab. Back,
+    /// Forward, Reload, zoom, Print and the like act on it (they used to change the page hidden
+    /// under the preview).
+    var pageInFront: BrowserTab? { preview ?? selectedTab }
 
     func closePreview() {
         guard let tab = preview else { return }

@@ -198,13 +198,13 @@ struct HushCommands: Commands {
         }
 
         CommandGroup(replacing: .printItem) {
-            Button("Print…") { browser?.selectedTab?.printPage() }
+            Button("Print…") { browser?.pageInFront?.printPage() }
                 .keyboardShortcut(Shortcuts.get(.print))
         }
 
         CommandGroup(after: .pasteboard) {
             Button("Copy Clean Link") {
-                guard let url = browser?.selectedTab?.url else { return }
+                guard let url = browser?.pageInFront?.url else { return }
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(CleanLinks.clean(url).absoluteString, forType: .string)
             }
@@ -224,7 +224,7 @@ struct HushCommands: Commands {
             Button("Close Window") { NSApp.keyWindow?.performClose(nil) }
                 .keyboardShortcut(Shortcuts.get(.closeWindow))
             Divider()
-            Button("Save Page As…") { browser?.selectedTab?.savePage() }
+            Button("Save Page As…") { browser?.pageInFront?.savePage() }
                 .keyboardShortcut(Shortcuts.get(.savePage))
             Button("Send to iPhone…") {
                 if let b = browser, let tab = b.selectedTab, let url = tab.url { Beam.show(url, title: tab.displayTitle, in: b.window) }
@@ -235,14 +235,14 @@ struct HushCommands: Commands {
         }
 
         CommandGroup(before: .toolbar) {
-            Button("Reload Page") { browser?.selectedTab?.reload() }
+            Button("Reload Page") { browser?.pageInFront?.reload() }
                 .keyboardShortcut(Shortcuts.get(.reload))
             Divider()
-            Button("Zoom In") { browser?.selectedTab?.zoom(by: 0.1) }
+            Button("Zoom In") { browser?.pageInFront?.zoom(by: 0.1) }
                 .keyboardShortcut(Shortcuts.get(.zoomIn))
-            Button("Zoom Out") { browser?.selectedTab?.zoom(by: -0.1) }
+            Button("Zoom Out") { browser?.pageInFront?.zoom(by: -0.1) }
                 .keyboardShortcut(Shortcuts.get(.zoomOut))
-            Button("Actual Size") { browser?.selectedTab?.resetZoom() }
+            Button("Actual Size") { browser?.pageInFront?.resetZoom() }
                 .keyboardShortcut(Shortcuts.get(.actualSize))
             Divider()
             // One label that's always right (the sidebar's open state isn't something menus watch).
@@ -260,7 +260,7 @@ struct HushCommands: Commands {
             Button("Show or Leave Reader") { browser?.selectedTab?.toggleReader() }
                 .keyboardShortcut(Shortcuts.get(.reader))
             Button("Picture in Picture") {
-                if let view = browser?.selectedTab?.webView { WebKitExtras.togglePictureInPicture(view) }
+                if let view = browser?.pageInFront?.webView { WebKitExtras.togglePictureInPicture(view) }
             }
             .keyboardShortcut(Shortcuts.get(.pictureInPicture))
             Button("Translate Page") {
@@ -310,9 +310,9 @@ struct HushCommands: Commands {
             Button("Reopen Closed Tab") { browser?.reopenClosedTab() }
                 .keyboardShortcut(Shortcuts.get(.reopenTab))
             Divider()
-            Button("Back") { browser?.selectedTab?.goBack() }
+            Button("Back") { browser?.pageInFront?.goBack() }
                 .keyboardShortcut(Shortcuts.get(.back))
-            Button("Forward") { browser?.selectedTab?.goForward() }
+            Button("Forward") { browser?.pageInFront?.goForward() }
                 .keyboardShortcut(Shortcuts.get(.forward))
             Divider()
             Button("Show Next Tab") { browser?.selectAdjacentTab(1) }
