@@ -36,9 +36,25 @@ enum FluidTest {
                 try? await Task.sleep(nanoseconds: 700_000_000)
                 let settleLate = meter.late
                 switches.append("\(tab.rawValue) \(switchMs)")
+                if pass == passes {
+                    // How many AppKit views the section is made of (each is laid out, tracked and
+                    // searched under the pointer as you scroll).
+                    var count = 0, kinds: [String: Int] = [:]
+                    func walk(_ v: NSView) { count += 1; kinds[String(describing: type(of: v)).prefix(40).description, default: 0] += 1; v.subviews.forEach(walk) }
+                    walk(view)
+                    let top = kinds.sorted { $0.value > $1.value }.prefix(6).map { "\($0.key) \($0.value)" }.joined(separator: ", ")
+                    lines.append("\(tab.rawValue): \(count) views (\(top))")
+                }
                 if pass < passes { continue }
                 // Scrolling: down to the bottom and back up at a steady trackpad speed.
                 guard let scroll = detailScrollView(in: view) else { lines.append("\(tab.rawValue): switch \(switchMs) ms, no scroll view"); continue }
+                // UFOLIO_FLUID_POINTER=over|away: the pointer parked over the page, or off the window.
+                if let where_ = ProcessInfo.processInfo.environment["UFOLIO_FLUID_POINTER"], let screen = window.screen {
+                    let f = window.frame, h = screen.frame.height
+                    let p = where_ == "away" ? CGPoint(x: 5, y: 5) : CGPoint(x: f.midX + 120, y: h - f.midY)
+                    CGWarpMouseCursorPosition(p)
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                }
                 meter.reset()
                 await meter.scroll(scroll, speed: 1400)
                 let frames = meter.frames, late = meter.late, worst = Int(meter.worst * 1000)
