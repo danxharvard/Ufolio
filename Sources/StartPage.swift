@@ -91,6 +91,7 @@ struct StartPage: View {
         .animation(.smooth(duration: 0.26), value: personalising)
         .onAppear {
             weather.refreshIfNeeded()
+            LaunchWarmup.startIfFast(in: model)   // the site you usually open first, loading already
             // The sites you're most likely to open from here get their connections ready now
             // (a look-up and a secure handshake, nothing downloaded), so even a quick click on a
             // favourite skips that part of the wait. Each site at most once every 30 seconds.

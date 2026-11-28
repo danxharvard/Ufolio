@@ -470,7 +470,8 @@ final class BrowserModel: NSObject, ObservableObject {
             if !placed.isEmpty { tabs = placed + tabs.filter { !$0.isPinned } }
         }
         if !isPrivate, !Self.didRestoreSession { SpeedBenchmark.startIfAsked(in: self); LeakTest.startIfAsked(in: self); AutofillTest.startIfAsked(in: self); ShieldSnapshot.startIfAsked(in: self); BackgroundPlayTest.startIfAsked(in: self); EvalTest.startIfAsked(in: self) }
-        if !isPrivate { EvalTest.startIfAsked(in: self); SwitchTest.startIfAsked(in: self); SpeedBenchmark.prefetchTestIfAsked(in: self); ChaosTest.startIfAsked(in: self) }   // (testing only; also after restoring tabs)
+        if !isPrivate { EvalTest.startIfAsked(in: self); SwitchTest.startIfAsked(in: self); SpeedBenchmark.prefetchTestIfAsked(in: self)
+        SpeedBenchmark.warmupTestIfAsked(in: self); ChaosTest.startIfAsked(in: self) }   // (testing only; also after restoring tabs)
         if !isPrivate { Self.didRestoreSession = true }
         if visibleTabs.allSatisfy(\.isPinned) {
             // A new window opens the homepage if Settings › General says so.
@@ -781,6 +782,7 @@ final class BrowserModel: NSObject, ObservableObject {
 
     /// Opens a URL in the current tab, or a new background tab when ⌘ is held.
     func open(_ url: URL, inNewTab: Bool = false) {
+        LaunchWarmup.noteOpen(url, privately: isPrivate)
         if inNewTab || selectedTab == nil {
             newTab(url: url, select: !inNewTab)
         } else {

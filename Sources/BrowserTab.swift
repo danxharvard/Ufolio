@@ -882,6 +882,10 @@ extension BrowserTab: WKNavigationDelegate {
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                  preferences: WKWebpagePreferences,
                  decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
+        // Heading to a new page: the servers its files come from get their connections now (Skywalker).
+        if action.targetFrame?.isMainFrame ?? false, let url = action.request.url, url.scheme?.lowercased().hasPrefix("http") == true {
+            OriginWarmup.warm(url, in: webView, privately: isPrivate)
+        }
         // ⌥-click: Link preview, the page in a floating card over this one (as in Zen's Glance).
         if action.navigationType == .linkActivated, action.modifierFlags.contains(.option),
            !action.modifierFlags.contains(.command), let model, model.preview !== self,
@@ -1242,6 +1246,7 @@ extension BrowserTab: WKNavigationDelegate {
             // Private windows leave no trace: no history, suggestions or report entries.
             guard !isPrivate else { return }
             HistoryStore.store(for: profileID).record(url, title: webView.title ?? "")
+            OriginWarmup.learn(from: webView, url: url)
             CookieCleaner.noteVisit(url.host)
             // (Only in the default profile: other profiles keep their browsing fully separate.)
             if profileID == nil { BookmarkOffer.shared.record(url, previousHost: lastFinishedHost) }

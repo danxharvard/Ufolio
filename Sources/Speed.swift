@@ -65,7 +65,8 @@ enum Speed {
 
     /// Opens a connection to the site's server ahead of time, through this web view (so with its
     /// profile's cookies, or a Stealth window's own). At most once every 30 seconds per site.
-    static func preconnect(_ url: URL?, in webView: WKWebView?) {
+    /// `related`: also the servers that site's pages use (OriginWarmup).
+    static func preconnect(_ url: URL?, in webView: WKWebView?, related: Bool = true) {
         guard enabled, let url, let webView, let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
               let host = url.host?.lowercased(), !host.isEmpty, !TorrentTools.isAdNetwork(host),
               // Never to an ad or tracking server: pointing at an ad link used to open a connection to
@@ -79,6 +80,7 @@ enum Speed {
         let selector = NSSelectorFromString("_preconnectToServer:")
         guard webView.responds(to: selector), let target = URL(string: origin) else { return }
         webView.perform(selector, with: target)
+        if related { OriginWarmup.warm(url, in: webView, privately: !webView.configuration.websiteDataStore.isPersistent) }
     }
 
     // MARK: Links on the page
@@ -285,6 +287,21 @@ enum SpeedBenchmark {
                     }
                 }
             }
+            NSApp.terminate(nil)
+        }
+    }
+
+    /// Testing only (UFOLIO_WARMUP_TEST=1, with UFOLIO_BENCH=1 for the timings): five seconds after
+    /// launch, opens the first favourite from the start page and prints how long it took.
+    static func warmupTestIfAsked(in model: BrowserModel) {
+        guard ProcessInfo.processInfo.environment["UFOLIO_WARMUP_TEST"] != nil else { return }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard let tab = model.selectedTab, let url = model.bookmarks.items(in: nil).first?.url else { NSApp.terminate(nil); return }
+            NSApp.activate(ignoringOtherApps: true)
+            model.window?.makeKeyAndOrderFront(nil)
+            let (commit, finish, fcp) = await measure(in: tab) { model.open(url) }
+            FileHandle.standardError.write("warmup: \(url.host ?? "") commit \(commit) finish \(finish) fcp \(fcp)\n".data(using: .utf8)!)
             NSApp.terminate(nil)
         }
     }

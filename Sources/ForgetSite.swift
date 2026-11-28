@@ -34,6 +34,7 @@ enum SiteForgetter {
             BookmarkOffer.shared.forget(site: site)
             PrivacyReport.shared.forget(site: site)   // it lists the sites you visited too
             CookieCleaner.forget(site: site)          // and the cleaner's note of when you last used it
+            OriginWarmup.forget(site: site)           // and which servers its pages use
             Task { await FaviconCache.shared.forget(site: site) }
         }
         // Nothing of it stays in memory either: a page of it loading ahead, pages of it kept for

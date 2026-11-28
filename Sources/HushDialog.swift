@@ -397,6 +397,7 @@ enum HushDialogs {
                 RecentlyClosed.shared.clear()
                 PrivacyReport.shared.reset()
                 CookieCleaner.historyCleared()
+                OriginWarmup.forgetAll()
             }))
     }
 }
