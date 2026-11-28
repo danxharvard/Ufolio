@@ -65,12 +65,7 @@ struct SideTabBar: View {
     private var toolsRow: some View {
         HStack(spacing: 2) {
             if !model.isPrivate { SpaceButton(model: model) }
-            if !model.isPrivate, let space = SpaceStore.shared.space(model.spaceID) {
-                Text(space.name)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            if !model.isPrivate { SpaceName(spaceID: model.spaceID) }
             Spacer(minLength: 4)
             // Downloads, extensions, Force Field and Stealth all sit together at the top right,
             // beside the ⋯ menu, as with tabs along the top.
@@ -114,6 +109,22 @@ struct SideTabBar: View {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { storedWidth = compact ? 250 : Self.minWidth }
             }
             .help("Drag to resize. Double-click for icons only.")
+    }
+}
+
+/// The Orbit's name beside its button. Watches the Orbits themselves, so renaming one shows
+/// here straight away (it used to keep the old name until something else redrew the column).
+private struct SpaceName: View {
+    let spaceID: UUID?
+    @ObservedObject private var store = SpaceStore.shared
+
+    var body: some View {
+        if let space = store.space(spaceID) {
+            Text(space.name)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
     }
 }
 
