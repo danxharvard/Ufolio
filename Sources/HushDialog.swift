@@ -70,6 +70,9 @@ final class DialogHost: ObservableObject {
     }
 
     func finish(_ dialog: HushDialog, choice: Int, checked: Bool) {
+        // Answered once: a second click while the card fades away (it stays clickable for that
+        // moment) used to run the answer again.
+        guard queue.contains(where: { $0.id == dialog.id }) else { return }
         queue.removeAll { $0.id == dialog.id }
         dialog.completion(choice, checked)
     }
