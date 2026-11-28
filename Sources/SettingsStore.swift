@@ -324,7 +324,8 @@ enum SearchEngine: String, CaseIterable, Identifiable {
             components?.queryItems = [.init(name: "q", value: query), .init(name: "type", value: "list")]
         case .bing:
             components = URLComponents(string: "https://api.bing.com/osjson.aspx")
-            components?.queryItems = [.init(name: "query", value: query)]
+            // "form" as Firefox sends it: without it Bing answers some clients with nothing at all.
+            components?.queryItems = [.init(name: "query", value: query), .init(name: "form", value: "OSDJAS")]
         case .brave:
             components = URLComponents(string: "https://search.brave.com/api/suggest")
             components?.queryItems = [.init(name: "q", value: query)]
