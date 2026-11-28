@@ -5,8 +5,9 @@
 <h1 align="center">Ufolio 🛸</h1>
 
 <p align="center">
-  <b>Project UFO</b><br>
-  A native Mac browser built on WebKit. Small but mighty fast and powerful. With all the standard features you’d expect from a browser plus many more unique to Ufolio. A pretty awesome ad blocker built right in thats light on CPU/RAM. 
+  <b>Small but mighty. Extraordinarily fast. Light on RAM.</b><br>
+  A native Mac browser built on WebKit, with an ad blocker at its core. Light enough to sip memory,
+  yet powerful enough to run 250 open tabs of all your favourite content.
 </p>
 
 <p align="center">
@@ -17,6 +18,22 @@
 > 🛰️ **Mid-transmission:** Ufolio was called Hush Browser until recently. Your settings, bookmarks,
 > history and passwords come along for the ride. If you installed it before the rename, it may still
 > be called Hush Browser in your Applications folder; rename it in Finder if you like.
+
+---
+
+## At a glance
+
+- **Small but mighty.** A 12 MB download, about 40 MB of memory for the app itself, and every
+  feature you'd expect from a browser, plus plenty you won't find anywhere else.
+- **Extraordinarily fast.** Pages start loading before you click, your usual first site is ready
+  the moment Ufolio opens, and Back and Forward are instant.
+- **Light on RAM, yet powerful.** Tabs you're not using rest and hand their memory back, so Ufolio
+  stays light even with 250 tabs open, and every one wakes exactly where you left it.
+- **An ad blocker at its core.** Force Field stops ads and trackers before they download, YouTube
+  ads included, so pages land sooner and use less data.
+- **Everything else on board:** Chrome and Safari extensions, Split View, Orbits, Profiles, Link
+  Preview, Docked Sites, Compact Mode, a Command Palette, Stealth windows, a password vault,
+  Send to iPhone and more.
 
 ---
 
@@ -42,16 +59,21 @@ No bloat. No probing. No nonsense. Just *Ufolio*.
 - **Instant pages**: Ufolio starts loading the page you're about to open (the address you're
   typing, the suggestion you arrow to, the favourite you rest on, the link you press), so it's
   already there when you get to it. Back to a page you came from is instant too.
+- **Pages before you click**: point at a link and its page is fetched before you click it.
+- **Your first site, ready at launch**: Ufolio learns which site you open first and has it loaded
+  by the time you click.
+- **Quicker social sites**: Facebook, X and Reddit get their connections ready the moment you
+  head there, and Ufolio learns the same trick for the other sites you visit.
 - **Ads vaporised before they load.** Ads and trackers are stopped before they download, so busy
   pages land sooner and use less data. Even with the Force Field up, pages load as quickly as in
   plain WebKit.
-- **Tab Sleep and Memory Saver**: tabs you're not using drift into hibernation and give back memory
-  and battery, and Ufolio keeps itself under a memory limit you set. Tabs wake exactly where you
-  left them.
+- **Tab Sleep, Light Sleep and Memory Saver**: tabs you're not using hand back the memory they
+  don't need (without reloading), then drift into hibernation, and Ufolio keeps itself under a
+  memory limit you set. That's how 250 open tabs stay light. Tabs wake exactly where you left them.
 - **Performance modes**: Automatic, Performance, Balanced, Battery Saver and Eco.
 
 ### 🛸 Tiny craft, big power
-- **A 9 MB download** (22 MB installed): one app for both Apple Silicon and Intel Macs.
+- **A 12 MB download** (29 MB installed): one app for both Apple Silicon and Intel Macs.
 - **About 40 MB of memory** for the app itself. Web pages run in WebKit's own processes, just like
   in Safari, and a closed tab hands its memory straight back.
 - No stowaway copy of Chrome: Ufolio uses the WebKit already on your Mac.
@@ -59,6 +81,7 @@ No bloat. No probing. No nonsense. Just *Ufolio*.
 
 ### 🛡️ Force Field: ad & tracker shield
 - **Deflects ads and trackers** out of the box, with a live count of everything it zapped.
+- **YouTube without ads**: video ads are skipped the moment they start.
 - **Hides cookie banners**, so you don't have to click "Reject all" a hundred times a day.
 - **Collapses empty ad craters**, so pages look clean instead of full of holes.
 - **Lower the shield for one site** with a single click, whenever you need to.
@@ -90,12 +113,15 @@ No bloat. No probing. No nonsense. Just *Ufolio*.
 - Your history and bookmarks stay **on your home planet: your Mac**. Always.
 
 ### 🌌 Out-of-this-world looks
-- **Frosted glass everywhere**, with the page as a rounded card, in Day and Night themes.
+- **Frosted glass everywhere**, in Day and Night themes. With tabs along the top the page fills
+  the window edge to edge; down the side it sits as a rounded card.
+- **Crisp, Apple-style toolbar buttons** with a word under each (Downloads, Blocking, Stealth,
+  More) that light up when you point at them. While a file downloads, a ring travels round it.
 - **Start page skies**: frosted glass, your desktop picture, a fresh Photo of the Day, Apple's
   macOS wallpapers or your own photo.
 - **Tabs along the top or down the side**, in a frosted column you can resize or shrink to icons.
-- **Magic Theme** tints the toolbar with each site's own colour.
-- Smooth animations, with **Reduce Motion** if you prefer everything instant.
+- **Smooth as butter**: switches that glide on a soft spring, drop-downs that flow open, and
+  **Reduce Motion** if you prefer everything instant.
 - A **System Settings-style control deck**, and a friendly **setup guide** on your first flight.
 
 ### 🪐 A joy to pilot
@@ -103,6 +129,10 @@ No bloat. No probing. No nonsense. Just *Ufolio*.
 - **Orbits**: keep Work, Personal and anything else in separate orbits, each with its own tabs.
 - **Split View**, with links dragged from one side opening on the other, plus **Reader** and
   **quick translation**.
+- **Link Preview**: ⌥-click a link to peek at it in a floating card without leaving your page.
+- **Docked Sites**: keep chat or music in a panel beside every page.
+- **Compact Mode**: hide the tabs and toolbar so the page fills the window (More menu ›
+  Compact Mode).
 - **Picture in Picture** that pops a playing video out when you switch tabs, and back in when you
   return.
 - **Tab previews**: rest on a tab to see its page, without waking it.
@@ -117,8 +147,9 @@ No bloat. No probing. No nonsense. Just *Ufolio*.
 - **Easy abduction**: beam your bookmarks and favourite sites over from Safari, Chrome, Brave,
   Edge, Arc, Vivaldi or Firefox, right from the setup guide.
 - **Updates itself** quietly, and shows you what's new after each update. If an update ever
-  won't start, Ufolio offers to go back to the version before. Want new features first? Switch on
-  **Get beta versions** in Settings › Software Update.
+  won't start, Ufolio offers to go back to the version before. Every version sits on a **release
+  timeline** in Settings › Software Update. Want new features first? Switch on **Get beta
+  versions** there.
 - **A heads-up for heavy pages** that keep your Mac busy, with one click to pause them.
 
 ---
