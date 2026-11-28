@@ -369,9 +369,10 @@ struct SettingsHeader: View {
                 .shadow(color: (tab.colors.first ?? .clear).opacity(0.4), radius: 5)
                 .shadow(color: .black.opacity(0.18), radius: 3, y: 2)
             VStack(alignment: .leading, spacing: 4) {
-                Text(tab.title).font(.system(size: 20, weight: .bold))
+                // A big, tight headline, as on Apple's own pages.
+                Text(tab.title).font(.system(size: 28, weight: .semibold)).tracking(-0.7)
                 Text(subtitle)
-                    .font(.system(size: 12.5))
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

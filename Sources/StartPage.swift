@@ -246,7 +246,7 @@ private struct StartSection<Content: View, Accessory: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
-                Text(title).font(.system(size: 21, weight: .bold))
+                Text(title).font(.system(size: 21, weight: .semibold)).tracking(-0.45)
                 Spacer()
                 accessory
             }
