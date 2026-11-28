@@ -25,7 +25,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var keywords: String {
         switch self {
         case .general: return "default browser homepage startup new tab window search engine suggestions history import downloads safe files favourites"
-        case .appearance: return "tabs vertical side sidebar layout theme dark light night day accent colour color start page background wallpaper photo picture daily desktop motion animation zoom bookmarks bar tab bar address magic theme colours site colour"
+        case .appearance: return "tabs vertical side sidebar layout theme dark light night day accent colour color start page background wallpaper photo picture daily desktop motion animation zoom bookmarks bar tab bar address"
         case .spaces: return "spaces profiles workspaces work personal accounts sign in cookies separate containers"
         case .performance: return "performance speed fast power battery saver eco carbon energy green memory ram tab sleep graphics 120hz smooth frame rate video pause"
         case .adBlocker: return "blocking mode strict standard off ads ad blocker trackers block filter list easylist cookie banners collapse zapper hidden elements counter statistics"
@@ -407,7 +407,6 @@ struct DescribedToggle: View {
         "Fingerprinting protection": ("touchid", purple),
         "Skip tracking redirects": ("arrow.uturn.right", teal),
         "Open original pages instead of AMP": ("bolt.slash.fill", orange),
-        "Magic Theme": ("wand.and.stars", pink),
         "Show News": ("newspaper.fill", purple),
         "Pause sound and video in background tabs": ("pause.circle.fill", green),
         "Free up memory automatically": ("memorychip.fill", blue),
@@ -679,7 +678,6 @@ struct AppearanceSettings: View {
     @AppStorage(Prefs.startBackground) private var background = StartBackground.frosted.rawValue
     @AppStorage(Prefs.startGreeting) private var greeting = true
     @AppStorage(Prefs.startBookmarks) private var startBookmarks = true
-    @AppStorage(Prefs.magicTheme) private var magicTheme = false
     @AppStorage(Prefs.startNews) private var startNews = false
     @AppStorage(Prefs.startFrequent) private var startFrequent = true
     @AppStorage(Prefs.startRecentlyClosed) private var startClosed = true
@@ -762,9 +760,6 @@ struct AppearanceSettings: View {
             } header: { SectionTitle("Start page") }
 
             Section {
-                DescribedToggle(title: "Magic Theme",
-                                detail: "The toolbar and tabs take on the colours of the website you’re on.",
-                                isOn: $magicTheme)
                 Toggle("Show bookmarks bar", isOn: $bookmarkBar)
                 Toggle("Show a preview when you hover a tab", isOn: $tabPreviews)
                 Toggle("Pop playing videos out into Picture in Picture when you switch tabs", isOn: $autoPiP)

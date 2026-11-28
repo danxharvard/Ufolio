@@ -15,12 +15,7 @@ struct BrowserWindow: View {
     @Environment(\.colorScheme) private var systemScheme
     @AppStorage(Prefs.showBookmarkBar) private var showBookmarkBar = true
     @State private var isFullScreen = false
-    @AppStorage(Prefs.magicTheme) private var magicTheme = false
-    @State private var siteColor: NSColor?
-    private var tint: Chrome.Tint? {
-        if model.isPrivate { return PrivateChrome.tint }
-        return magicTheme ? Chrome.tint(for: siteColor) : nil
-    }
+    private var tint: Chrome.Tint? { model.isPrivate ? PrivateChrome.tint : nil }
     /// Where the address bar is, so its suggestions line up underneath it.
     @State private var addressFrame: CGRect = .zero
     @State private var showWelcome = false
@@ -90,8 +85,6 @@ struct BrowserWindow: View {
             if compact, !(revealTop || revealSide) { CompactMode.showWindowButtons(false, in: window) }
             TrafficLights.align(in: window)
         })
-        // Turning Magic Theme on picks up the current site's colour straight away.
-        .onChange(of: magicTheme) { _, on in siteColor = on ? model.selectedTab?.siteColor : nil }
         .onChange(of: tabLayout) { _, _ in
             DispatchQueue.main.async { TrafficLights.align(in: model.window) }
         }
@@ -244,7 +237,6 @@ struct BrowserWindow: View {
             .overlay(alignment: .bottom) { Hairline() }
         }
         .environment(\.colorScheme, tint?.scheme ?? systemScheme)
-        .animation(.easeInOut(duration: 0.35), value: siteColor)
     }
 
     /// Typing in the address bar keeps Compact mode's chrome out while the pointer wanders.
@@ -294,14 +286,6 @@ struct BrowserWindow: View {
             .padding([.horizontal, .bottom], 6)
             .padding(.top, 6)
         }
-        .background(SelectedTab(model: model) { tab in
-            SiteColorReader(tab: tab) { color in
-                // Only with Magic Theme on: otherwise each site's colour redrew the whole window for nothing.
-                let wanted = magicTheme && !model.isPrivate ? color : nil
-                if wanted != siteColor { siteColor = wanted }
-            }
-                .id(tab.id)
-        })
         // Compact mode: the tabs and toolbar come back over the page from the top edge.
         .overlay(alignment: .top) {
             if compact {
@@ -361,14 +345,6 @@ struct BrowserWindow: View {
             }
             .padding(.top, 4)
         }
-        .background(SelectedTab(model: model) { tab in
-            SiteColorReader(tab: tab) { color in
-                    // Only with Magic Theme on: otherwise each site's colour redrew the whole window for nothing.
-                    let wanted = magicTheme && !model.isPrivate ? color : nil
-                    if wanted != siteColor { siteColor = wanted }
-                }
-                .id(tab.id)
-        })
         // Compact mode: the tab column comes back over the page from the left edge.
         .overlay(alignment: .leading) {
             if compact {

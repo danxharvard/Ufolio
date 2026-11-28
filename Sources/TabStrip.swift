@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 /// The window's two shades: the frame the tabs sit on, and the toolbar the selected tab
-/// flows into. Magic Theme can tint the toolbar with the website's own colour.
+/// flows into. A Stealth window tints both.
 enum Chrome {
     /// Frosted: a light veil over the window's translucent backdrop, so the desktop shows
     /// softly through. The selected tab uses exactly the same veil, so the two always match.
@@ -12,35 +12,13 @@ enum Chrome {
     })
     static let tabBarHeight: CGFloat = 38
 
-    /// Magic Theme colours for a website's colour: the toolbar in the site's colour, the tab
-    /// row a shade deeper, and light or dark text to suit.
+    /// A tinted look (Stealth windows): toolbar, tab row and light or dark text.
     struct Tint {
         let toolbar: Color
         let frame: Color
         let scheme: ColorScheme
     }
 
-    static func tint(for site: NSColor?) -> Tint? {
-        guard let c = site?.usingColorSpace(.sRGB) else { return nil }
-        func linear(_ v: CGFloat) -> CGFloat { v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
-        let luminance = 0.2126 * linear(c.redComponent) + 0.7152 * linear(c.greenComponent) + 0.0722 * linear(c.blueComponent)
-        let light = luminance > 0.42
-        let frame = c.blended(withFraction: light ? 0.10 : 0.18, of: light ? .black : .white) ?? c
-        return Tint(toolbar: Color(nsColor: c), frame: Color(nsColor: frame), scheme: light ? .light : .dark)
-    }
-}
-
-/// Reports the selected tab's website colour to the window (for Magic Theme).
-struct SiteColorReader: View {
-    @ObservedObject var tab: BrowserTab
-    let report: (NSColor?) -> Void
-
-    var body: some View {
-        Color.clear
-            .frame(width: 0, height: 0)
-            .onAppear { report(tab.siteColor) }
-            .onChange(of: tab.siteColor) { _, color in report(color) }
-    }
 }
 
 /// The tab row in the title bar, beside the window buttons: the selected tab is a raised

@@ -110,7 +110,6 @@ enum Prefs {
     static let blockChatWidgets = "blockChatWidgets"
     static let autoUpdateLists = "autoUpdateLists"
     static let memoryLimitGB = "memoryLimitGB"
-    static let magicTheme = "magicTheme"
     static let fingerprintProtection = "fingerprintProtection"
     static let debounceLinks = "debounceLinks"
     static let deAMP = "deAMP"
@@ -197,7 +196,6 @@ enum Prefs {
         blockChatWidgets: false,
         autoUpdateLists: true,
         memoryLimitGB: 0.0,
-        magicTheme: false,
         fingerprintProtection: true,
         debounceLinks: true,
         deAMP: true,
