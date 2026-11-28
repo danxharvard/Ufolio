@@ -34,11 +34,25 @@ struct HushlistCard: View {
                 }
             }
             Spacer(minLength: 8)
+            if let list = blocker.hushlist {
+                // Disconnecting: Force Field goes back to its own lists (asked first).
+                Button("Disconnect…") { confirmDisconnect(list) }
+                    .controlSize(.regular)
+            }
             Button(blocker.hushlist == nil ? "Set Up…" : "Options…") { showingSetup = true }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.regular)
         }
         .sheet(isPresented: $showingSetup) { HushlistSetup { showingSetup = false } }
+    }
+
+    private func confirmDisconnect(_ list: FilterList) {
+        DialogHost.settings.present(HushDialog(
+            art: .symbol("shield.lefthalf.filled.badge.checkmark"), theme: .caution, motion: .drift,
+            title: "Disconnect Hushlist?",
+            message: "Force Field stops using Hushlist’s \(list.ruleCount.formatted()) extra domains and goes back to its own lists. You can connect it again any time. (If you also installed Hushlist for your whole Mac, that stays until you remove it with Hushlist’s own uninstaller.)",
+            choices: [.init(title: "Cancel", role: .cancel), .init(title: "Disconnect", role: .destructive)],
+            completion: { choice, _ in if choice == 1 { blocker.remove(list) } }))
     }
 }
 
