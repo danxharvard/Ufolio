@@ -201,7 +201,18 @@ enum Shortcuts {
         if let other = ShortcutAction.allCases.first(where: { $0 != action && self.combo($0) == combo }) { return other.title }
         let reserved: [(KeyCombo, String)] = [(KeyCombo("q"), "Quit"), (KeyCombo(","), "Settings"), (KeyCombo("h"), "Hide Ufolio"),
                                               (KeyCombo("m"), "Minimise"), (KeyCombo("c"), "Copy"), (KeyCombo("v"), "Paste"),
-                                              (KeyCombo("x"), "Cut"), (KeyCombo("a"), "Select All"), (KeyCombo("z"), "Undo")]
+                                              (KeyCombo("x"), "Cut"), (KeyCombo("a"), "Select All"), (KeyCombo("z"), "Undo"),
+                                              // macOS's own: it takes these first (so they'd never work here), or they'd
+                                              // stop doing their usual job (⌃⌘F was free to take, and full screen stopped).
+                                              (KeyCombo("f", [.command, .control]), "Enter Full Screen"),
+                                              (KeyCombo("q", [.command, .control]), "Lock Screen"),
+                                              (KeyCombo("3", [.command, .shift]), "Screenshot"),
+                                              (KeyCombo("4", [.command, .shift]), "Screenshot"),
+                                              (KeyCombo("5", [.command, .shift]), "Screenshot"),
+                                              (KeyCombo("`"), "Switch Windows"),
+                                              (KeyCombo("d", [.command, .option]), "Show or Hide the Dock"),
+                                              (KeyCombo("h", [.command, .option]), "Hide Others"),
+                                              (KeyCombo("\u{1b}", [.command, .option]), "Force Quit")]
             // Tab switching (⌘1–⌘9) and Orbits (⌃1–⌃9), which have no setting of their own.
             + (1...9).map { (KeyCombo("\($0)"), $0 == 9 ? "Go to Last Tab" : "Go to Tab \($0)") }
             + (1...9).map { (KeyCombo("\($0)", .control), "Show Orbit \($0)") }
