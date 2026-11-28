@@ -557,15 +557,9 @@ private struct GeneralSettings: View {
             }
 
             Section {
-                LabeledContent("Ufolio opens with") { Picker("", selection: $launch) {
-                    ForEach(LaunchBehavior.allCases) { Text($0.label).tag($0.rawValue) }
-                }.labelsHidden().fixedSize() }
-                LabeledContent("New windows open with") { Picker("", selection: $newWindowPage) {
-                    ForEach(NewTabPage.allCases) { Text($0.label).tag($0.rawValue) }
-                }.labelsHidden().fixedSize() }
-                LabeledContent("New tabs open with") { Picker("", selection: $newTabPage) {
-                    ForEach(NewTabPage.allCases) { Text($0.label).tag($0.rawValue) }
-                }.labelsHidden().fixedSize() }
+                LabeledContent("Ufolio opens with") { FluidPicker(selection: $launch, options: LaunchBehavior.allCases.map { ($0.rawValue, $0.label) }) }
+                LabeledContent("New windows open with") { FluidPicker(selection: $newWindowPage, options: NewTabPage.allCases.map { ($0.rawValue, $0.label) }) }
+                LabeledContent("New tabs open with") { FluidPicker(selection: $newTabPage, options: NewTabPage.allCases.map { ($0.rawValue, $0.label) }) }
                 LabeledContent("Homepage") {
                     HStack {
                         TextField("", text: $homepage, prompt: Text("example.com"))
@@ -580,18 +574,14 @@ private struct GeneralSettings: View {
             } header: { SectionTitle("Startup") }
 
             Section {
-                LabeledContent("Search engine") { Picker("", selection: $engine) {
-                    ForEach(SearchEngine.allCases) { Text($0.name).tag($0.rawValue) }
-                }.labelsHidden().fixedSize() }
+                LabeledContent("Search engine") { FluidPicker(selection: $engine, options: SearchEngine.allCases.map { ($0.rawValue, $0.name) }) }
                 DescribedToggle(title: "Show search suggestions",
                                 detail: "What you type in the address bar is sent to \(engineName) to suggest searches.",
                                 isOn: $suggestions)
             } header: { SectionTitle("Search") }
 
             Section {
-                LabeledContent("Remove history items") { Picker("", selection: $historyRetention) {
-                    ForEach(HistoryRetention.allCases) { Text($0.label).tag($0.rawValue) }
-                }.labelsHidden().fixedSize() }
+                LabeledContent("Remove history items") { FluidPicker(selection: $historyRetention, options: HistoryRetention.allCases.map { ($0.rawValue, $0.label) }) }
                 // A shorter time takes effect straight away.
                 .onChange(of: historyRetention) { _, _ in HistoryStore.all.forEach { $0.prune() } }
                 HStack {
@@ -623,9 +613,7 @@ private struct GeneralSettings: View {
                         Button("Change…", action: chooseFolder)
                     }
                 }
-                LabeledContent("Remove download list items") { Picker("", selection: $downloadRetention) {
-                    ForEach(DownloadRetention.allCases) { Text($0.label).tag($0.rawValue) }
-                }.labelsHidden().fixedSize() }
+                LabeledContent("Remove download list items") { FluidPicker(selection: $downloadRetention, options: DownloadRetention.allCases.map { ($0.rawValue, $0.label) }) }
                 Toggle("Ask where to save each download", isOn: $askWhereToSave)
                 Toggle("Sort downloads into folders by type (Images, Documents, Videos…)", isOn: $sortDownloads)
                 DescribedToggle(title: "Open “safe” files after downloading",
@@ -783,9 +771,7 @@ struct AppearanceSettings: View {
                 DescribedToggle(title: "Reduce motion",
                                 detail: "Turns off Ufolio’s animations, for an instant, snappier feel.",
                                 isOn: $reduceMotion)
-                LabeledContent("Default page zoom") { Picker("", selection: $zoom) {
-                    ForEach(zoomLevels, id: \.self) { Text("\(Int(($0 * 100).rounded()))%").tag($0) }
-                }.labelsHidden().fixedSize() }
+                LabeledContent("Default page zoom") { FluidPicker(selection: $zoom, options: zoomLevels.map { ($0, "\(Int(($0 * 100).rounded()))%") }) }
                 // Open pages still at the old default follow the new one (it used to apply only to
                 // new tabs); pages you've zoomed yourself keep their zoom.
                 .onChange(of: zoom) { old, new in
@@ -956,12 +942,8 @@ private struct PrivacySettings: View {
             } header: { SectionTitle("Tracking protection") }
 
             Section {
-                LabeledContent("Camera and microphone") { Picker("", selection: $camera) {
-                    ForEach(PermissionPolicy.allCases) { Text($0.label).tag($0.rawValue) }
-                }.labelsHidden().fixedSize() }
-                LabeledContent("Auto-play") { Picker("", selection: $autoplay) {
-                    ForEach(AutoplayPolicy.allCases) { Text($0.label).tag($0.rawValue) }
-                }.labelsHidden().fixedSize() }
+                LabeledContent("Camera and microphone") { FluidPicker(selection: $camera, options: PermissionPolicy.allCases.map { ($0.rawValue, $0.label) }) }
+                LabeledContent("Auto-play") { FluidPicker(selection: $autoplay, options: AutoplayPolicy.allCases.map { ($0.rawValue, $0.label) }) }
                 Toggle("Block pop-up windows", isOn: $popups)
                 Toggle("Allow JavaScript", isOn: $javaScript)
             } header: { SectionTitle("Websites") } footer: {
@@ -1056,13 +1038,11 @@ private struct TorrentToolsSection: View {
                             detail: "See what a magnet link or .torrent file contains before your torrent app opens it, and stay safe on torrent sites. Ufolio never downloads or shares torrents itself.",
                             isOn: $on)
             if on {
-                Picker("Torrent app", selection: $app) {
-                    Text("Mac default").tag("")
-                    // Apps without an ID (they'd share the "Mac default" choice) are left out, and each
-                    // app is listed once even if macOS knows several copies of it.
-                    ForEach(uniqueApps, id: \.self) { url in
-                        Text(TorrentTools.appName(url)).tag(Bundle(url: url)?.bundleIdentifier ?? "")
-                    }
+                // Apps without an ID (they'd share the "Mac default" choice) are left out, and each
+                // app is listed once even if macOS knows several copies of it.
+                LabeledContent("Torrent app") {
+                    FluidPicker(selection: $app, options: [("", "Mac default")]
+                        + uniqueApps.compactMap { url in Bundle(url: url)?.bundleIdentifier.map { ($0, TorrentTools.appName(url)) } })
                 }
                 DescribedToggle(title: "Preview .torrent files",
                                 detail: "Lists the files and sizes when one finishes downloading, and warns about programs hidden in videos or names like movie.mp4.exe.",
@@ -1187,19 +1167,13 @@ private struct AdBlockerSettings: View {
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 LabeledContent("Scripts") {
-                    Picker("", selection: defaultBinding(Prefs.scriptPolicy, ShieldSettings.defaults.scripts.rawValue)) {
-                        ForEach(ScriptPolicy.allCases) { Text($0.label).tag($0.rawValue) }
-                    }.labelsHidden().fixedSize()
+                    FluidPicker(selection: defaultBinding(Prefs.scriptPolicy, ShieldSettings.defaults.scripts.rawValue), options: ScriptPolicy.allCases.map { ($0.rawValue, $0.label) })
                 }
                 LabeledContent("Fingerprinting protection") {
-                    Picker("", selection: defaultBinding(Prefs.fingerprintMode, ShieldSettings.defaults.fingerprinting.rawValue)) {
-                        ForEach(FingerprintLevel.allCases) { Text($0.label).tag($0.rawValue) }
-                    }.labelsHidden().fixedSize()
+                    FluidPicker(selection: defaultBinding(Prefs.fingerprintMode, ShieldSettings.defaults.fingerprinting.rawValue), options: FingerprintLevel.allCases.map { ($0.rawValue, $0.label) })
                 }
                 LabeledContent("Cookies") {
-                    Picker("", selection: defaultBinding(Prefs.cookiePolicy, ShieldSettings.defaults.cookies.rawValue)) {
-                        ForEach(CookiePolicy.allCases) { Text($0.label).tag($0.rawValue) }
-                    }.labelsHidden().fixedSize()
+                    FluidPicker(selection: defaultBinding(Prefs.cookiePolicy, ShieldSettings.defaults.cookies.rawValue), options: CookiePolicy.allCases.map { ($0.rawValue, $0.label) })
                 }
             } header: { SectionTitle("Defaults for every site") } footer: {
                 Footnote("Each site can be set differently from the Force Field panel in the toolbar. Blocking scripts or all cookies makes many sites stop working, so they’re best chosen for single sites.")
@@ -1528,9 +1502,7 @@ private struct LocationSettings: View {
             }
 
             Section {
-                LabeledContent("When a website asks for your location") { Picker("", selection: $policy) {
-                    ForEach(PermissionPolicy.allCases) { Text($0.label).tag($0.rawValue) }
-                }.labelsHidden().fixedSize() }
+                LabeledContent("When a website asks for your location") { FluidPicker(selection: $policy, options: PermissionPolicy.allCases.map { ($0.rawValue, $0.label) }) }
             } header: { SectionTitle("Websites") } footer: {
                 Text("Maps, delivery and weather sites can use your location to show nearby results. Ufolio asks you first and remembers your answer.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
@@ -1752,8 +1724,8 @@ private struct PasswordSettings: View {
             }
 
             Section {
-                Picker("Ask for Touch ID or your Mac password before filling", selection: $fillLock) {
-                    ForEach(UserAuth.FillLock.allCases) { Text($0.label).tag($0.rawValue) }
+                LabeledContent("Ask for Touch ID or your Mac password before filling") {
+                    FluidPicker(selection: $fillLock, options: UserAuth.FillLock.allCases.map { ($0.rawValue, $0.label) })
                 }
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {

@@ -81,11 +81,9 @@ struct PerformanceSettings: View {
                                symbol: "memorychip", colors: PowerMode.eco.colors, isOn: $memorySaver)
                 if memorySaver {
                     LabeledContent("Memory limit") {
-                        Picker("", selection: $memoryLimitGB) {
-                            Text("Automatic (\(PerformanceCenter.format(max(1_073_741_824, ProcessInfo.processInfo.physicalMemory / 4))))").tag(0.0)
-                            ForEach([1.0, 2.0, 3.0, 4.0, 6.0, 8.0], id: \.self) { gb in Text("\(Int(gb)) GB").tag(gb) }
-                        }
-                        .labelsHidden().fixedSize()
+                        FluidPicker(selection: $memoryLimitGB, options:
+                            [(0.0, "Automatic (\(PerformanceCenter.format(max(1_073_741_824, ProcessInfo.processInfo.physicalMemory / 4))))")]
+                            + [1.0, 2.0, 3.0, 4.0, 6.0, 8.0].map { ($0, "\(Int($0)) GB") })
                     }
                 }
                 SettingsSwitch(title: "Power Mode",
@@ -96,13 +94,10 @@ struct PerformanceSettings: View {
                           systemImage: "bolt.circle.fill")
                         .font(.system(size: 11.5)).foregroundStyle(Color.orange)
                 }
-                LabeledContent("Sleep inactive tabs") { Picker("", selection: $tabSleep) {
-                    Text("Never").tag(0.0)
-                    Text("After 5 minutes").tag(5.0)
-                    Text("After 15 minutes").tag(15.0)
-                    Text("After 30 minutes").tag(30.0)
-                    Text("After 1 hour").tag(60.0)
-                }.labelsHidden().fixedSize() }
+                LabeledContent("Sleep inactive tabs") {
+                    FluidPicker(selection: $tabSleep, options: [(0.0, "Never"), (5.0, "After 5 minutes"), (15.0, "After 15 minutes"),
+                                                                 (30.0, "After 30 minutes"), (60.0, "After 1 hour")])
+                }
                 SettingsSwitch(title: "Free up memory automatically",
                                detail: "When your Mac runs low on memory, Ufolio puts background tabs to sleep straight away.",
                                symbol: "memorychip.fill", colors: PowerMode.balanced.colors,
