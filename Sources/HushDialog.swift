@@ -134,6 +134,12 @@ extension View {
     }
 }
 
+/// Blurred at the start of the dialog's arrival, sharp at the end.
+private struct DialogFocus: ViewModifier {
+    let blur: CGFloat
+    func body(content: Content) -> some View { content.blur(radius: blur) }
+}
+
 private struct DialogOverlay: ViewModifier {
     @ObservedObject var host: DialogHost
 
@@ -147,10 +153,15 @@ private struct DialogOverlay: ViewModifier {
                         }
                     }
                     .id(dialog.id)
-                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                    // Rises into focus on a soft spring; goes quickly and quietly.
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.9)).combined(with: .offset(y: 14))
+                            .combined(with: .modifier(active: DialogFocus(blur: 8), identity: DialogFocus(blur: 0))),
+                        removal: .opacity.combined(with: .scale(scale: 0.96))
+                            .animation(.easeIn(duration: 0.16))))
                 }
             }
-            .animation(.smooth(duration: 0.26), value: host.current?.id)
+            .animation(.spring(response: 0.42, dampingFraction: 0.8), value: host.current?.id)
             .onReceive(NotificationCenter.default.publisher(for: QuitHelper.closeSheets)) { _ in host.cancelAll() }
     }
 }
@@ -268,11 +279,13 @@ private struct DialogButtonStyle: ButtonStyle {
             )
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(main ? Color.white.opacity(0.18) : Color.primary.opacity(0.06)))
+            .shadow(color: main ? (colors.last ?? .clear).opacity(hovering ? 0.4 : 0.22) : .clear, radius: hovering ? 10 : 6, y: 3)
             .brightness(configuration.isPressed ? -0.06 : (main && hovering ? 0.04 : 0))
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .contentShape(Rectangle())
             .onHover { hovering = $0 }
-            .animation(.snappy(duration: 0.16), value: configuration.isPressed)
+            .animation(.spring(response: 0.26, dampingFraction: 0.75), value: hovering)
+            .animation(.spring(response: 0.22, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }
 
