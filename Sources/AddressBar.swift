@@ -193,7 +193,7 @@ struct AddressTextField: NSViewRepresentable {
 
     func updateNSView(_ field: FocusTextField, context: Context) {
         context.coordinator.parent = self
-        // Follow the toolbar's light or dark look (Magic Theme can differ from the system's).
+        // Follow the toolbar's light or dark look (a Stealth window is always dark).
         let look = NSAppearance(named: context.environment.colorScheme == .dark ? .darkAqua : .aqua)
         if field.appearance?.name != look?.name { field.appearance = look }
         if field.stringValue != text { field.setText(text) }

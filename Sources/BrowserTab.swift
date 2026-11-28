@@ -190,17 +190,6 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         if pip != canPictureInPicture { canPictureInPicture = pip }
     }
 
-    /// The website's colour, for Magic Theme (nil on the start page or while asleep).
-    @Published private(set) var siteColor: NSColor?
-
-    fileprivate func updateSiteColor() {
-        guard url != nil, !isAsleep else { if siteColor != nil { siteColor = nil }; return }
-        let color = (webView.themeColor ?? webView.underPageBackgroundColor)?.usingColorSpace(.sRGB)
-        // Ignore see-through colours: they'd show the frame, not the site.
-        let usable = (color?.alphaComponent ?? 0) > 0.9 ? color : nil
-        if usable != siteColor { siteColor = usable }
-    }
-
     func setTranslation(_ state: TranslationState, language: Locale.Language?) {
         if translation != state { translation = state }
         if pageLanguage != language { pageLanguage = language }
@@ -334,7 +323,6 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
                ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
                 HistoryStore.store(for: tab.profileID).record(url, title: tab.webView.title ?? "")
             }
-            tab.updateSiteColor()
             tab.model?.scheduleSessionSave()
             ExtensionEvents.changed(tab)
         }
@@ -355,9 +343,6 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         // A published value announces a change even when set to the same thing, so each one is
         // only set when it really changes; otherwise every observer redraws for nothing.
         bind(\.hasOnlySecureContent) { tab, value in if tab.isSecure != value { tab.isSecure = value } }
-        // Magic Theme: the site's own colour (its theme-color, or else its page background).
-        bind(\.themeColor) { tab, _ in tab.updateSiteColor() }
-        bind(\.underPageBackgroundColor) { tab, _ in tab.updateSiteColor() }
     }
 
     // MARK: Tab Sleep
