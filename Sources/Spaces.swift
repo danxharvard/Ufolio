@@ -247,6 +247,8 @@ struct SpaceEditor: View {
     @State private var makingProfile = false
     /// A profile made in this editor: removed again if you cancel (it used to be left behind).
     @State private var madeProfile: UUID?
+    /// Saved with Create/Save (or Return): anything else, Cancel or a click outside the popover, drops a profile made here.
+    @State private var saved = false
     @FocusState private var nameFocused: Bool
 
     var body: some View {
@@ -260,7 +262,7 @@ struct SpaceEditor: View {
                 TextField("Orbit name", text: $space.name)
                     .textFieldStyle(.roundedBorder)
                     .focused($nameFocused)
-                    .onSubmit { done(space) }
+                    .onSubmit { saved = true; done(space) }
             }
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(26), spacing: 6), count: 8), spacing: 6) {
                 ForEach(SpacePalette.symbols, id: \.self) { symbol in
@@ -301,17 +303,17 @@ struct SpaceEditor: View {
             }
             HStack {
                 Spacer()
-                Button("Cancel") {
-                    if let madeProfile { store.removeProfile(madeProfile) }
-                    done(nil)
-                }
+                Button("Cancel") { done(nil) }
                 .keyboardShortcut(.cancelAction)
-                Button(isNew ? "Create Orbit" : "Save") { done(space) }.keyboardShortcut(.defaultAction)
+                Button(isNew ? "Create Orbit" : "Save") { saved = true; done(space) }.keyboardShortcut(.defaultAction)
             }
         }
         .padding(16)
         .frame(width: 300)
         .onAppear { if isNew { nameFocused = true } }
+        // Closed without saving (Cancel, Esc, or a click outside the popover): a profile made
+        // here goes again. A click outside used to leave it behind, used by no Orbit.
+        .onDisappear { if !saved, let madeProfile { store.removeProfile(madeProfile) } }
     }
 
     private func addProfile() {
