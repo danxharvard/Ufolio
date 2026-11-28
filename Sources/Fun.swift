@@ -401,7 +401,12 @@ enum UfolioBirthday {
         let cal = Calendar.current
         let a = cal.dateComponents([.year, .month, .day], from: installed)
         let b = cal.dateComponents([.year, .month, .day], from: Date())
-        guard a.month == b.month, a.day == b.day, let y1 = a.year, let y2 = b.year, y2 > y1 else { return nil }
+        guard let y1 = a.year, let y2 = b.year, y2 > y1 else { return nil }
+        // Installed on 29 February: in other years the birthday is the 28th (it used to come
+        // only once every four years).
+        let leap = cal.range(of: .day, in: .month, for: cal.date(from: DateComponents(year: y2, month: 2)) ?? Date())?.count == 29
+        let day = a.month == 2 && a.day == 29 && !leap ? 28 : a.day
+        guard a.month == b.month, day == b.day else { return nil }
         return y2 - y1
     }
 }
