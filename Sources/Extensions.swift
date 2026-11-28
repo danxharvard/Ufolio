@@ -650,7 +650,11 @@ extension BrowserTab: WKWebExtensionTab {
         completionHandler(nil)
     }
     func reload(fromOrigin: Bool, for context: WKWebExtensionContext, completionHandler: @escaping ((any Error)?) -> Void) {
-        webView.reload()
+        // A sleeping tab wakes (its page view is an empty stand-in, so reloading that did nothing),
+        // and "from origin" fetches everything afresh, as asked.
+        if isAsleep { wakeIfNeeded() }
+        else if fromOrigin { webView.reloadFromOrigin() }
+        else { webView.reload() }
         completionHandler(nil)
     }
 }
