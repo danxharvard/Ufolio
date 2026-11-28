@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.54.0-beta.3: a new look up top
+
+**New Toolbar Icons**
+- Ad blocking, Downloads, Stealth and More now have their own saucer icons in the top right. While a file downloads, the saucer glows and a ring travels round it.
+
 ## 0.54.0-beta.2: lighter in the background
 
 **Light Sleep**
