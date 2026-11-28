@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.54.0-beta.1: downloads you can watch
+
+**Download Ring**
+- While a file downloads, a ring travels round the DOWNLOADS button's outline, closing up as the file arrives. Download anything to see it go.
+
 ## 0.53.0: faster from the first click
 
 **Your First Site, Ready at Launch**
