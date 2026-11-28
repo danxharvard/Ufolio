@@ -281,6 +281,7 @@ struct BrowserWindow: View {
             // Bookmarks & History (⇧⌘L) slides in over the page's edge, so the page never resizes.
             .overlay(alignment: .leading) { SidebarSlot(model: model) }
             .overlay { LinkPreviewOverlay(model: model) }
+            .overlay { NoticeHost(center: model.notices) }   // little notices, in the page's corner
             DockArea(model: model)
             }
             .padding([.horizontal, .bottom], 6)
@@ -338,6 +339,7 @@ struct BrowserWindow: View {
                     .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.08)).allowsHitTesting(false))
                     .overlay(alignment: .leading) { SidebarSlot(model: model) }
                     .overlay { LinkPreviewOverlay(model: model) }
+                    .overlay { NoticeHost(center: model.notices) }   // little notices, in the page's corner
                     DockArea(model: model)
                 }
                 .padding(.trailing, 8)

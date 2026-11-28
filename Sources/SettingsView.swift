@@ -424,6 +424,7 @@ struct DescribedToggle: View {
         "Hide cookie banners": ("eye.slash.fill", grey),
         "Personalise the start page": ("cloud.sun.fill", blue),
         "Download and install updates automatically": ("arrow.down.circle.fill", green),
+        "Little notices": ("bell.badge.fill", orange),
     ]
 
     var body: some View {
@@ -680,6 +681,7 @@ struct AppearanceSettings: View {
     @AppStorage(Prefs.launchSound) private var launchSound = true
     @AppStorage(Prefs.theme) private var alienTheme = "classic"
     @AppStorage(Prefs.funEffects) private var funEffects = true
+    @AppStorage(Prefs.showNotices) private var showNotices = true
     @AppStorage(Prefs.achievements) private var achievements = false
 
     private let zoomLevels: [Double] = [0.75, 0.85, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75]
@@ -766,6 +768,9 @@ struct AppearanceSettings: View {
                 DescribedToggle(title: "Effects",
                                 detail: "The little touches: shooting stars, warp speed between Orbits, the Stealth shimmer and the download beam.",
                                 isOn: $funEffects)
+                DescribedToggle(title: "Little notices",
+                                detail: "Now and then, a small card in the corner of the page shows a win: how many ads Force Field stopped, or a page that opened instantly.",
+                                isOn: $showNotices)
                 DescribedToggle(title: "Achievements",
                                 detail: "Badges on the weekly report card, such as First Contact at 1,000 ads blocked. Never any pop-ups.",
                                 isOn: $achievements)

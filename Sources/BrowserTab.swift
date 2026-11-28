@@ -755,6 +755,7 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
         // counter used to keep showing the previous page's number).
         for (identifier, blockedURL) in Preloader.takeBlocked() { noteBlocked(identifier, url: blockedURL, in: view) }
         dropParked(&parkedForwardStack)   // a new page: Forward no longer leads anywhere
+        if model?.selectedTab === self { model?.notices.instant() }
         // A new tab's empty start page isn't somewhere to go Back to (Back used to lead to it).
         if previous.url != nil { park(previous, on: &parkedBackStack) } else { close(parked: previous) }
         refreshNavigation()
@@ -1239,6 +1240,16 @@ extension BrowserTab: WKNavigationDelegate {
             guard !isPrivate else { return }
             HistoryStore.store(for: profileID).record(url, title: webView.title ?? "")
             OriginWarmup.learn(from: webView, url: url)
+            if model?.selectedTab === self, let host = url.host {
+                // Once the last blocked requests have been counted, and again a few seconds on:
+                // many ads only start loading after the page says it has finished.
+                for delay in [0.6, 6.0] {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                        guard let self, self.model?.selectedTab === self, self.webView.url?.host == host else { return }
+                        self.model?.notices.forceField(blocked: self.blockedOnPage, site: Domains.site(host))
+                    }
+                }
+            }
             CookieCleaner.noteVisit(url.host)
             // (Only in the default profile: other profiles keep their browsing fully separate.)
             if profileID == nil { BookmarkOffer.shared.record(url, previousHost: lastFinishedHost) }

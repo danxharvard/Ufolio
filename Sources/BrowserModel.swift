@@ -327,6 +327,12 @@ final class BrowserModel: NSObject, ObservableObject {
     let dataStore: WKWebsiteDataStore
     /// Find on Page (⌘F) for this window.
     let find = FindModel()
+    /// Little notices shown in the page's corner (see Notices.swift).
+    let notices: NoticeCenter = {
+        let center = NoticeCenter()
+        center.showSampleIfAsked()   // (testing only)
+        return center
+    }()
     /// Questions waiting to be shown over this window (one at a time).
     let dialogs = DialogHost()
     /// Whether the Bookmarks & History sidebar is showing.

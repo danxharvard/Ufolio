@@ -17,6 +17,7 @@ enum Prefs {
     /// The playful animations: the abducted-counter saucer, shooting stars, the cloaking shimmer,
     /// the tractor beam and the easter egg.
     static let funEffects = "funEffects"
+    static let showNotices = "showNotices"
     /// Opt-in badges on the weekly report card.
     static let achievements = "achievements"
     /// Torrent tools (off by default) and their options.
@@ -130,6 +131,7 @@ enum Prefs {
         launchSound: true,
         theme: "classic",
         funEffects: true,
+        showNotices: true,
         achievements: false,
         clearCacheOnQuit: true,
         preloadPages: true,
