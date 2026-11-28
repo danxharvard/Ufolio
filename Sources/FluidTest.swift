@@ -69,6 +69,48 @@ enum FluidTest {
         }
     }
 
+    /// Testing only (UFOLIO_FLUID_UI=1): the browser window's everyday moves, each timed from the
+    /// action to its first frame, with late frames counted over the half second after (when its
+    /// animation plays). Each is done several times and the median reported.
+    static func browserIfAsked(in model: BrowserModel) {
+        guard ProcessInfo.processInfo.environment["UFOLIO_FLUID_UI"] != nil, !started else { return }
+        started = true
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard let window = model.window, let view = window.contentView else { report("no window"); NSApp.terminate(nil); return }
+            NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil)
+            // A few ordinary tabs to switch between.
+            for url in ["https://en.wikipedia.org/wiki/Mars", "https://www.apple.com/", "https://news.ycombinator.com/"] {
+                model.newTab(url: URL(string: url)!)
+            }
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            let meter = Meter(view: view)
+            @MainActor func measure(_ name: String, times: Int = 6, _ action: @escaping @MainActor () -> Void, undo: (@MainActor () -> Void)? = nil) async {
+                var firsts: [Int] = [], lates: [Int] = [], worst = 0.0
+                for _ in 0..<times {
+                    meter.reset()
+                    let begin = CACurrentMediaTime()
+                    action()
+                    await meter.nextFrame()
+                    firsts.append(Int((CACurrentMediaTime() - begin) * 1000))
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    lates.append(meter.late); worst = max(worst, meter.worst)
+                    if let undo { undo(); try? await Task.sleep(nanoseconds: 500_000_000) }
+                }
+                let median = firsts.sorted()[firsts.count / 2]
+                await report("\(name): first frame \(median) ms (median), late frames \(lates.reduce(0, +)) over \(times), worst \(Int(worst * 1000)) ms")
+            }
+            // UFOLIO_FLUID_ONLY=switch|sidebar|palette|newtab, UFOLIO_FLUID_TIMES=n: one action, n times (to profile it).
+            let only = ProcessInfo.processInfo.environment["UFOLIO_FLUID_ONLY"]
+            let times = ProcessInfo.processInfo.environment["UFOLIO_FLUID_TIMES"].flatMap(Int.init) ?? 6
+            if only == nil || only == "palette" { await measure("command palette", times: times, { model.paletteOpen = true }, undo: { model.paletteOpen = false }) }
+            if only == nil || only == "sidebar" { await measure("sidebar", times: times, { model.sidebarOpen = true }, undo: { model.sidebarOpen = false }) }
+            if only == nil || only == "switch" { await measure("switch tab", times: times, { model.selectAdjacentTab(1) }) }
+            if only == nil || only == "newtab" { await measure("new tab", times: times, { model.newTab(focus: true) }, undo: { if let t = model.selectedTab { model.close(t) } }) }
+            NSApp.terminate(nil)
+        }
+    }
+
     private static func report(_ text: String) { FileHandle.standardError.write("fluid: \(text)\n".data(using: .utf8)!) }
 
     /// The section's own scroll area: the widest scroll view in the window (the sidebar is narrower).
@@ -76,7 +118,16 @@ enum FluidTest {
         var found: [NSScrollView] = []
         func walk(_ v: NSView) { if let s = v as? NSScrollView { found.append(s) }; v.subviews.forEach(walk) }
         walk(root)
-        return found.filter { ($0.documentView?.frame.height ?? 0) > $0.contentView.bounds.height + 20 }
+        // Only one that's actually showing (sections you've visited stay built, faded out).
+        func visible(_ v: NSView) -> Bool {
+            var view: NSView? = v
+            while let current = view {
+                if current.isHidden || current.alphaValue < 0.05 || (current.layer?.opacity ?? 1) < 0.05 { return false }
+                view = current.superview
+            }
+            return true
+        }
+        return found.filter { ($0.documentView?.frame.height ?? 0) > $0.contentView.bounds.height + 20 && visible($0) }
             .max { $0.frame.width < $1.frame.width }
     }
 

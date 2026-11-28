@@ -503,7 +503,7 @@ final class BrowserModel: NSObject, ObservableObject {
         }
         if !isPrivate, !Self.didRestoreSession { SpeedBenchmark.startIfAsked(in: self); LeakTest.startIfAsked(in: self); AutofillTest.startIfAsked(in: self); ShieldSnapshot.startIfAsked(in: self); BackgroundPlayTest.startIfAsked(in: self); EvalTest.startIfAsked(in: self) }
         if !isPrivate { EvalTest.startIfAsked(in: self); SwitchTest.startIfAsked(in: self); SpeedBenchmark.prefetchTestIfAsked(in: self)
-        SpeedBenchmark.warmupTestIfAsked(in: self); ChaosTest.startIfAsked(in: self); MainActor.assumeIsolated { FluidTest.startIfAsked() } }   // (testing only; also after restoring tabs)
+        SpeedBenchmark.warmupTestIfAsked(in: self); ChaosTest.startIfAsked(in: self); MainActor.assumeIsolated { FluidTest.startIfAsked(); FluidTest.browserIfAsked(in: self) } }   // (testing only; also after restoring tabs)
         if !isPrivate { Self.didRestoreSession = true }
         if visibleTabs.allSatisfy(\.isPinned) {
             // A new window opens the homepage if Settings › General says so.
