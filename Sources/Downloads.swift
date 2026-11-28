@@ -145,6 +145,12 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
             let recent = (recentStarts[site] ?? []).filter { now.timeIntervalSince($0) < 30 }
             if recent.count >= 3 {
                 recentStarts[site] = recent
+                // Kept (a few) so they can start if you allow it: they used to be lost, and the
+                // site had to be asked again.
+                if let url = download.originalRequest?.url, let webView = download.webView,
+                   (heldBack[site]?.count ?? 0) < 20, !(heldBack[site]?.contains { $0.url == url } ?? false) {
+                    heldBack[site, default: []].append((url, WeakWebView(view: webView)))
+                }
                 completionHandler(nil)
                 askToAllowMany(from: site, window: download.webView?.window)
                 return
@@ -207,6 +213,8 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
     private var burstAllowed: Set<String> = []
     private var recentStarts: [String: [Date]] = [:]
     private var askingSites: Set<String> = []
+    /// Downloads held back while a site waited for permission, started if you allow it.
+    private var heldBack: [String: [(url: URL, webView: WeakWebView)]] = [:]
 
     private func askToAllowMany(from site: String, window: NSWindow?) {
         guard !askingSites.contains(site), !DialogHost.isBusy(window) else { return }
@@ -217,8 +225,16 @@ final class Downloads: NSObject, ObservableObject, WKDownloadDelegate {
             message: "This site is trying to download lots of files one after another. Ufolio stopped the rest until you say so.",
             choices: [.init(title: "Don’t Allow", role: .cancel), .init(title: "Allow", role: .primary)],
             completion: { [weak self] choice, _ in
-                self?.askingSites.remove(site)
-                if choice == 1 { self?.burstAllowed.insert(site); self?.recentStarts[site] = nil }
+                guard let self else { return }
+                self.askingSites.remove(site)
+                let held = self.heldBack.removeValue(forKey: site) ?? []
+                guard choice == 1 else { return }
+                self.burstAllowed.insert(site); self.recentStarts[site] = nil
+                for entry in held {
+                    entry.webView.view?.startDownload(using: URLRequest(url: entry.url)) { [weak self] download in
+                        download.delegate = self
+                    }
+                }
             }), in: window)
     }
 
@@ -627,4 +643,9 @@ private struct RowButton: View {
         .buttonStyle(.plain)
         .accessibilityLabel(help)   // VoiceOver said nothing useful for these
     }
+}
+
+/// A web view held without keeping its page alive (a closed tab's downloads are simply dropped).
+struct WeakWebView {
+    weak var view: WKWebView?
 }
