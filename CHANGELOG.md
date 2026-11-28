@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.54.0-beta.4: smooth as butter
+
+**Gliding Switches**
+- Every switch now slides on a soft spring, and the knob stretches a little as you press it, like on iPhone. Flip any setting to feel it.
+
+**Drop-downs That Flow**
+- Settings drop-downs open into a small frosted panel whose choices glide in, and Settings sections open noticeably quicker.
+
+**Bug fixes**
+- Bug fixed where Settings › Passwords, and name boxes on web pages, froze for a moment while checking your Contacts permission.
+- Bug fixed where tabs from last time showed only the site's name, and Ufolio sometimes came back to the wrong tab.
+- Other bug fixes and improvements.
+
 ## 0.54.0-beta.3: a new look up top
 
 **New Toolbar Icons**
