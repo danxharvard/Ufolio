@@ -8,12 +8,15 @@ import SwiftUI
 final class NoticeCenter: ObservableObject {
     struct Notice: Identifiable, Equatable {
         let id = UUID()
-        let art: String        // a toolbar tile's name, or "icon" for Ufolio's own
+        let symbol: String     // an SF Symbol, in a small coloured tile
+        let colors: [Color]
         let title: String
         let detail: String
     }
 
     @Published private(set) var current: Notice?
+    private static let green = [Color(red: 0.30, green: 0.82, blue: 0.45), Color(red: 0.12, green: 0.60, blue: 0.30)]
+    private static let blue = [Color(red: 0.30, green: 0.62, blue: 1.0), Color(red: 0.10, green: 0.42, blue: 0.95)]
     private var hide: DispatchWorkItem?
     private static var lastShown = Date.distantPast
     private static var forceFieldSites: Set<String> = []
@@ -27,14 +30,14 @@ final class NoticeCenter: ObservableObject {
     func forceField(blocked: Int, site: String) {
         guard blocked >= 15, !site.isEmpty, Self.allowed, !Self.forceFieldSites.contains(site) else { return }
         Self.forceFieldSites.insert(site)
-        post(Notice(art: "adblock", title: "Force Field", detail: "\(blocked.formatted()) ads and trackers stopped on this page"))
+        post(Notice(symbol: "shield.lefthalf.filled", colors: Self.green, title: "Force Field", detail: "\(blocked.formatted()) ads and trackers stopped on this page"))
     }
 
     /// A page Ufolio had loaded ahead was swapped in (at most every ten minutes).
     func instant() {
         guard Self.allowed, Date().timeIntervalSince(Self.lastInstant) > 600 else { return }
         Self.lastInstant = Date()
-        post(Notice(art: "icon", title: "Instant pages", detail: "Opened instantly: it loaded before you clicked"))
+        post(Notice(symbol: "bolt.fill", colors: Self.blue, title: "Instant pages", detail: "Opened instantly: it loaded before you clicked"))
     }
 
     private func post(_ notice: Notice) {
@@ -50,7 +53,7 @@ final class NoticeCenter: ObservableObject {
     func showSampleIfAsked() {
         guard ProcessInfo.processInfo.environment["UFOLIO_NOTICE_TEST"] != nil else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-            self.post(Notice(art: "adblock", title: "Force Field", detail: "32 ads and trackers stopped on this page"))
+            self.post(Notice(symbol: "shield.lefthalf.filled", colors: Self.green, title: "Force Field", detail: "32 ads and trackers stopped on this page"))
         }
     }
 
@@ -80,18 +83,9 @@ struct NoticeHost: View {
 private struct NoticeCard: View {
     let notice: NoticeCenter.Notice
 
-    private var image: NSImage? {
-        notice.art == "icon" ? NSApp.applicationIconImage
-            : Bundle.main.url(forResource: notice.art, withExtension: "png").flatMap(NSImage.init(contentsOf:))
-    }
-
     var body: some View {
         HStack(spacing: 11) {
-            if let image {
-                Image(nsImage: image).resizable().interpolation(.high)
-                    .frame(width: 30, height: 30)
-                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-            }
+            IconTile(symbol: notice.symbol, colors: notice.colors, size: 30)
             VStack(alignment: .leading, spacing: 1) {
                 Text(notice.title).font(.system(size: 12.5, weight: .semibold))
                 Text(notice.detail).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(2)

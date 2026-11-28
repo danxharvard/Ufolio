@@ -720,61 +720,86 @@ enum ToolbarIcon {
     static let button = CGSize(width: 30, height: 26)
 }
 
-/// The top-right toolbar buttons: Ufolio's icon tiles (a saucer beaming down what the button
-/// does), all one size. Pictures only; the name shows when you hover.
+/// The top-right toolbar buttons, in the macOS "icon and text" style: an SF Symbol (drawn by
+/// macOS as a vector, so it stays perfectly crisp) over a small word, all one size. The shield is
+/// green while Force Field blocks, with its count; Downloads gets a ring as files arrive.
 struct ToolbarTile: View {
     enum Art: String { case adblock, downloads, stealth, more }
     let art: Art
-    /// Greyed out (ad blocking switched off for this site).
+    /// Ad blocking switched off for this site: a slashed grey shield, "Allowed".
     var dimmed = false
     var pressed = false
-    /// The saucer lights up (Downloads, while a file is downloading).
+    /// Downloads: something is downloading (the symbol takes the accent colour).
     var glowing = false
+    /// Ad blocking: how many things it stopped on this page (shown on the shield).
+    var count = 0
+    /// A little bounce of the count when something new is blocked.
+    var pulse = false
     @State private var hovering = false
 
-    static let size: CGFloat = 28
-    static let cornerRadius: CGFloat = size * 0.235
+    static let size = CGSize(width: 56, height: 32)
 
-    /// Loaded once from the app's resources.
-    private static let images: [Art: NSImage] = {
-        var found: [Art: NSImage] = [:]
-        for art in [Art.adblock, .downloads, .stealth, .more] {
-            if let url = Bundle.main.url(forResource: art.rawValue, withExtension: "png"), let image = NSImage(contentsOf: url) {
-                found[art] = image
-            }
+    private var symbol: String {
+        switch art {
+        case .adblock: return dimmed ? "shield.slash" : "shield.lefthalf.filled"
+        case .downloads: return "arrow.down.circle"
+        case .stealth: return "eye.slash"
+        case .more: return "ellipsis.circle"
         }
-        return found
-    }()
+    }
+    private var word: String {
+        switch art {
+        case .adblock: return dimmed ? "Allowed" : "Blocking"
+        case .downloads: return "Downloads"
+        case .stealth: return "Stealth"
+        case .more: return "More"
+        }
+    }
+    private var tint: Color {
+        if art == .adblock && !dimmed { return ForceFieldColor.on }
+        if art == .downloads && glowing { return .accentColor }
+        return Color.primary.opacity(dimmed ? 0.45 : 0.78)
+    }
 
     var body: some View {
-        Group {
-            if let image = Self.images[art] {
-                Image(nsImage: image).resizable().interpolation(.high)
-            } else {
-                RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous).fill(Color.secondary)
-            }
+        VStack(spacing: 1) {
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .regular))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(tint)
+                .frame(width: 22, height: 19)
+                .overlay(alignment: .topTrailing) {
+                    if count > 0 {
+                        Text(count > 99 ? "99+" : "\(count)")
+                            .font(.system(size: 8.5, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 3.5)
+                            .frame(minWidth: 14, minHeight: 13)
+                            // A deep green in both looks, so the white number reads clearly.
+                            .background(Capsule().fill(Color(red: 0.13, green: 0.60, blue: 0.29)))
+                            .overlay(Capsule().strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5))
+                            .scaleEffect(pulse ? 1.18 : 1)
+                            .fixedSize()
+                            .offset(x: 11, y: -5)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+            Text(word)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(Color.primary.opacity(hovering || pressed ? 0.85 : 0.6))
+                .lineLimit(1)
+                .fixedSize()
         }
-        // A hair larger than the tile and clipped, so no edge of the artwork's background shows.
-        .frame(width: Self.size + 1.2, height: Self.size + 1.2)
-        .frame(width: Self.size, height: Self.size)
-        .overlay {
-            // The saucer's glow: a soft light where it hovers, at the top of the tile.
-            if glowing {
-                RadialGradient(colors: [Color.white.opacity(0.55), Color.white.opacity(0)],
-                               center: UnitPoint(x: 0.5, y: 0.27), startRadius: 0, endRadius: Self.size * 0.42)
-                    .blendMode(.plusLighter)
-                    .allowsHitTesting(false)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
-        .shadow(color: glowing ? Color(red: 0.45, green: 0.75, blue: 1).opacity(0.75) : .clear, radius: glowing ? 5 : 0)
-        .saturation(dimmed ? 0 : 1)
-        .opacity(dimmed ? 0.55 : 1)
-        .brightness(pressed ? -0.08 : hovering ? 0.06 : 0)
+        .frame(width: Self.size.width, height: Self.size.height)
+        .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .fill(Color.primary.opacity(pressed ? 0.11 : hovering ? 0.07 : 0)))
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .animation(.snappy(duration: 0.16), value: hovering)
-        .padding(.horizontal, 2)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: count > 0)
+        .animation(.easeOut(duration: 0.2), value: glowing)
+        .accessibilityLabel(word)
     }
 }
 
@@ -837,8 +862,8 @@ struct ShieldsButton: View {
     var body: some View {
         Button { showing.toggle() } label: {
             // In colour while Force Field protects this site; greyed out when it's off for it.
-            ToolbarTile(art: .adblock, dimmed: !shieldsUp, pressed: showing)
-                .scaleEffect(pulse ? 1.08 : 1)
+            ToolbarTile(art: .adblock, dimmed: !shieldsUp, pressed: showing,
+                        count: shieldsUp ? tab.blockedOnPage : 0, pulse: pulse)
         }
         .buttonStyle(.plain)
         .help(shieldsUp ? "Force Field: blocking ads and trackers on this site" : "Force Field is off for this site")
@@ -851,20 +876,6 @@ struct ShieldsButton: View {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { pulse = false }
             }
         }
-        .overlay(alignment: .topTrailing) {
-            if tab.blockedOnPage > 0 && shieldsUp {
-                Text(tab.blockedOnPage > 99 ? "99+" : "\(tab.blockedOnPage)")
-                    .font(.system(size: 8.5, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 3.5)
-                    .frame(minWidth: 13, minHeight: 13)
-                    .background(Capsule().fill(ForceFieldColor.on))
-                    .offset(x: 2, y: -6)
-                    .allowsHitTesting(false)
-                    .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: tab.blockedOnPage > 0)
         .popover(isPresented: $showing, arrowEdge: .bottom) {
             ShieldsPanel(tab: tab, shieldsUp: shieldsUp)
         }

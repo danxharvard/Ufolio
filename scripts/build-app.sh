@@ -39,7 +39,6 @@ sed -e "s/__VERSION__/$VERSION/g" -e "s/__BUILD__/${VERSION%%-*}/g" Resources/In
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp rules/youtube-ads.js "$APP/Contents/Resources/youtube-ads.js"   # YouTube ad blocking (updates itself, signed)
 cp CHANGELOG.md "$APP/Contents/Resources/CHANGELOG.md"   # shown in What's New and Software Update
-cp Resources/Toolbar/*.png "$APP/Contents/Resources/"   # the toolbar's icon tiles
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 # Free "ad-hoc" signature: needed for Apple Silicon Macs to open the app at all.
