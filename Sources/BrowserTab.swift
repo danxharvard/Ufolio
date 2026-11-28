@@ -462,9 +462,11 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
 
     /// A tab restored from last time: shows its address and title but loads nothing until
     /// you switch to it.
-    func restoreLazily(_ address: URL) {
+    func restoreLazily(_ address: URL, title saved: String? = nil) {
         url = address
-        title = address.host?.strippingWWW ?? ""
+        // Its title from last time where there is one (tabs used to show only the site's name
+        // until clicked).
+        title = saved.flatMap { $0.isEmpty ? nil : String($0.prefix(300)) } ?? address.host?.strippingWWW ?? ""
         sleepState = nil
         isAsleep = true
     }

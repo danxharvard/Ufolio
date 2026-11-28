@@ -449,6 +449,7 @@ final class BrowserModel: NSObject, ObservableObject {
            let saved = UserDefaults.standard.stringArray(forKey: "lastSession"), !saved.isEmpty {
             Self.didRestoreSession = true
             let savedSpaces = UserDefaults.standard.stringArray(forKey: "lastSessionSpaces") ?? []
+            let savedTitles = UserDefaults.standard.stringArray(forKey: "lastSessionTitles") ?? []
             if let last = UserDefaults.standard.string(forKey: "lastSpace").flatMap(UUID.init(uuidString:)),
                SpaceStore.shared.space(last) != nil { spaceID = last }
             // Only web pages come back, and only the first loads now: the rest wait until you
@@ -462,7 +463,8 @@ final class BrowserModel: NSObject, ObservableObject {
                 guard let url = URL(string: text), ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { continue }
                 let space = savedSpaces.indices.contains(index)
                     ? UUID(uuidString: savedSpaces[index]).flatMap { SpaceStore.shared.space($0)?.id } : nil
-                restored[index] = addRestoredTab(url, space: space ?? SpaceStore.shared.defaultSpace.id)
+                let title = savedTitles.count == saved.count && savedTitles.indices.contains(index) ? savedTitles[index] : nil
+                restored[index] = addRestoredTab(url, space: space ?? SpaceStore.shared.defaultSpace.id, title: title)
             }
             // Only that tab loads now (selecting wakes it); the rest wait until you click them.
             if let wanted, let tab = restored[wanted], tab.spaceID == spaceID {
@@ -504,10 +506,10 @@ final class BrowserModel: NSObject, ObservableObject {
     }
 
     /// A tab from last time, waiting to load until you click it.
-    private func addRestoredTab(_ url: URL, space: UUID) -> BrowserTab {
+    private func addRestoredTab(_ url: URL, space: UUID, title: String? = nil) -> BrowserTab {
         let tab = BrowserTab(model: self, store: SpaceStore.shared.dataStore(forSpace: space), waiting: true)
         tab.spaceID = space
-        tab.restoreLazily(url)
+        tab.restoreLazily(url, title: title)
         tabs.append(tab)
         ExtensionEvents.opened(tab)
         return tab
@@ -568,8 +570,11 @@ final class BrowserModel: NSObject, ObservableObject {
             guard !saved.isEmpty else { return }
             d.set(saved.compactMap { $0.url?.absoluteString }, forKey: "lastSession")
             d.set(saved.map { $0.spaceID?.uuidString ?? "" }, forKey: "lastSessionSpaces")
-            // The tab you were on, so it's the one you come back to.
+            d.set(saved.map { String($0.title.prefix(300)) }, forKey: "lastSessionTitles")
+            // The tab you were on, so it's the one you come back to. (On a tab that isn't saved, a
+            // blank one say, the old choice goes: it pointed at whatever tab now has that place.)
             if let index = saved.firstIndex(where: { $0 === self.selectedTab }) { d.set(index, forKey: "lastSessionSelected") }
+            else { d.removeObject(forKey: "lastSessionSelected") }
         }
         sessionSave = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: work)
