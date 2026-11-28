@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.54.0-beta.5: a cleaner look
+
+**A Cleaner Toolbar**
+- Crisp Apple-style buttons with a word under each: Downloads, Blocking, Stealth and More. The shield turns green while ads are being blocked, with the count right on it.
+
+**Release Timeline**
+- Settings › Software Update now shows every version as a card you can flick through. Pick one to see what it brought.
+
+**Little Notices**
+- Now and then, a small card in the corner celebrates a win, like a page that opened instantly. Turn them off in Settings › Appearance.
+
+**Bug fixes**
+- Hushlist can now be disconnected, from Settings › Force Field.
+- Other bug fixes and improvements.
+
 ## 0.54.0-beta.4: smooth as butter
 
 **Gliding Switches**
