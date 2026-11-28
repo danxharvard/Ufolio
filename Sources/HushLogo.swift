@@ -177,11 +177,12 @@ struct AnimatedHushLogo: View {
 struct UFOZapperScene: View {
     @AppStorage(Prefs.reduceMotion) private var reduceMotion = false
     /// Paused while its window isn't the one you're using (Settings left open behind the browser
-    /// kept drawing 30 frames a second for nobody).
+    /// kept drawing 30 frames a second for nobody). Only the window you're typing in is "key":
+    /// one behind the browser in Ufolio itself is "active", not "inactive", and kept drawing.
     @Environment(\.controlActiveState) private var activeState
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || activeState == .inactive)) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || activeState != .key)) { context in
             let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
             GeometryReader { geo in
                 let w = geo.size.width, h = geo.size.height
