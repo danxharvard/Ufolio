@@ -421,7 +421,7 @@ struct MoreMenuButton: View {
 
     var body: some View {
         Button { showing.toggle() } label: {
-            ToolbarBadge(topSymbol: "ellipsis", bottom: "MORE", pressed: showing)
+            ToolbarTile(art: .more, pressed: showing)
         }
         .buttonStyle(.plain)
         .help("More: zoom, print, history, settings and more")
@@ -718,42 +718,57 @@ enum ToolbarIcon {
     static let button = CGSize(width: 30, height: 26)
 }
 
-/// The toolbar's main buttons (Downloads, AD BLOCKING, GO STEALTH, MORE): one size and one
-/// shape for all of them, an outlined box with a bold word over a small one, so each says what
-/// it does and they read as a set.
-struct ToolbarBadge: View {
-    var top: String = ""
-    /// A symbol in place of the top word (the arrow for Downloads, ••• for More).
-    var topSymbol: String? = nil
-    let bottom: String
-    var color: Color = ToolbarIcon.color
-    /// Outlined in its own colour (AD BLOCKING while it's on) rather than the usual grey.
-    var tinted = false
+/// The top-right toolbar buttons: Ufolio's icon tiles (a saucer beaming down what the button
+/// does), all one size. Pictures only; the name shows when you hover.
+struct ToolbarTile: View {
+    enum Art: String { case adblock, downloads, stealth, more }
+    let art: Art
+    /// Greyed out (ad blocking switched off for this site).
+    var dimmed = false
     var pressed = false
+    /// The saucer lights up (Downloads, while a file is downloading).
+    var glowing = false
     @State private var hovering = false
 
-    static let size = CGSize(width: 56, height: 24)
+    static let size: CGFloat = 28
+    static let cornerRadius: CGFloat = size * 0.235
+
+    /// Loaded once from the app's resources.
+    private static let images: [Art: NSImage] = {
+        var found: [Art: NSImage] = [:]
+        for art in [Art.adblock, .downloads, .stealth, .more] {
+            if let url = Bundle.main.url(forResource: art.rawValue, withExtension: "png"), let image = NSImage(contentsOf: url) {
+                found[art] = image
+            }
+        }
+        return found
+    }()
 
     var body: some View {
-        VStack(spacing: -1) {
-            Group {
-                if let topSymbol {
-                    Image(systemName: topSymbol).font(.system(size: 9.5, weight: .bold)).frame(height: 12)
-                } else {
-                    Text(top).font(.system(size: 10, weight: .heavy))
-                }
+        Group {
+            if let image = Self.images[art] {
+                Image(nsImage: image).resizable().interpolation(.high)
+            } else {
+                RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous).fill(Color.secondary)
             }
-            // Room either side of the small word (DOWNLOADS ran right up to the outline).
-            Text(bottom).font(.system(size: 6.5, weight: .heavy)).tracking(0.2)
-                .lineLimit(1).minimumScaleFactor(0.85)
-                .padding(.horizontal, 5)
         }
-        .foregroundStyle(color)
-        .frame(width: Self.size.width, height: Self.size.height)
-        .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .fill(Color.primary.opacity(hovering || pressed ? 0.08 : 0)))
-        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .strokeBorder(tinted ? color.opacity(0.7) : Color.primary.opacity(0.28), lineWidth: 1.1))
+        // A hair larger than the tile and clipped, so no edge of the artwork's background shows.
+        .frame(width: Self.size + 1.2, height: Self.size + 1.2)
+        .frame(width: Self.size, height: Self.size)
+        .overlay {
+            // The saucer's glow: a soft light where it hovers, at the top of the tile.
+            if glowing {
+                RadialGradient(colors: [Color.white.opacity(0.55), Color.white.opacity(0)],
+                               center: UnitPoint(x: 0.5, y: 0.27), startRadius: 0, endRadius: Self.size * 0.42)
+                    .blendMode(.plusLighter)
+                    .allowsHitTesting(false)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+        .shadow(color: glowing ? Color(red: 0.45, green: 0.75, blue: 1).opacity(0.75) : .clear, radius: glowing ? 5 : 0)
+        .saturation(dimmed ? 0 : 1)
+        .opacity(dimmed ? 0.55 : 1)
+        .brightness(pressed ? -0.08 : hovering ? 0.06 : 0)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .animation(.snappy(duration: 0.16), value: hovering)
@@ -819,10 +834,8 @@ struct ShieldsButton: View {
 
     var body: some View {
         Button { showing.toggle() } label: {
-            // Says what it does: AD BLOCKING, in green, while Force Field protects this site;
-            // ADS ALLOWED, in grey, when it's off for it.
-            ToolbarBadge(top: shieldsUp ? "AD" : "ADS", bottom: shieldsUp ? "BLOCKING" : "ALLOWED",
-                         color: shieldsUp ? ForceFieldColor.on : ToolbarIcon.color, tinted: shieldsUp, pressed: showing)
+            // In colour while Force Field protects this site; greyed out when it's off for it.
+            ToolbarTile(art: .adblock, dimmed: !shieldsUp, pressed: showing)
                 .scaleEffect(pulse ? 1.08 : 1)
         }
         .buttonStyle(.plain)
