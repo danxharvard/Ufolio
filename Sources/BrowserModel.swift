@@ -348,11 +348,17 @@ final class BrowserModel: NSObject, ObservableObject {
         guard let current = selectedTab else { return }
         FeatureUsage.mark(.split)
         if let tab, tab !== current {
+            if otherPane(of: current) === tab { return }   // already side by side
+            // Replacing the other side of an open Split View: the side going out of sight is left
+            // the way closing Split View leaves it (its silent video kept playing, unseen, and its
+            // idle clock never started, so it didn't sleep on time).
+            if isInSplit(current) { closeSplit(keeping: current.id) }
             splitPair = SplitPair(left: current.id, right: tab.id)
             tab.wakeIfNeeded()
             // It's on screen now: video paused when you left it plays again.
             if !tab.isAsleep { tab.webView.setAllMediaPlaybackSuspended(false) }
         } else {
+            if isInSplit(current) { closeSplit(keeping: current.id) }
             let fresh = newTab(select: false, usePreferredPage: true)
             splitPair = SplitPair(left: current.id, right: fresh.id)
             selectedID = fresh.id
