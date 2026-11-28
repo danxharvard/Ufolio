@@ -130,7 +130,7 @@ final class BrowserModel: NSObject, ObservableObject {
         guard !isPrivate, tab.spaceID != id, SpaceStore.shared.space(id) != nil else { return }
         let target = SpaceStore.shared.dataStore(forSpace: id)
         if splitPair?.contains(tab.id) == true { splitPair = nil }
-        if target === tab.webView.configuration.websiteDataStore {
+        if target === tab.dataStore {
             tab.spaceID = id
             if tab.id == selectedID { selectFallback(near: tab) }
             objectWillChange.send()
@@ -150,7 +150,7 @@ final class BrowserModel: NSObject, ObservableObject {
     func spaceChangedProfile(_ id: UUID) {
         guard !isPrivate else { return }
         let target = SpaceStore.shared.dataStore(forSpace: id)
-        for tab in tabs where tab.spaceID == id && (!tab.hasPageView || tab.webView.configuration.websiteDataStore !== target) {
+        for tab in tabs where tab.spaceID == id && tab.dataStore !== target {
             guard let index = tabs.firstIndex(where: { $0 === tab }) else { continue }
             let copy = BrowserTab(model: self, store: target)
             copy.spaceID = id
@@ -174,7 +174,7 @@ final class BrowserModel: NSObject, ObservableObject {
         let target = SpaceStore.shared.dataStore(forSpace: fallback)
         let wasShowing = spaceID == id
         for tab in tabs where tab.spaceID == id {
-            if tab.webView.configuration.websiteDataStore === target {
+            if tab.dataStore === target {
                 tab.spaceID = fallback
             } else {
                 tab.spaceID = id   // reopened below with the right cookies
@@ -800,7 +800,7 @@ final class BrowserModel: NSObject, ObservableObject {
 
     /// Opens a link in the floating preview (from the tab it was clicked in, with its sign-ins).
     func showPreview(_ url: URL, from source: BrowserTab?) {
-        let store = source?.webView.configuration.websiteDataStore ?? currentStore
+        let store = source?.dataStore ?? currentStore
         let tab = BrowserTab(model: self, store: store)
         present(preview: tab, from: source)
         tab.load(url)

@@ -506,7 +506,7 @@ enum Preloader {
             || (CleanLinks.isEnabled && CleanLinks.cleaned(url) != nil) || TorrentTools.isAdNetwork(host)
             || BuiltInRules.isBlocked(host) { return }   // an ad or tracker's own page: never loaded ahead
         discard()
-        let config = BrowserTab.makeConfiguration(privately: false, store: tab.webView.configuration.websiteDataStore)
+        let config = BrowserTab.makeConfiguration(privately: false, store: tab.dataStore)
         // Laid out at the tab's own size, so swapping it in needs no second layout (it was always
         // 1280 × 800, so most pages reflowed, and some jumped, as they appeared).
         let size = tab.webView.bounds.size
@@ -562,7 +562,7 @@ enum Preloader {
               Date().timeIntervalSince(entry.started) < 30,
               // Still the tab's own website data (its Orbit may have moved to another profile
               // since, and the page would have shown the other profile's sign-ins).
-              sameStore(entry.view.configuration.websiteDataStore, tab.webView.configuration.websiteDataStore),
+              sameStore(entry.view.configuration.websiteDataStore, tab.dataStore),
               same(entry.url, url) || (entry.view.url.map { same($0, url) } ?? false) else { return nil }
         current = nil
         taken = entry.blocked

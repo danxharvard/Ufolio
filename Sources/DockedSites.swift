@@ -96,7 +96,7 @@ extension BrowserModel {
     /// let go (they load again, in the new profile, when you next open them). A docked chat
     /// used to stay signed in to the other profile's account.
     func releaseDocksFromOtherProfiles() {
-        for (id, tab) in dockTabs where tab.webView.configuration.websiteDataStore !== currentStore {
+        for (id, tab) in dockTabs where tab.dataStore !== currentStore {
             if dockOpen == id { dockOpen = nil }
             tab.tearDown()
             dockTabs[id] = nil

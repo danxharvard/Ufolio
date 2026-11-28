@@ -26,6 +26,12 @@ final class BrowserTab: NSObject, ObservableObject, Identifiable {
     var backCacheReleased = false
     /// False for a restored tab that hasn't made its page view yet.
     var hasPageView: Bool { madeWebView != nil }
+    /// Where this tab's cookies and sign-ins live (its profile's website data), without making
+    /// the page view of a tab that's still waiting: asking the page view woke every sleeping tab
+    /// touched when an Orbit was deleted or a tab moved between Orbits.
+    var dataStore: WKWebsiteDataStore {
+        madeWebView?.configuration.websiteDataStore ?? waitingStore ?? model?.dataStore ?? .nonPersistent()
+    }
     weak var model: BrowserModel?
 
     @Published private(set) var title = ""
