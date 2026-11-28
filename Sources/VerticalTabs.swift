@@ -314,8 +314,14 @@ private struct PinnedTile: View {
             }
             .contentShape(Rectangle())
             .onTapGesture { model.selectedID = tab.id }
-            .onHover { hovering = $0 }
+            // As with every other tab: resting the pointer starts waking a sleeping one, a
+            // middle-click closes it, and its preview shows (pinned tiles in the side column did none of these).
+            .onHover { inside in
+                hovering = inside
+                model.pointerOverTab(tab, inside)
+            }
             .contextMenu { TabMenuItems(model: model, tab: tab, vertical: true) }
+            .tabPreview(tab, selected: selected, edge: .trailing)
     }
 }
 
