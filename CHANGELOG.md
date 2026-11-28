@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.53.1: a simpler look
+
+**Magic Theme retired**
+- The toolbar no longer takes on each website's colours. Ufolio keeps its frosted look on every site.
+
+**Bug fixes**
+- Bug fixed where an extension reloading a sleeping tab left it asleep.
+- Other bug fixes and improvements.
+
 ## 0.53.0: faster from the first click
 
 **Your First Site, Ready at Launch**
