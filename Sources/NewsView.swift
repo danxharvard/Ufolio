@@ -678,7 +678,7 @@ private struct SourceRow: View {
             Spacer()
             Toggle("", isOn: Binding(get: { !store.hiddenSources.contains(source.id) },
                                      set: { store.setSource(source, shown: $0) }))
-                .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                .toggleStyle(FluidSwitchStyle()).labelsHidden()
         }
         .padding(.vertical, 7)
     }

@@ -253,8 +253,7 @@ struct SettingsSwitchStyle: ToggleStyle {
             Spacer(minLength: 16)
             Toggle("", isOn: configuration.$isOn)
                 .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)
+                .toggleStyle(FluidSwitchStyle())
         }
     }
 }
@@ -1400,9 +1399,8 @@ private struct FilterListRow: View {
             .menuIndicator(.hidden)
             .fixedSize()
             Toggle("", isOn: Binding(get: { list.enabled }, set: { blocker.setEnabled(list, $0) }))
-                .toggleStyle(.switch)
+                .toggleStyle(FluidSwitchStyle())
                 .labelsHidden()
-                .controlSize(.small)
         }
     }
 
@@ -1917,11 +1915,12 @@ private struct PasswordSettings: View {
                 let cards = CardVault.list()
                 DispatchQueue.main.async { cardList = cards }
             }
-            if MyCard.status == .authorized {
-                DispatchQueue.global(qos: .userInitiated).async {
-                    let name = MyCard.displayName
-                    DispatchQueue.main.async { myName = name }
-                }
+            // Asked in the background as well: checking the Contacts permission takes macOS about
+            // 0.2 s, and this pane used to freeze for that long every time it opened.
+            DispatchQueue.global(qos: .userInitiated).async {
+                guard MyCard.status == .authorized else { return }
+                let name = MyCard.displayName
+                DispatchQueue.main.async { myName = name }
             }
         }
         .onDisappear { lock() }
@@ -2218,7 +2217,7 @@ private struct ExtensionRow: View {
             } label: { Image(systemName: "ellipsis.circle") }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             Toggle("", isOn: Binding(get: { ext.enabled }, set: { store.setEnabled(ext, $0) }))
-                .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                .toggleStyle(FluidSwitchStyle()).labelsHidden()
         }
         .task {
             if #available(macOS 15.4, *) {

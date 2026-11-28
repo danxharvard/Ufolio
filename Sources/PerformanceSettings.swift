@@ -215,7 +215,7 @@ private struct SettingsSwitch: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 16)
-            Toggle("", isOn: $isOn).toggleStyle(.switch).labelsHidden().controlSize(.small)
+            Toggle("", isOn: $isOn).toggleStyle(FluidSwitchStyle()).labelsHidden()
         }
     }
 }

@@ -1007,7 +1007,7 @@ struct ShieldsPanel: View {
                         ContentBlocker.shared.setShields(up, for: host, privately: tab.isPrivate)
                         tab.webView.reload()
                     }))
-                .toggleStyle(.switch)
+                .toggleStyle(FluidSwitchStyle(size: CGSize(width: 38, height: 22)))
                 .labelsHidden()
                 .accessibilityLabel("Turn Force Field off if this site doesn’t work properly")
             }
