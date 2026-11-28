@@ -1524,11 +1524,8 @@ private struct LocationSettings: View {
 
 private struct UpdateSettings: View {
     @ObservedObject private var updater = Updater.shared
-    @State private var showAllVersions = false
-
-    private var earlierVersions: [ReleaseNotes.Version] {
-        ReleaseNotes.bundled.versions.filter { $0.version != updater.currentVersion }
-    }
+    /// The version chosen in the release timeline (the installed one until you pick another).
+    @State private var timelineChoice: String?
     @AppStorage(Prefs.autoCheckUpdates) private var autoCheck = true
     @AppStorage(Prefs.autoInstallUpdates) private var autoInstall = true
     @AppStorage(Prefs.betaUpdates) private var betaUpdates = false
@@ -1556,11 +1553,18 @@ private struct UpdateSettings: View {
                 }
             }
 
-            if let installed = ReleaseNotes.bundled.notes(for: updater.currentVersion) {
+            if !ReleaseNotes.bundled.versions.isEmpty {
+                let chosen = ReleaseNotes.bundled.notes(for: timelineChoice ?? updater.currentVersion) ?? ReleaseNotes.bundled.versions[0]
                 Section {
-                    ReleaseNotesView(notes: installed)
+                    ReleaseTimeline(versions: ReleaseNotes.bundled.versions, selection: $timelineChoice, current: updater.currentVersion)
+                } header: { SectionTitle("Release timeline") }
+                .bareSection()   // the cards sit on the page, not inside another card
+                Section {
+                    ReleaseNotesView(notes: chosen)
                         .padding(.vertical, 6)
-                } header: { SectionTitle("What’s in Ufolio \(installed.version)") }
+                        .id(chosen.version)
+                        .transition(.opacity)
+                } header: { SectionTitle("What’s in Ufolio \(chosen.version)") }
             }
 
             if let notes = updater.releaseNotes, isShowingRelease {
@@ -1596,21 +1600,6 @@ private struct UpdateSettings: View {
 
             DeveloperSection()   // hidden until unlocked from the start page
 
-            if !earlierVersions.isEmpty {
-                Section {
-                    ForEach(showAllVersions ? earlierVersions : Array(earlierVersions.prefix(3))) { version in
-                        DisclosureGroup("Ufolio \(version.version)") {
-                            ReleaseNotesView(notes: version).padding(.vertical, 6)
-                        }
-                    }
-                    if earlierVersions.count > 3 {
-                        Button(showAllVersions ? "Show Less" : "Show More") {
-                            withAnimation(.easeOut(duration: 0.2)) { showAllVersions.toggle() }
-                        }
-                        .buttonStyle(.link)
-                    }
-                } header: { SectionTitle("Earlier versions") }
-            }
         }
         .formStyle(SafariFormStyle())
     }

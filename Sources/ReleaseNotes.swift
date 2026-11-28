@@ -13,7 +13,18 @@ struct ReleaseNotes {
         let version: String
         let intro: [String]       // lines before the first bullet that aren't headings
         let sections: [Section]
+        /// The release's name, after the version ("## 0.54.0-beta.4: smooth as butter").
+        var title = ""
         var id: String { version }
+
+        /// "Beta 4" for a beta, "Release" otherwise (for the timeline's badges).
+        var badge: (label: String, beta: Bool) {
+            guard let range = version.range(of: "-beta") else { return ("Release", false) }
+            let number = version[range.upperBound...].trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            return (number.isEmpty ? "Beta" : "Beta \(number)", true)
+        }
+        /// The first headline feature (or the first section), for a timeline card.
+        var headline: String { sections.first { !$0.heading.lowercased().contains("fix") }?.heading ?? sections.first?.heading ?? "" }
     }
 
     let versions: [Version]
@@ -37,7 +48,7 @@ struct ReleaseNotes {
             if version.version == lastSeen { break }
             sections += version.sections
         }
-        return Version(version: current, intro: versions[start].intro, sections: sections)
+        return Version(version: current, intro: versions[start].intro, sections: sections, title: versions[start].title)
     }
 
     static func parse(_ text: String) -> ReleaseNotes {
@@ -47,6 +58,7 @@ struct ReleaseNotes {
         var heading = ""
         var items: [String] = []
         var intro: [String] = []
+        var title = ""
 
         func closeSection() {
             if !items.isEmpty { sections.append(Section(heading: heading, items: items)) }
@@ -54,8 +66,8 @@ struct ReleaseNotes {
         }
         func closeVersion() {
             closeSection()
-            if let v = version { versions.append(Version(version: v, intro: intro, sections: sections)) }
-            sections = []; intro = []; heading = ""
+            if let v = version { versions.append(Version(version: v, intro: intro, sections: sections, title: title)) }
+            sections = []; intro = []; heading = ""; title = ""
         }
 
         for raw in text.components(separatedBy: .newlines) {
@@ -65,6 +77,9 @@ struct ReleaseNotes {
                 // "## 0.43.0: the stability release" → "0.43.0" (the title after it is optional).
                 let rest = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
                 version = rest.split(whereSeparator: { $0 == ":" || $0 == " " }).first.map(String.init) ?? rest
+                if let colon = rest.firstIndex(of: ":") {
+                    title = rest[rest.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+                }
             } else if version == nil {
                 continue
             } else if line.hasPrefix("**") && line.hasSuffix("**") && line.count > 4 {
@@ -146,8 +161,14 @@ struct WhatsNewView: View {
         VStack(spacing: 0) {
             VStack(spacing: 12) {
                 AnimatedHushLogo(size: 72)
-                Text("What’s new in Ufolio \(notes.version)")
-                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                HStack(spacing: 8) {
+                    ReleaseBadge(version: notes)
+                    Text(notes.version).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+                }
+                Text(notes.title.isEmpty ? "What’s new" : notes.title.prefix(1).uppercased() + notes.title.dropFirst())
+                    .font(.system(size: 30, weight: .semibold))
+                    .tracking(-0.9)
+                    .multilineTextAlignment(.center)
                 Text("Ufolio just updated. Here’s what changed.")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
@@ -178,5 +199,95 @@ struct WhatsNewView: View {
             .padding(.vertical, 22)
         }
         .frame(width: 540)
+    }
+}
+
+// MARK: - Release timeline
+
+/// A version's badge: orange for a beta, green for a release.
+struct ReleaseBadge: View {
+    let version: ReleaseNotes.Version
+    var body: some View {
+        let badge = version.badge
+        let tint = badge.beta ? Color.orange : Color.green
+        Text(badge.label)
+            .font(.system(size: 10.5, weight: .semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 7).padding(.vertical, 2.5)
+            .background(Capsule().fill(tint.opacity(0.16)))
+    }
+}
+
+/// Every version Ufolio knows about, newest first, as cards in a row that scrolls sideways.
+/// Choosing one shows its notes underneath.
+struct ReleaseTimeline: View {
+    let versions: [ReleaseNotes.Version]
+    @Binding var selection: String?
+    var current: String
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 10) {
+                    ForEach(versions) { version in
+                        ReleaseCard(version: version, selected: (selection ?? current) == version.version,
+                                    installed: version.version == current) {
+                            withAnimation(FluidSwitch.spring) { selection = version.version }
+                        }
+                        .id(version.version)
+                    }
+                }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 2)
+            }
+            .onAppear { proxy.scrollTo(selection ?? current, anchor: .leading) }
+        }
+    }
+}
+
+private struct ReleaseCard: View {
+    let version: ReleaseNotes.Version
+    let selected: Bool
+    let installed: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    ReleaseBadge(version: version)
+                    Spacer()
+                    if installed {
+                        Text("Installed").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+                    }
+                }
+                Text(version.title.isEmpty ? version.headline : version.title.prefix(1).uppercased() + version.title.dropFirst())
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(version.version)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                if !version.headline.isEmpty, !version.title.isEmpty {
+                    Text(version.headline).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            .padding(12)
+            .frame(width: 168, height: 118, alignment: .topLeading)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.primary.opacity(selected ? 0.10 : hovering ? 0.07 : 0.045)))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(selected ? Color.accentColor : Color.primary.opacity(0.06), lineWidth: selected ? 1.5 : 0.5))
+            .offset(y: hovering && !selected ? -2 : 0)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.snappy(duration: 0.18), value: hovering)
+        .accessibilityLabel("Ufolio \(version.version), \(version.badge.label)")
     }
 }
