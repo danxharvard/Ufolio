@@ -67,10 +67,49 @@ struct BeamShape: Shape {
 }
 
 /// The full-colour saucer: silver disc, glass dome with two little green men, rim lights and a
-/// green beam, as in the app icon.
+/// green beam, as in the app icon. Drawn once per size into a picture and reused: it's made of
+/// dozens of shapes, and the start page (with two of them) used to rebuild them all every time you
+/// switched to a new tab.
 struct SaucerArt: View {
     var beam: CGFloat = 1
     var discColors: [Color] = [Color(white: 0.98), Color(white: 0.72), Color(white: 0.50)]
+    @Environment(\.displayScale) private var scale
+
+    var body: some View {
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height)
+            if let picture = SaucerPictures.picture(side: side, beam: beam, colors: discColors, scale: scale) {
+                Image(nsImage: picture).resizable().frame(width: geo.size.width, height: geo.size.height)
+            } else {
+                SaucerDrawing(beam: beam, discColors: discColors)
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+    }
+}
+
+/// The saucers drawn so far, by size (a few dozen at most).
+@MainActor
+private enum SaucerPictures {
+    private static var made: [String: NSImage] = [:]
+
+    static func picture(side: CGFloat, beam: CGFloat, colors: [Color], scale: CGFloat) -> NSImage? {
+        guard side >= 4, side <= 600 else { return nil }
+        let key = "\(Int((side * 2).rounded()))|\(beam)|\(colors)|\(scale)"
+        if let picture = made[key] { return picture }
+        let renderer = ImageRenderer(content: SaucerDrawing(beam: beam, discColors: colors).frame(width: side, height: side))
+        renderer.scale = max(scale, 1)
+        guard let picture = renderer.nsImage else { return nil }
+        if made.count > 40 { made.removeAll() }
+        made[key] = picture
+        return picture
+    }
+}
+
+/// The saucer itself, shape by shape.
+private struct SaucerDrawing: View {
+    var beam: CGFloat
+    var discColors: [Color]
 
     var body: some View {
         GeometryReader { geo in

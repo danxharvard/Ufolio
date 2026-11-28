@@ -69,7 +69,6 @@ struct BrowserWindow: View {
         .overlay(alignment: .topLeading) {
             SuggestionOverlay(suggestions: suggestions, anchor: addressFrame) { choice in go(choice.text) }
         }
-        .onPreferenceChange(AddressFrameKey.self) { addressFrame = $0 }
         .background(WindowReader { window in
             // Remember the window's size and position between launches.
             if let window, model.window !== window, !model.isPrivate {
@@ -272,24 +271,21 @@ struct BrowserWindow: View {
             }
 
             HStack(spacing: 0) {
-            // The page: a rounded card set into the frosted window.
+            // The page fills the window, edge to edge, with square corners (tabs along the top;
+            // down the side it's a rounded card set into the frosted window).
             ZStack(alignment: .topLeading) {
                 PageArea(model: model)
                 if let tab = model.selectedTab {
                     ProgressLine(tab: tab)
                 }
             }
-            // Rounded by the page itself (cheap even for video), with a hairline edge. No drop
-            // shadow or clipping mask here: those make the Mac recompose a playing video every frame.
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.08)).allowsHitTesting(false))
+            .environment(\.pageCornerRadius, 0)
             // Bookmarks & History (⇧⌘L) slides in over the page's edge, so the page never resizes.
             .overlay(alignment: .leading) { SidebarSlot(model: model) }
             .overlay { LinkPreviewOverlay(model: model) }
             .overlay { NoticeHost(center: model.notices) }   // little notices, in the page's corner
             DockArea(model: model)
             }
-            .padding([.horizontal, .bottom], 6)
-            .padding(.top, 6)
         }
         // Compact mode: the tabs and toolbar come back over the page from the top edge.
         .overlay(alignment: .top) {
@@ -365,7 +361,7 @@ struct BrowserWindow: View {
 
     /// The tab column: window buttons, address bar, Orbits and tabs.
     private var sideColumn: some View {
-        SideTabBar(model: model, suggestions: suggestions, onGo: go)
+        SideTabBar(model: model, suggestions: suggestions, onGo: go, onAddressFrame: { addressFrame = $0 })
             .background(tint?.frame ?? .clear)
             .environment(\.colorScheme, tint?.scheme ?? systemScheme)
     }
@@ -378,9 +374,10 @@ struct BrowserWindow: View {
             SelectedTab(model: model) { tab in
                 AddressBar(model: model, tab: tab, suggestions: suggestions, onGo: go)
                     .frame(maxWidth: .infinity)
-                    .background(GeometryReader { geo in
-                        Color.clear.preference(key: AddressFrameKey.self, value: geo.frame(in: .named("window")))
-                    })
+                    // Where the address bar is, for the suggestions underneath. Watched directly: as a
+                    // preference it was gathered up through the whole window on every update (tab
+                    // switches especially).
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("window")) } action: { addressFrame = $0 }
             }
             .padding(.horizontal, 4)
             HStack(spacing: 2) {
@@ -623,6 +620,8 @@ struct TabPageContent: View {
 private struct TabPage: View {
     let model: BrowserModel   // not observed: the page doesn't need redrawing when other tabs change
     @ObservedObject var tab: BrowserTab
+    @Environment(\.pageCornerRadius) private var radius
+    private var corners: RoundedRectangle { RoundedRectangle(cornerRadius: radius, style: .continuous) }
 
     var body: some View {
         ZStack {
@@ -630,10 +629,10 @@ private struct TabPage: View {
             // isn't drawn over an empty white web view.
             if tab.isBlank {
                 Group { if model.isPrivate { PrivateStartPage() } else { StartPage(model: model) } }
-                    .clipShape(PageCorners.shape)
+                    .clipShape(corners)
             } else if tab.isAsleep, let snapshot = tab.snapshot {
                 Image(nsImage: snapshot).resizable().aspectRatio(contentMode: .fill)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).clipShape(PageCorners.shape)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).clipShape(corners)
                     .contentShape(Rectangle())
                     .onTapGesture { tab.wakeIfNeeded() }   // a page put to sleep while showing
             } else {
@@ -642,19 +641,19 @@ private struct TabPage: View {
             }
             if tab.crashed {
                 CrashedPage { tab.recoverFromCrash() }
-                    .clipShape(PageCorners.shape)
+                    .clipShape(corners)
                     .transition(.opacity)
             } else if let failure = tab.loadError {
                 LoadErrorPage(url: failure.url, message: failure.message, insecure: failure.insecure,
                               onInsecure: { if let insecure = failure.insecure { tab.openInsecure(insecure) } }) {
                     if let url = failure.url ?? tab.url { tab.load(url) } else { tab.reload() }
                 }
-                .clipShape(PageCorners.shape)
+                .clipShape(corners)
                 .transition(.opacity)
             }
             if let article = tab.reader {
                 ReaderView(article: article) { tab.toggleReader() }
-                    .clipShape(PageCorners.shape)
+                    .clipShape(corners)
                     .transition(.opacity)
             }
             if let block = tab.lookalike {
@@ -665,7 +664,7 @@ private struct TabPage: View {
                     Lookalike.allow(Domains.site(block.url.host ?? ""), remember: !tab.isPrivate)   // Stealth leaves no record
                     tab.load(block.url)
                 }
-                .clipShape(PageCorners.shape)
+                .clipShape(corners)
                 .transition(.opacity)
             }
         }
@@ -674,8 +673,8 @@ private struct TabPage: View {
 
 struct WebViewHost: NSViewRepresentable {
     let webView: WKWebView
-    func makeNSView(context: Context) -> WKWebView { PageCorners.round(webView); return webView }
-    func updateNSView(_ nsView: WKWebView, context: Context) { PageCorners.round(nsView) }
+    func makeNSView(context: Context) -> WKWebView { PageCorners.round(webView, context.environment.pageCornerRadius); return webView }
+    func updateNSView(_ nsView: WKWebView, context: Context) { PageCorners.round(nsView, context.environment.pageCornerRadius) }
 }
 
 /// The page card's rounded corners. Web pages are rounded by their own layer, which Core
@@ -685,12 +684,22 @@ enum PageCorners {
     static let radius: CGFloat = 10
     static let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
 
-    static func round(_ view: NSView) {
+    static func round(_ view: NSView, _ radius: CGFloat = PageCorners.radius) {
         view.wantsLayer = true
         guard let layer = view.layer, layer.cornerRadius != radius else { return }
         layer.cornerRadius = radius
         layer.cornerCurve = .continuous
-        layer.masksToBounds = true
+        layer.masksToBounds = radius > 0   // square: nothing to clip (cheaper too)
+    }
+}
+
+/// How round the page's corners are: a rounded card set into the window (tabs down the side), or
+/// square and filling the window (tabs along the top).
+private struct PageCornerRadiusKey: EnvironmentKey { static let defaultValue = PageCorners.radius }
+extension EnvironmentValues {
+    var pageCornerRadius: CGFloat {
+        get { self[PageCornerRadiusKey.self] }
+        set { self[PageCornerRadiusKey.self] = newValue }
     }
 }
 
@@ -740,6 +749,8 @@ struct ToolbarTile: View {
     /// A little bounce of the count when something new is blocked.
     var pulse = false
     @State private var hovering = false
+    /// Changes each time the pointer arrives, so the symbol gives one little hop.
+    @State private var hops = 0
 
     static let size = CGSize(width: 56, height: 32)
 
@@ -762,8 +773,12 @@ struct ToolbarTile: View {
     private var tint: Color {
         if art == .adblock && !dimmed { return ForceFieldColor.on }
         if art == .downloads && glowing { return .accentColor }
+        // Pointed at: it lights up in the accent colour (instead of a box behind it).
+        if hovering { return .accentColor }
         return Color.primary.opacity(dimmed ? 0.45 : 0.78)
     }
+    /// The soft light round the symbol while pointed at.
+    private var glow: Color { art == .adblock && !dimmed ? ForceFieldColor.on : .accentColor }
 
     var body: some View {
         VStack(spacing: 1) {
@@ -771,6 +786,11 @@ struct ToolbarTile: View {
                 .font(.system(size: 15, weight: .regular))
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(tint)
+                // Pointed at: a soft glow and one little hop (Apple's own symbol animation, so the
+                // symbol stays sharp: nothing is scaled).
+                .shadow(color: glow.opacity(hovering ? 0.9 : 0), radius: hovering ? 6 : 0)
+                .symbolEffect(.bounce.up, options: .nonRepeating, value: hops)
+                .opacity(pressed ? 0.7 : 1)
                 .frame(width: 22, height: 19)
                 .overlay(alignment: .topTrailing) {
                     if count > 0 {
@@ -796,11 +816,12 @@ struct ToolbarTile: View {
                 .fixedSize()
         }
         .frame(width: Self.size.width, height: Self.size.height)
-        .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(Color.primary.opacity(pressed ? 0.11 : hovering ? 0.07 : 0)))
         .contentShape(Rectangle())
-        .onHover { hovering = $0 }
-        .animation(.snappy(duration: 0.16), value: hovering)
+        .onHover { inside in
+            hovering = inside
+            if inside && !Prefs.bool(Prefs.reduceMotion) { hops += 1 }
+        }
+        .animation(.easeOut(duration: 0.18), value: hovering)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: count > 0)
         .animation(.easeOut(duration: 0.2), value: glowing)
         .accessibilityLabel(word)
@@ -1643,6 +1664,7 @@ struct GuardStars: View {
 /// Thin loading bar along the top of the page.
 struct ProgressLine: View {
     @ObservedObject var tab: BrowserTab
+    @Environment(\.pageCornerRadius) private var radius
 
     var body: some View {
         GeometryReader { geo in
@@ -1657,7 +1679,7 @@ struct ProgressLine: View {
                 .animation(.easeOut(duration: 0.4), value: tab.isLoading)
         }
         .frame(height: 2)
-        .padding(.horizontal, PageCorners.radius)   // stays inside the page's rounded corners
+        .padding(.horizontal, radius)   // stays inside the page's rounded corners (if it has them)
         .allowsHitTesting(false)
     }
 }
@@ -1901,14 +1923,6 @@ private struct SuggestionOverlay: View {
             }
         }
         .animation(.easeOut(duration: 0.12), value: suggestions.isVisible)
-    }
-}
-
-struct AddressFrameKey: PreferenceKey {
-    static let defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
-        let next = nextValue()
-        if next != .zero { value = next }
     }
 }
 

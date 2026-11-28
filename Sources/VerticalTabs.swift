@@ -8,6 +8,8 @@ struct SideTabBar: View {
     @ObservedObject var model: BrowserModel
     let suggestions: SuggestionsModel   // passed on to the address bar; the column needn't redraw as you type
     let onGo: (String) -> Void
+    /// Where the address bar is (for the suggestions underneath it).
+    var onAddressFrame: (CGRect) -> Void = { _ in }
     @AppStorage(Prefs.sideTabsWidth) private var storedWidth = 250.0
     @State private var dragStart: Double?
     /// The width while the edge is being dragged; saved to settings only when you let go, so a
@@ -27,9 +29,7 @@ struct SideTabBar: View {
             } else {
                 SelectedTab(model: model) { tab in
                     AddressBar(model: model, tab: tab, suggestions: suggestions, onGo: onGo)
-                        .background(GeometryReader { geo in
-                            Color.clear.preference(key: AddressFrameKey.self, value: geo.frame(in: .named("window")))
-                        })
+                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("window")) } action: { onAddressFrame($0) }
                 }
                 .padding(.horizontal, 10)
                 .padding(.top, 4)
