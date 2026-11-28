@@ -152,16 +152,22 @@ struct WindowTabBar: View {
                 }
                 let tabs = model.visibleTabs
                 guard draggingID == tab.id, let index = tabs.firstIndex(where: { $0 === tab }) else { return }
-                var offset = value.translation.width - slotsMoved * width
-                // Past halfway over a neighbour: swap places with it.
-                if offset > width / 2, index < tabs.count - 1 {
-                    model.moveTab(from: index, to: index + 1)
+                // A pinned tab is narrower: it swaps places after half its own width.
+                let slot = tab.isPinned ? Self.pinnedWidth : width
+                var offset = value.translation.width - slotsMoved * slot
+                // Past halfway over a neighbour: swap places with it. Only counted if it really
+                // moved: a tab can't pass the pinned ones (or they it), and counting the refused
+                // move made the tab jump a whole slot away from the pointer.
+                func moved(to target: Int) -> Bool {
+                    model.moveTab(from: index, to: target)
+                    return model.visibleTabs.firstIndex(where: { $0 === tab }) == target
+                }
+                if offset > slot / 2, index < tabs.count - 1, moved(to: index + 1) {
                     slotsMoved += 1
-                    offset -= width
-                } else if offset < -width / 2, index > 0 {
-                    model.moveTab(from: index, to: index - 1)
+                    offset -= slot
+                } else if offset < -slot / 2, index > 0, moved(to: index - 1) {
                     slotsMoved -= 1
-                    offset += width
+                    offset += slot
                 }
                 dragOffset = offset
             }
