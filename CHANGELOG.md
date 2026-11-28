@@ -1,9 +1,30 @@
 # Changelog
 
+## 0.54.0-beta.2: lighter in the background
+
+**Light Sleep**
+- Tabs you leave in the background for a couple of minutes hand back memory they don't need, without reloading. Come back and they're exactly as you left them.
+
+**Magic Theme retired**
+- The toolbar no longer takes on each website's colours. Ufolio keeps its frosted look on every site.
+
+**Bug fixes**
+- Bug fixed where an extension reloading a sleeping tab left it asleep.
+- Other bug fixes and improvements.
+
 ## 0.54.0-beta.1: downloads you can watch
 
 **Download Ring**
 - While a file downloads, a ring travels round the DOWNLOADS button's outline, closing up as the file arrives. Download anything to see it go.
+
+## 0.53.1: a simpler look
+
+**Magic Theme retired**
+- The toolbar no longer takes on each website's colours. Ufolio keeps its frosted look on every site.
+
+**Bug fixes**
+- Bug fixed where an extension reloading a sleeping tab left it asleep.
+- Other bug fixes and improvements.
 
 ## 0.53.0: faster from the first click
 
