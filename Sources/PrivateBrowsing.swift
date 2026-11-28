@@ -18,7 +18,7 @@ struct PrivateWindowButton: View {
 
     var body: some View {
         Button { openWindow(id: "private") } label: {
-            ToolbarBadge(top: "GO", bottom: "STEALTH", color: isPrivate ? PrivateChrome.lavender : ToolbarIcon.color)
+            ToolbarTile(art: .stealth)
         }
         .buttonStyle(.plain)
         .help("New Stealth Window: browse without saving history (⇧⌘N)")

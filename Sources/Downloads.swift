@@ -436,7 +436,7 @@ struct DownloadsButton: View {
     var body: some View {
         if !downloads.items.isEmpty {
             Button { showing.toggle() } label: {
-                ToolbarBadge(topSymbol: "arrow.down", bottom: "DOWNLOADS", pressed: showing)
+                ToolbarTile(art: .downloads, pressed: showing, glowing: downloads.activeCount > 0)
             }
             .buttonStyle(.plain)
             .help("Downloads")
@@ -452,7 +452,7 @@ struct DownloadsButton: View {
     }
 }
 
-/// How far the downloads have got: a ring travelling round the DOWNLOADS badge's outline,
+/// How far the downloads have got: a ring travelling round the Downloads tile,
 /// clockwise from the top centre, gliding on as each part arrives until it meets itself.
 /// (Several at once: their progress together.)
 private struct ActiveBar: View {
@@ -464,7 +464,7 @@ private struct ActiveBar: View {
             let progress = items.isEmpty ? 0 : items.map(\.progress).reduce(0, +) / Double(items.count)
             OutlineRing(progress: max(0.02, min(1, progress)))
                 .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
-                .frame(width: ToolbarBadge.size.width, height: ToolbarBadge.size.height)
+                .frame(width: ToolbarTile.size + 5, height: ToolbarTile.size + 5)
                 .animation(.linear(duration: 0.25), value: progress)
         }
     }
@@ -478,7 +478,7 @@ private struct OutlineRing: Shape {
     func path(in rect: CGRect) -> Path {
         // A rounded rectangle's outline starts halfway down its right side; the top centre is
         // three quarters of the way round from there.
-        let outline = RoundedRectangle(cornerRadius: 6, style: .continuous).inset(by: 0.8).path(in: rect)
+        let outline = RoundedRectangle(cornerRadius: ToolbarTile.cornerRadius + 2.5, style: .continuous).path(in: rect)
         let start = 0.75, end = start + progress
         var path = outline.trimmedPath(from: start, to: min(1, end))
         if end > 1 { path.addPath(outline.trimmedPath(from: 0, to: end - 1)) }
