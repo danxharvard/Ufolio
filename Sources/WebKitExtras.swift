@@ -55,9 +55,9 @@ enum WebKitExtras {
         let resume = NSSelectorFromString("_processDidResumeForTesting")
         guard webView.responds(to: suspend), webView.responds(to: resume) else { return }
         typealias WithBlock = @convention(c) (AnyObject, Selector, Any) -> Void
-        let done: @convention(block) () -> Void = { [weak webView] in
-            if let webView { call(webView, "_processDidResumeForTesting") }
-        }
+        // Held strongly until it's done: other tabs can share this page's process, so if the tab
+        // closed in between, skipping the resume would leave them paused.
+        let done: @convention(block) () -> Void = { call(webView, "_processDidResumeForTesting") }
         unsafeBitCast(webView.method(for: suspend), to: WithBlock.self)(webView, suspend, done)
     }
 
