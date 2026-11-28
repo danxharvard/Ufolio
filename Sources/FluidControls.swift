@@ -71,7 +71,9 @@ struct FluidPicker<Value: Hashable>: View {
         self.options = options.map { (value: $0.0, label: $0.1) }
     }
 
-    private var current: String { options.first { $0.value == selection }?.label ?? "" }
+    /// The chosen value's name, or "Custom" for one that isn't in the list (left by an older
+    /// version, say): the button used to go blank.
+    private var current: String { options.first { $0.value == selection }?.label ?? "Custom" }
 
     var body: some View {
         Button { open.toggle() } label: {
