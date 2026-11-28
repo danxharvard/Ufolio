@@ -10,6 +10,7 @@ final class BrowserModel: NSObject, ObservableObject {
             let old = tabs.first(where: { $0.id == oldValue })
             old?.lastActive = Date()
             old?.backCacheReleased = false   // a fresh idle spell starts
+            old?.memoryReleased = false
             // A link preview belongs to the page it was opened from.
             if preview != nil, selectedID != oldValue { closePreview() }
             // Pause sound and video in the tab you leave (Eco, or Settings › Performance),
@@ -264,6 +265,7 @@ final class BrowserModel: NSObject, ObservableObject {
             tab.backCacheReleased = true
             WebKitExtras.clearBackForwardCache(tab.webView)
         }
+        lightSleepIdleTabs()
         let minutes = PerformanceCenter.shared.sleepMinutes   // shorter in Power Saver
         guard minutes > 0 else { return }
         sleepBackgroundTabs(idleFor: minutes * 60)
@@ -272,6 +274,28 @@ final class BrowserModel: NSObject, ObservableObject {
         // pointing at the tab wakes it again before you click.
         let heavy = PerformanceCenter.shared.heavyTabIDs
         if !heavy.isEmpty, minutes * 60 > 300 { sleepBackgroundTabs(idleFor: 300, only: heavy) }
+    }
+
+    /// Light sleep: background tabs left alone for two minutes give back the memory their page
+    /// can rebuild, once per idle spell, staying awake and exactly as they were. Skipped for a
+    /// tab whose page process also draws something on screen (the tab in front, Split View, a
+    /// tab playing sound, using the camera, or in Picture in Picture), or that's still loading.
+    private func lightSleepIdleTabs() {
+        guard Prefs.bool(Prefs.freeMemoryAutomatically), ProcessInfo.processInfo.environment["UFOLIO_LIGHTSLEEP_OFF"] == nil else { return }
+        let onScreen = splitPair.flatMap { $0.contains(selectedID) ? $0 : nil }
+        func busy(_ tab: BrowserTab) -> Bool {
+            tab === selectedTab || (onScreen?.contains(tab.id) ?? false) || tab.isLoading || tab.isPlayingAudio
+                || tab.webView.cameraCaptureState != .none || tab.webView.microphoneCaptureState != .none
+                || WebKitExtras.isPictureInPictureActive(tab.webView)
+        }
+        let awake = tabs.filter { !$0.isAsleep && $0.hasPageView }
+        let busyProcesses = Set(awake.filter(busy).map { WebKitExtras.processID($0.webView) })
+        for tab in awake where !tab.memoryReleased && !busy(tab) && Date().timeIntervalSince(tab.lastActive) > 120 {
+            let pid = WebKitExtras.processID(tab.webView)
+            guard pid > 0, !busyProcesses.contains(pid) else { continue }
+            tab.memoryReleased = true
+            WebKitExtras.releaseMemory(tab.webView)
+        }
     }
 
     /// Sleeps background tabs idle for at least `seconds`, unless they're playing media

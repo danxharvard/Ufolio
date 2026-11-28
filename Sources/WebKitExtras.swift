@@ -38,6 +38,29 @@ enum WebKitExtras {
     /// still works: it loads them again).
     static func clearBackForwardCache(_ webView: WKWebView) { call(webView, "_clearBackForwardCache") }
 
+    /// The page's web process (0 if it hasn't one yet).
+    static func processID(_ webView: WKWebView) -> pid_t {
+        let selector = NSSelectorFromString("_webProcessIdentifier")
+        guard webView.responds(to: selector) else { return 0 }
+        typealias Getter = @convention(c) (AnyObject, Selector) -> pid_t
+        return unsafeBitCast(webView.method(for: selector), to: Getter.self)(webView, selector)
+    }
+
+    /// Light sleep: the page's process gives back the memory it can rebuild (decoded pictures,
+    /// caches, JavaScript garbage), as WebKit does before macOS suspends it, then carries on at
+    /// once. The page stays exactly as it was, nothing reloads. Measured: about a quarter of a
+    /// background tab's memory. Both halves are checked first; without them it does nothing.
+    static func releaseMemory(_ webView: WKWebView) {
+        let suspend = NSSelectorFromString("_processWillSuspendForTesting:")
+        let resume = NSSelectorFromString("_processDidResumeForTesting")
+        guard webView.responds(to: suspend), webView.responds(to: resume) else { return }
+        typealias WithBlock = @convention(c) (AnyObject, Selector, Any) -> Void
+        let done: @convention(block) () -> Void = { [weak webView] in
+            if let webView { call(webView, "_processDidResumeForTesting") }
+        }
+        unsafeBitCast(webView.method(for: suspend), to: WithBlock.self)(webView, suspend, done)
+    }
+
     /// The auto-play rules for a page about to load, as Safari sets them (WebKit's per-page
     /// website policies). With only the web view's own "needs a click for sound" switch, a video
     /// you'd opened yourself (a YouTube link, say) sat waiting for a second click in Ufolio, where

@@ -422,6 +422,11 @@ enum LeakTest {
             }
             try? await Task.sleep(nanoseconds: 20_000_000_000)
             await stage("open")
+            // UFOLIO_LEAKTEST_IDLE: the tabs sit in the background this many seconds, measured again.
+            if let idle = env["UFOLIO_LEAKTEST_IDLE"].flatMap(Double.init), idle > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(idle * 1e9))
+                await stage("idle")
+            }
             let keep = model.tabs.first
             for tab in model.tabs where tab !== keep { model.close(tab, remember: true) }
             try? await Task.sleep(nanoseconds: 15_000_000_000)
