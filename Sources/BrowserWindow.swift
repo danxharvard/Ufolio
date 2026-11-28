@@ -78,6 +78,10 @@ struct BrowserWindow: View {
                 WindowPlacement.keepOnScreen(window)
             }
             model.window = window
+            // Ufolio reopens its own windows and tabs. Left restorable, macOS also copied the whole
+            // window's picture over and over to show at the next launch (a quarter of a core,
+            // measured, while tabs changed), and for a Stealth window that's a picture of it.
+            if let window, window.isRestorable { window.isRestorable = false }
             // Stealth windows are dark through and through: the window's own appearance, so the
             // frosted glass, menus and scroll bars are drawn dark by macOS itself.
             if model.isPrivate, let window, window.appearance?.name != .darkAqua { window.appearance = NSAppearance(named: .darkAqua) }
