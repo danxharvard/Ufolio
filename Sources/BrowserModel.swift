@@ -818,6 +818,7 @@ final class BrowserModel: NSObject, ObservableObject {
         FeatureUsage.mark(.linkPreview)
         tab.spaceID = source?.spaceID ?? spaceID
         (tab.webView as? HushWebView)?.ignoresBlockers = true   // it sits on top of the page
+        if ChaosTest.on { ChaosTest.previewTabs.add(tab) }
         preview = tab
     }
 

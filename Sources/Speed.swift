@@ -818,6 +818,7 @@ enum ChaosTest {
     static let on = ProcessInfo.processInfo.environment["UFOLIO_CHAOS"] != nil
     /// Every tab made during the test (weakly), to describe any that outlive being closed.
     static let everyTab = NSHashTable<BrowserTab>.weakObjects()
+    static let previewTabs = NSHashTable<BrowserTab>.weakObjects()
 
     static func startIfAsked(in model: BrowserModel) {
         guard let text = ProcessInfo.processInfo.environment["UFOLIO_CHAOS"], let seconds = Double(text) else { return }
@@ -866,7 +867,21 @@ enum ChaosTest {
             FileHandle.standardError.write("chaos: after 40 s: tabs \(later.tabs), webViews \(later.webViews), in list \(model.tabs.count), preview \(model.preview != nil)\n".data(using: .utf8)!)
             for t in everyTab.allObjects where !model.tabs.contains(where: { $0 === t }) {
                 let blockers = (t.hasPageView ? (t.webView as? HushWebView)?.ignoresBlockers : nil) ?? false
-                FileHandle.standardError.write("chaos: survivor \(t.url?.absoluteString ?? "-") asleep \(t.isAsleep) pageView \(t.hasPageView) previewFlag \(blockers) inWindow \(t.hasPageView && t.webView.window != nil) model \(t.model != nil) at \(Unmanaged.passUnretained(t).toOpaque())\n".data(using: .utf8)!)
+                FileHandle.standardError.write("chaos: survivor \(t.url?.absoluteString ?? "-") asleep \(t.isAsleep) pageView \(t.hasPageView) previewFlag \(blockers) wasPreview \(previewTabs.contains(t)) inWindow \(t.hasPageView && t.webView.window != nil) model \(t.model != nil) at \(Unmanaged.passUnretained(t).toOpaque())\n".data(using: .utf8)!)
+            }
+            // Then use the window a little (a new tab, a preview, back again): SwiftUI lets go of
+            // old views' values when it next redraws them, so this tells a late release from a leak.
+            if let first = model.tabs.first {
+                let extra = model.newTab(select: true)
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                model.showPreview(URL(string: "https://example.com/")!, from: extra)
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                model.closePreview()
+                model.selectedID = first.id
+                model.close(extra, remember: false)
+                try? await Task.sleep(nanoseconds: 8_000_000_000)
+                let used = LiveCount.now
+                FileHandle.standardError.write("chaos: after using the window: tabs \(used.tabs), webViews \(used.webViews)\n".data(using: .utf8)!)
             }
             // UFOLIO_CHAOS_HOLD=<seconds>: stay open afterwards (to inspect with heap/leaks).
             if let hold = ProcessInfo.processInfo.environment["UFOLIO_CHAOS_HOLD"].flatMap(Double.init) {
